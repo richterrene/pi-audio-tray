@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (QApplication, QDialog, QDialogButtonBox, QFileDia
 from core import (PairSession, UnknownHost, config_dir, disable_pairing,
                   install_helper, load_config, poll, save_config, store_soloist_key,
                   remove_soloist_key, update_soloist, trust_host, display_text, instance_lock_file, shutdown_pi)
+from music_ui import MusicWindow
 from version import VERSION
 from platform_support import lock_instance
 
@@ -80,7 +81,8 @@ class Settings(QDialog):
         for key, label, hint in [('host', 'Pi hostname / IP', 'audio-pi.local'),
                                   ('username', 'SSH username', 'your Pi user'),
                                   ('host_key_alias', 'Known-host alias (optional)', 'previous SSH hostname'),
-                                  ('key_file', 'SSH private key (optional)', '~/.ssh/id_ed25519')]:
+                                  ('key_file', 'SSH private key (optional)', '~/.ssh/id_ed25519'),
+                                  ('music_web_url', 'Music HTTPS URL (optional)', 'https://audio-pi.local:8443/')]:
             entry = QLineEdit(config[key])
             entry.setPlaceholderText(hint)
             self.fields[key] = entry
@@ -153,6 +155,7 @@ class TrayApp(QWidget):
         self.closing = False
         self.power_state = None
         self.details_requested = False
+        self.music_window = None
         self.generation = 0
         self.setWindowTitle('Pi Audio Tray · ' + VERSION)
         self.setWindowIcon(icon())
@@ -197,7 +200,7 @@ class TrayApp(QWidget):
         layout.addLayout(controls)
         extras = QHBoxLayout()
         for label, callback in [('Refresh', self.refresh), ('Settings…', self.settings),
-                                 ('Set up Pi…', self.setup)]:
+                                 ('Set up Pi…', self.setup), ('USB music…', self.open_music)]:
             button = QPushButton(label)
             button.clicked.connect(callback)
             extras.addWidget(button)
@@ -223,6 +226,7 @@ class TrayApp(QWidget):
         self.on_action = self.menu.addAction('Enable pairing · 3 min', self.start_pairing)
         self.off_action = self.menu.addAction('Disable pairing', self.stop_pairing)
         self.menu.addSeparator()
+        self.menu.addAction('USB music…', self.open_music)
         self.menu.addAction('Open status', self.open_window)
         self.menu.addAction('Refresh now', self.refresh)
         self.menu.addAction('Settings…', self.settings)
@@ -460,6 +464,16 @@ class TrayApp(QWidget):
                 self.enable_controls()
             plain_warning(self, 'Pi Audio Tray', str(error))
 
+    def open_music(self):
+        if not self.config['host']:
+            self.settings()
+            return
+        if self.music_window is None:
+            self.music_window = MusicWindow(self)
+        self.music_window.showNormal()
+        self.music_window.raise_()
+        self.music_window.activateWindow()
+
     def open_window(self):
         self.showNormal()
         self.raise_()
@@ -481,6 +495,8 @@ class TrayApp(QWidget):
             except (OSError, ValueError, TypeError) as exc:
                 plain_warning(self, 'Settings', display_text(exc))
                 return
+            if self.music_window is not None:
+                self.music_window.hide()
             self.config = config
             self.power_state = None
             self.generation += 1
@@ -623,6 +639,8 @@ class TrayApp(QWidget):
             self.row('pairing', f'Enabled · {max(0, self.expires - int(time.time()))}s remaining')
 
     def quit(self):
+        if self.music_window is not None:
+            self.music_window.hide()
         self.timer.stop()
         if self.session:
             self.closing = True

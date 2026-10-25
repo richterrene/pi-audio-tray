@@ -10,6 +10,18 @@ without typing commands. There are no cloud services or telemetry.
 Other distributions and boards have not been validated. This project is not
 affiliated with Spotify or Raspberry Pi.
 
+## Local music and phone playback control
+
+The optional **USB music…** window browses a Pi-attached library and controls its
+MPD queue and volume. A mobile-friendly myMPD web player can share the same queue
+over authenticated HTTPS. This requires a separate opt-in Pi setup; see
+[requirements, installation, certificate trust and security](docs/LOCAL_MUSIC.md).
+The supplied installer targets Debian/Raspberry Pi OS 13 with PipeWire and a
+FAT32 USB drive. Spotify/Bluetooth and local playback can mix; pause the previous
+source when switching.
+
+![Local music window with fictional demo tracks](assets/screenshots/local-music.png)
+
 ## Compatibility and requirements
 
 | Component | Tested / required |

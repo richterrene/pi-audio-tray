@@ -17,6 +17,7 @@ from PySide6.QtWidgets import QApplication, QMessageBox
 from PySide6.QtGui import QPixmap
 from PySide6.QtCore import Qt
 from app import Settings, TrayApp
+from music_ui import MusicWindow
 
 
 def capture(widget, path):
@@ -76,7 +77,20 @@ def main():
     with patch.object(QMessageBox, 'exec', capture_confirmation), \
          patch('core.connect', side_effect=AssertionError('Screenshots cannot connect to a receiver')):
         window.shutdown()
-    print('Captured status, settings, tray menu and shutdown confirmation with fictional data only.')
+    with patch.object(MusicWindow, 'request'):
+        music = MusicWindow(window)
+        music.show()
+        music.timer.stop()
+        music.path = 'Example Artist/First Album'
+        music.operation_done(({'action': 'browse'}, {'items': [
+            {'file': 'Example Artist/First Album/01 - Morning.mp3', 'Title': 'Morning', 'Artist': 'Example Artist'},
+            {'file': 'Example Artist/First Album/02 - Home.mp3', 'Title': 'Home', 'Artist': 'Example Artist'},
+            {'file': 'Example Artist/First Album/03 - Evening.mp3', 'Title': 'Evening', 'Artist': 'Example Artist'}], 'more': False},
+            {'status': {'state': 'pause', 'volume': '30'}, 'current': {'Title': 'Morning', 'Artist': 'Example Artist'}}, window.config.copy()), None)
+        app.processEvents()
+        capture(music, output / 'local-music.png')
+        music.hide()
+    print('Captured status, settings, tray menu, shutdown confirmation and local music with fictional data only.')
 
 
 if __name__ == '__main__':
