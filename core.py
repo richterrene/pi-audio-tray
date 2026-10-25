@@ -54,7 +54,7 @@ def config_dir():
     if os.environ.get('XDG_CONFIG_HOME'):
         root = Path(os.environ['XDG_CONFIG_HOME']) / 'pi-audio-tray'
     elif sys.platform == 'win32':
-        root = Path(os.environ.get('APPDATA', str(Path.home() / 'AppData/Roaming'))) / 'Pi Audio Tray'
+        root = (Path(os.environ['APPDATA']) if os.environ.get('APPDATA') else Path.home() / 'AppData/Roaming') / 'Pi Audio Tray'
     elif sys.platform == 'darwin':
         root = Path.home() / 'Library/Application Support/Pi Audio Tray'
     else:

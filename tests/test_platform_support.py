@@ -7,7 +7,7 @@ import unittest
 from unittest.mock import patch
 
 import core
-from platform_support import lock_instance, open_instance_lock, secure_directory, windows_descriptor, windows_user_sid
+from platform_support import lock_instance, open_instance_lock, secure_directory, windows_descriptor, windows_user_sid, windows_allowed_sids
 
 
 class DesktopStorage(unittest.TestCase):
@@ -54,10 +54,7 @@ sys.exit(1)
         for path in (root, root / 'config.json'):
             descriptor = windows_descriptor(path)
             self.assertIn('D:P', descriptor)
-            self.assertIn(sid, descriptor)
-            self.assertIn(';;;SY)', descriptor)
-            for broad in (';;;WD)', ';;;BU)', ';;;AU)', ';;;BA)'):
-                self.assertNotIn(broad, descriptor)
+            self.assertCountEqual(windows_allowed_sids(path), [sid, 'S-1-5-18'])
 
     @unittest.skipUnless(os.name == 'nt', 'Requires native Windows reparse points')
     def test_windows_junction_configuration_is_rejected(self):

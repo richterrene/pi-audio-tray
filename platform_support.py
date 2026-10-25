@@ -48,6 +48,10 @@ def _windows_api():
     adv.SetNamedSecurityInfoW.restype = w.DWORD
     adv.ConvertSecurityDescriptorToStringSecurityDescriptorW.argtypes = [ptr, w.DWORD, w.DWORD, ctypes.POINTER(w.LPWSTR), ctypes.POINTER(w.DWORD)]
     adv.ConvertSecurityDescriptorToStringSecurityDescriptorW.restype = w.BOOL
+    adv.GetAclInformation.argtypes = [ptr, ptr, w.DWORD, ctypes.c_int]
+    adv.GetAclInformation.restype = w.BOOL
+    adv.GetAce.argtypes = [ptr, w.DWORD, ctypes.POINTER(ptr)]
+    adv.GetAce.restype = w.BOOL
     return SimpleNamespace(c=ctypes, w=w, adv=adv, kernel=kernel)
 
 
@@ -97,6 +101,32 @@ def windows_descriptor(path):
     finally:
         if value:
             api.kernel.LocalFree(api.c.cast(value, api.c.c_void_p))
+        api.kernel.LocalFree(descriptor)
+
+
+def windows_allowed_sids(path):
+    """Inspect actual ACE trustees; SDDL can abbreviate a SID as LA/SY/etc."""
+    api = _windows_api()
+    descriptor, dacl = api.c.c_void_p(), api.c.c_void_p()
+    code = api.adv.GetNamedSecurityInfoW(str(path), 1, 4, None, None, api.c.byref(dacl), None, api.c.byref(descriptor))
+    if code:
+        raise api.c.WinError(code)
+    try:
+        class AclSize(api.c.Structure):
+            _fields_ = [('count', api.w.DWORD), ('used', api.w.DWORD), ('free', api.w.DWORD)]
+        size = AclSize()
+        if not dacl or not api.adv.GetAclInformation(dacl, api.c.byref(size), api.c.sizeof(size), 2):
+            raise PermissionError('Could not inspect Windows DACL')
+        trustees = []
+        for index in range(size.count):
+            ace = api.c.c_void_p()
+            if not api.adv.GetAce(dacl, index, api.c.byref(ace)):
+                raise api.c.WinError(api.c.get_last_error())
+            if api.c.c_ubyte.from_address(ace.value).value != 0 or api.c.c_ushort.from_address(ace.value + 2).value < 16:
+                raise PermissionError('Unexpected access-control entry')
+            trustees.append(_sid_string(ace.value + 8))
+        return trustees
+    finally:
         api.kernel.LocalFree(descriptor)
 
 
