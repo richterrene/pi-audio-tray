@@ -73,3 +73,32 @@ The script renders an `.icns` icon from the shared SVG, bundles Python/Qt/SSH
 libraries, sets the app's version and menu-bar behavior, verifies the ad-hoc
 signature, runs a headless GUI smoke test, and exports a ZIP plus SHA-256 checksum.
 It does not read local Pi configuration or SSH keys when building.
+
+## Using your own Mac from another computer
+
+Development/editing can happen on Linux or Windows. A native Mac is needed for
+the build and macOS-specific tests; it may be a GitHub-hosted Mac or your own.
+
+For a personal build machine, enable **System Settings → General → Sharing →
+Remote Login** on the Mac for a dedicated build account and configure SSH-key
+access from your development computer. Install Xcode command-line tools and
+Python on the Mac, and check out the repository there. Full Xcode is needed for
+native Swift/Xcode projects and their tests; this Python/Qt project uses the
+command-line tools plus its Python dependencies. See [Apple's Remote Login guide](https://support.apple.com/guide/mac-help/mchlp1066/mac).
+
+After configuring a `build-mac` SSH alias, a build can be started from Linux:
+
+```sh
+ssh build-mac 'cd ~/src/pi-audio-tray && .venv/bin/python -m unittest discover -s tests -v && .venv/bin/python build_macos.py'
+scp 'build-mac:src/pi-audio-tray/dist/*.app.zip' ./
+```
+
+Prepare the checkout, virtual environment, and build prerequisites first. The
+Mac must be powered on and reachable; allow it to stay awake during long jobs.
+Real UI testing may require a logged-in graphical session or a person at the Mac.
+
+A [GitHub self-hosted runner](https://docs.github.com/en/actions/how-tos/manage-runners/self-hosted-runners/add-runners)
+is an alternative for regular builds. Use trusted/private workflows for a
+personal Mac; do not run untrusted pull-request code on a machine containing
+signing credentials or personal data. GitHub-hosted macOS runners remain the
+default for this repository.
