@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.pyc
+build/
+dist/
+*.AppImage
+*.spec
+config.json
+known_hosts
+*.pem
+id_*
+.env*

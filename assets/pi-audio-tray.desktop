@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Pi Audio Tray
+Comment=Monitor a Raspberry Pi audio receiver over SSH
+Exec=pi-audio-tray --show
+Icon=pi-audio-tray
+Categories=AudioVideo;Audio;Utility;
+Terminal=false
+StartupNotify=false
