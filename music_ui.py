@@ -84,6 +84,7 @@ class MusicWindow(QDialog):
         if self.busy or not self.isVisible() or self.isMinimized():
             return
         self.busy = True
+        self.tabs.setEnabled(False)
         config = self.parent().config.copy()
         for button in self.buttons:
             button.setEnabled(False)
@@ -99,6 +100,7 @@ class MusicWindow(QDialog):
 
     def operation_done(self, payload, error):
         self.busy = False
+        self.tabs.setEnabled(True)
         for button in self.buttons:
             button.setEnabled(True)
         self.volume.setEnabled(True)

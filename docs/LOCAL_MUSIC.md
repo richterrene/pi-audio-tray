@@ -99,6 +99,13 @@ On iPhone, open the certificate attachment/file, install the downloaded profile
 in Settings, then enable **Pi Audio local CA** under **Settings → General →
 About → Certificate Trust Settings → Enable Full Trust for Root Certificates**.
 See [Apple’s instructions](https://support.apple.com/102390).
+On Android, save the public `.crt` file, then search Settings for **Install a
+certificate** and choose **CA certificate** (often under Security & privacy →
+More security settings → Encryption & credentials). Select this CA and approve
+the device’s confirmation. Menu names vary by vendor/version; use the CA option
+for browser HTTPS, not the Wi-Fi/client-certificate option. Reopen the browser
+afterwards. [Google’s certificate settings guide](https://support.google.com/pixelphone/answer/2844832)
+explains where these settings and removal controls live.
 A trusted local CA can issue certificates, so its root-only private key must be
 protected. Remove its trust from devices when retiring the Pi.
 

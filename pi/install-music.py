@@ -103,10 +103,15 @@ def main():
     except KeyError:
         run('useradd', '--system', '--gid', 'pi-audio-music', '--home-dir', '/nonexistent', '--shell', '/usr/sbin/nologin', 'pi-audio-web')
     mount = '/srv/pi-audio-music'
-    directory(mount)
+    if Path(mount).is_symlink():
+        raise ValueError('Refusing a symlink music mount')
+    if not os.path.ismount(mount):
+        directory(mount)
     fstab = Path('/etc/fstab')
     marker = '# Pi Audio Tray read-only music USB'
     original = fstab.read_text()
+    if marker in original and ('UUID=' + args.uuid + ' ' + mount + ' ') not in original:
+        raise ValueError('Music mount already configured for a different UUID')
     if marker not in original:
         shutil.copy2(fstab, '/etc/fstab.pi-audio-backup')
         with fstab.open('a') as stream:
@@ -115,6 +120,9 @@ def main():
     run('systemctl', 'start', 'srv-pi\\x2daudio\\x2dmusic.automount')
     if not Path(mount + '/Music').is_dir():
         raise RuntimeError('Expected Music directory is absent on the selected stick')
+    mounted_uuid = subprocess.check_output(['findmnt', '-no', 'UUID', '--target', mount + '/Music'], text=True).strip()
+    if mounted_uuid.casefold() != args.uuid.casefold():
+        raise RuntimeError('Mounted music UUID differs from the selected stick')
     conf = Path('/etc/pi-audio-tray/music')
     directory(conf)
     state = home / '.local/state/pi-audio-mpd'
