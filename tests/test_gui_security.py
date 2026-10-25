@@ -106,6 +106,61 @@ class PairingDialogs(unittest.TestCase):
             self.window.job('off', Mock())
             thread.assert_called_once()
 
+    def prepare_shutdown(self):
+        self.window.session = None
+        self.window.snapshot = {'online': True}
+        self.window.config.update(host='audio-pi.example', username='audio')
+
+    def test_canceling_shutdown_does_not_start_a_job(self):
+        self.prepare_shutdown()
+        with patch('app.plain_question', return_value=QMessageBox.StandardButton.No), \
+             patch.object(self.window, 'job') as job:
+            self.window.shutdown()
+        job.assert_not_called()
+
+    def test_shutdown_requires_confirmation_and_uses_the_confirmed_connection(self):
+        self.prepare_shutdown()
+        with patch('app.plain_question', return_value=QMessageBox.StandardButton.Yes) as question, \
+             patch.object(self.window, 'job') as job, patch('app.shutdown_pi') as shutdown:
+            self.window.shutdown()
+            self.assertIn('audio-pi.example', question.call_args.args[2])
+            self.assertIn('reconnect power', question.call_args.args[2])
+            kind, command = job.call_args.args
+            self.assertEqual(kind, 'shutdown')
+            command()
+            shutdown.assert_called_once_with(self.window.config)
+
+    def test_connection_change_during_confirmation_cannot_shutdown_another_pi(self):
+        self.prepare_shutdown()
+        def confirm(*args):
+            self.window.config['host'] = 'different-pi.example'
+            self.window.generation += 1
+            return QMessageBox.StandardButton.Yes
+        with patch('app.plain_question', side_effect=confirm), patch('app.plain_information'), \
+             patch.object(self.window, 'job') as job:
+            self.window.shutdown()
+        job.assert_not_called()
+
+    def test_shutdown_is_blocked_during_update_or_pairing(self):
+        self.prepare_shutdown()
+        for kind in ('update', 'pairing'):
+            self.window.busy = {'update'} if kind == 'update' else set()
+            self.window.session = self.session if kind == 'pairing' else None
+            with patch('app.plain_information'), patch('app.plain_question') as question:
+                self.window.shutdown()
+            question.assert_not_called()
+
+    def test_shutdown_request_is_not_reported_as_verified_poweroff(self):
+        self.prepare_shutdown()
+        with patch.object(self.window, 'refresh'):
+            self.window.done('shutdown', None)
+        self.assertEqual(self.window.power_state, 'requested')
+        self.assertIn('Waiting', self.window.notice.text())
+        self.window.render_offline('SSH failed')
+        self.assertEqual(self.window.power_state, 'disconnected')
+        self.assertIn('Check its activity LED', self.window.notice.text())
+        self.assertFalse(self.window.shutdown_action.isEnabled())
+
     def test_all_requested_pi_statistics_are_displayed(self):
         self.window.config['host'] = 'audio-pi.example'
         self.window.done('poll', {'services': {'soloist': 'active', 'bluetooth': 'active',

@@ -46,6 +46,8 @@ updating the desktop package alone does not replace Pi-side maintenance scripts.
   connected device names, and pairing state.
 - Pi temperature, aggregate CPU usage, 1/5/15-minute load, memory, root-disk use,
   and uptime in both the status window and tray menu. Missing sensors show N/A.
+- Confirmed graceful Pi shutdown from the tray, with an optional exact sudo rule.
+  Known scheduled updates block the request; starting again requires reconnecting power.
 - Three-minute pairing window with confirmation dialogs on the desktop.
 - Pairing closes on timeout, normal app exit, or SSH channel closure. BlueZ's
   own pairing/discovery timeouts also limit the window if the helper crashes.
@@ -96,8 +98,8 @@ directory and does not connect to a receiver.
 Download the x86_64 AppImage, make it executable, and launch it:
 
 ```sh
-chmod +x PiAudioTray-0.3.1-x86_64.AppImage
-./PiAudioTray-0.3.1-x86_64.AppImage --show
+chmod +x PiAudioTray-0.3.2-x86_64.AppImage
+./PiAudioTray-0.3.2-x86_64.AppImage --show
 ```
 
 Ubuntu's AppIndicator extension must be enabled for the tray icon. When no tray
