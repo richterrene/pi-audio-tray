@@ -144,6 +144,17 @@ class BoundedSSH(unittest.TestCase):
         self.assertEqual(callback.call_args.args[0]['session_id'], session.session_id)
 
 
+class PollMode(unittest.TestCase):
+    def test_light_poll_uses_health_command_and_marks_only_locally_selected_mode(self):
+        client=Mock()
+        reply=json.dumps({'protocol':1,'services':{},'adapter':{},'devices':[], '_detailed':True})
+        with patch.object(core,'connect',return_value=client), patch.object(core,'run',return_value=reply) as run:
+            result=core.poll(core.DEFAULTS,detailed=False)
+        run.assert_called_once_with(client,core.REMOTE_HELPER+' health')
+        self.assertFalse(result['_detailed'])
+        client.close.assert_called_once()
+
+
 class ShutdownSafety(unittest.TestCase):
     def test_only_fixed_nonblocking_poweroff_is_sent_after_update_check(self):
         client = Mock()

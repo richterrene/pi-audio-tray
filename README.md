@@ -62,6 +62,17 @@ updating the desktop package alone does not replace Pi-side maintenance scripts.
   Key files on the Pi are private (directory mode 700, file mode 600).
 - Soloist build lifetime and automatic update status, including failed update runs.
 
+While the status window is visible (not minimized) or its tray menu is open,
+the app refreshes detailed status at the configured interval. When both are
+closed, it checks only service/Bluetooth/update health for the tray dot once per
+minute (or less often if your configured interval is longer). Background checks
+do not request CPU, temperature, load, RAM, disk, uptime or Soloist build
+information; they do not return connected-device names. Opening the window/menu requests fresh details immediately;
+previous detail values may remain visible briefly while that request completes.
+One detailed request already in progress can finish after hiding the window.
+Pairing events remain active and explicit operations may trigger extra health
+checks. Version 0.3.3 requires the matching Pi helper’s new `health` action.
+
 CPU usage is averaged across all cores between refreshes (a one-second sample
 on the first refresh or after a cache reset); the displayed window shows the
 actual averaging interval. One fully busy core on a four-core Pi is about 25%.
@@ -120,8 +131,8 @@ closes only the tray application; **Shut down Pi…** powers off the receiver.
 Download the x86_64 AppImage, make it executable, and launch it:
 
 ```sh
-chmod +x PiAudioTray-0.3.2-x86_64.AppImage
-./PiAudioTray-0.3.2-x86_64.AppImage --show
+chmod +x PiAudioTray-0.3.3-x86_64.AppImage
+./PiAudioTray-0.3.3-x86_64.AppImage --show
 ```
 
 Ubuntu's AppIndicator extension must be enabled for the tray icon. When no tray

@@ -8,7 +8,7 @@ import sys
 import threading
 import time
 
-from PySide6.QtCore import QObject, QTimer, Qt, Signal
+from PySide6.QtCore import QObject, QTimer, Qt, Signal, QEvent
 from PySide6.QtGui import QAction, QIcon, QPainter, QPixmap
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (QApplication, QDialog, QDialogButtonBox, QFileDialog,
@@ -151,6 +151,7 @@ class TrayApp(QWidget):
         self.snapshot = None
         self.closing = False
         self.power_state = None
+        self.menu_open = False
         self.generation = 0
         self.setWindowTitle('Pi Audio Tray · ' + VERSION)
         self.setWindowIcon(icon())
@@ -210,6 +211,8 @@ class TrayApp(QWidget):
 
         self.menu = QMenu()
         self.menu.setTitle('Pi Audio Tray')
+        self.menu.aboutToShow.connect(lambda: self.set_menu_open(True))
+        self.menu.aboutToHide.connect(lambda: self.set_menu_open(False))
         self.menu_rows = {}
         for key in self.rows:
             item = self.menu.addAction('—')
@@ -241,7 +244,7 @@ class TrayApp(QWidget):
         self.tray.show()
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.refresh)
-        self.timer.start(self.config['poll_seconds'] * 1000)
+        self.update_polling()
         self.clock = QTimer(self)
         self.clock.timeout.connect(self.update_countdown)
         self.clock.start(1000)
@@ -275,10 +278,44 @@ class TrayApp(QWidget):
         if generation == self.generation:
             self.failed(kind, error)
 
+    def details_needed(self):
+        return self.menu_open or (self.isVisible() and not self.isMinimized())
+
+    def update_polling(self, refresh=False):
+        if not hasattr(self, 'timer'):
+            return
+        seconds = self.config['poll_seconds'] if self.details_needed() else max(60, self.config['poll_seconds'])
+        interval = seconds * 1000
+        if not self.timer.isActive():
+            self.timer.start(interval)
+        elif self.timer.interval() != interval:
+            self.timer.setInterval(interval)
+        if refresh and self.details_needed():
+            self.refresh()
+
+    def set_menu_open(self, opened):
+        self.menu_open = opened
+        self.update_polling(refresh=opened)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.update_polling(refresh=True)
+
+    def hideEvent(self, event):
+        super().hideEvent(event)
+        self.update_polling()
+
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        if event.type() == QEvent.Type.WindowStateChange:
+            self.update_polling(refresh=True)
+
     def refresh(self):
         if self.config['host']:
-            config = self.config.copy()
-            self.job('poll', lambda: poll(config))
+            config, detailed = self.config.copy(), self.details_needed()
+            if detailed:
+                self.notice.setText('Refreshing receiver details…')
+            self.job('poll', lambda: poll(config, detailed=detailed))
 
     def row(self, key, value):
         labels = {'pi': 'Pi', 'spotify': 'Spotify', 'bluetooth': 'Bluetooth',
@@ -326,6 +363,18 @@ class TrayApp(QWidget):
             self.tray.setIcon(icon('#55d9ad' if healthy else '#e8b75f'))
             self.tray.setToolTip('Pi Audio Tray · ' + ('services running' if healthy else 'check services'))
             self.row('pi', 'Online · ' + self.config['host'])
+            if not data.get('_detailed', True):
+                if data.get('soloist', {}).get('update_failed'):
+                    self.tray.setIcon(icon('#e8b75f'))
+                if self.power_state:
+                    self.notice.setText('Shutdown requested. Waiting for the Pi to disconnect. Reconnect power to start it again.')
+                else:
+                    self.notice.setText('Background health checked ' + time.strftime('%H:%M:%S') + ' · Open the window or tray menu for details.')
+                self.enable_controls()
+                # The window/menu may have opened while the light poll was pending.
+                if self.details_needed():
+                    self.refresh()
+                return
             self.row('spotify', services.get(backend, 'unknown') + ' · ' + backend.title())
             self.row('bluetooth', 'Powered on' if adapter.get('Powered') else 'Powered off / unavailable')
             self.row('audio', 'Ready' if all(services.get(s) == 'active' for s in audio_services) else 'Service stopped')
@@ -392,7 +441,7 @@ class TrayApp(QWidget):
                     self.refresh()
                 except (OSError, ValueError) as exc:
                     self.notice.setText(display_text(exc))
-            self.timer.start(self.config['poll_seconds'] * 1000)
+            self.update_polling()
         elif kind == 'poll':
             self.render_offline(str(error))
         else:
@@ -402,7 +451,7 @@ class TrayApp(QWidget):
             plain_warning(self, 'Pi Audio Tray', str(error))
 
     def open_window(self):
-        self.show()
+        self.showNormal()
         self.raise_()
         self.activateWindow()
 
@@ -427,7 +476,7 @@ class TrayApp(QWidget):
             self.generation += 1
             self.busy.clear()
             self.render_offline('Connecting…')
-            self.timer.start(config['poll_seconds'] * 1000)
+            self.update_polling()
             self.refresh()
 
     def setup(self):
