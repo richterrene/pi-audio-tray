@@ -124,7 +124,9 @@ browser origins. A routine DHCP IP change does not affect the hostname URL.
   and isolated writable state/cache. It cannot read the audio user's Soloist key,
   SSH files or bootstrap login. Music-group membership permits control of MPD and
   reading the read-only library; it is a trusted playback-control boundary.
-- myMPD HTTP binds only to `127.0.0.1:8080`. nginx exposes HTTPS 8443 and requires
+- myMPD HTTP binds only to `127.0.0.1:8080`. Local processes/accounts on the
+  Pi can reach that backend without the nginx login; local Pi users remain
+  trusted for playback control. nginx exposes HTTPS 8443 and requires
   login for UI, API, artwork and WebSockets. This is a full-access music account,
   not an administrator login. Do not share it with untrusted people.
 - The upstream myMPD PIN protects only some operations; it is **not** used as the
