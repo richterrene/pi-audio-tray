@@ -17,7 +17,12 @@ def load_helper():
     dbus = types.ModuleType('dbus')
     service = types.ModuleType('dbus.service')
     service.Object = DBusObject
-    service.method = lambda *args, **kwargs: lambda func: func
+    def method(*args, **kwargs):
+        def decorate(func):
+            func.test_sender_keyword = kwargs.get('sender_keyword')
+            return func
+        return decorate
+    service.method = method
     dbus.service = service
     dbus.DBusException = DBusError
     dbus.Boolean, dbus.UInt32 = bool, int
@@ -41,11 +46,13 @@ helper = load_helper()
 
 class PairingSafety(unittest.TestCase):
     def agent(self):
-        return helper.PairingAgent(Mock(), Mock(), Mock())
+        bus = Mock()
+        bus.get_name_owner.return_value = ':1.42'
+        return helper.PairingAgent(bus, Mock(), Mock())
 
     def test_non_audio_service_is_rejected_even_for_a_trusted_device(self):
         agent, ok, fail = self.agent(), Mock(), Mock()
-        agent.AuthorizeService('/device', '00001124-0000-1000-8000-00805f9b34fb', ok, fail)
+        agent.AuthorizeService('/device', '00001124-0000-1000-8000-00805f9b34fb', ok, fail, sender=':1.42')
         ok.assert_not_called()
         fail.assert_called_once()
 
@@ -77,6 +84,75 @@ class PairingSafety(unittest.TestCase):
 
     def test_invalid_command_shape_is_rejected(self):
         with self.assertRaises(ValueError): self.agent().command([])
+
+
+    def test_all_agent_methods_require_the_bus_provided_bluez_sender(self):
+        for name, arguments in (
+                ('RequestConfirmation', ('/device', 123456, Mock(), Mock())),
+                ('RequestAuthorization', ('/device', Mock(), Mock())),
+                ('AuthorizeService', ('/device', next(iter(helper.AUDIO_SERVICES)), Mock(), Mock())),
+                ('Cancel', ()), ('Release', ()), ('RequestPinCode', ('/device',)),
+                ('RequestPasskey', ('/device',)), ('DisplayPinCode', ('/device', '1234')),
+                ('DisplayPasskey', ('/device', 123456, 0))):
+            agent = self.agent()
+            callback = getattr(agent, name)
+            self.assertEqual(callback.test_sender_keyword, 'sender')
+            with patch.object(helper, 'emit') as emit:
+                with self.assertRaises(helper.Rejected): callback(*arguments, sender=':1.99')
+                with self.assertRaises(helper.Rejected): callback(*arguments)
+                emit.assert_not_called()
+            agent.loop.quit.assert_not_called()
+            self.assertFalse(agent.pending)
+
+    def test_bluez_can_cancel_and_release_its_agent(self):
+        agent, fail = self.agent(), Mock()
+        agent.pending = {'1': (Mock(), fail, '/device')}
+        with patch.object(helper, 'emit'):
+            agent.Cancel(sender=':1.42')
+            agent.Release(sender=':1.42')
+        fail.assert_called_once()
+        self.assertFalse(agent.pending)
+        self.assertTrue(agent.closing)
+        agent.loop.quit.assert_called_once()
+
+    def test_approval_after_pairing_off_is_rejected(self):
+        agent, ok, fail = self.agent(), Mock(), Mock()
+        agent.pending = {'1': (ok, fail, '/device')}
+        agent.props.Get.return_value = False
+        agent.command({'action': 'approve', 'token': '1'})
+        ok.assert_not_called()
+        fail.assert_called_once()
+        self.assertFalse(agent.approved)
+        agent.loop.quit.assert_called_once()
+
+    def test_stop_cancels_requests_and_late_approval_cannot_succeed(self):
+        agent, ok, fail = self.agent(), Mock(), Mock()
+        agent.pending = {'1': (ok, fail, '/device')}
+        with patch.object(helper, 'emit', side_effect=BrokenPipeError):
+            agent.command({'action': 'stop'})
+        agent.command({'action': 'approve', 'token': '1'})
+        ok.assert_not_called()
+        fail.assert_called_once()
+        agent.loop.quit.assert_called_once()
+
+    def test_failed_pairing_closure_does_not_trust_approved_devices(self):
+        bus, props, manager, loop = Mock(), Mock(), Mock(), Mock()
+        bus.get_name_owner.return_value = ':1.42'
+        def interface(obj, name):
+            return manager if name == 'org.bluez.AgentManager1' else Mock()
+        agent = self.agent()
+        agent.approved = {'/approved-device'}
+        with patch.object(helper.os, 'open', return_value=99), \
+             patch.object(helper.os, 'fdopen', return_value=Mock()), \
+             patch('fcntl.flock'), patch.object(helper.dbus, 'SystemBus', create=True, return_value=bus), \
+             patch.object(helper, 'adapter', return_value=props), \
+             patch.object(helper.GLib, 'MainLoop', return_value=loop), \
+             patch.object(helper.dbus, 'Interface', side_effect=interface) as make_interface, \
+             patch.object(helper, 'PairingAgent', return_value=agent), \
+             patch.object(helper, 'close_pairing', side_effect=RuntimeError('not closed')), \
+             patch.object(helper.signal, 'SIGTERM'), patch.object(helper, 'emit'):
+            with self.assertRaisesRegex(RuntimeError, 'not closed'): helper.pair()
+        self.assertFalse(any(call.args[1] == helper.PROPS for call in make_interface.call_args_list))
 
     def test_root_status_cannot_execute_the_downloaded_client(self):
         with patch.object(helper.sys, 'argv', ['helper', 'status']), patch.object(helper.os, 'geteuid', return_value=0), \

@@ -83,6 +83,29 @@ class PairingDialogs(unittest.TestCase):
         message.assert_called_once()
         self.assertNotEqual(settings.result(), settings.DialogCode.Accepted)
 
+    def test_connection_cannot_be_saved_during_pairing(self):
+        settings = Settings(self.window.config, self.window)
+        with patch('app.plain_information') as message:
+            settings.accept()
+        message.assert_called_once()
+        self.assertNotEqual(settings.result(), settings.DialogCode.Accepted)
+
+    def test_pairing_cannot_start_during_helper_installation(self):
+        self.window.session = None
+        self.window.busy.add('setup')
+        with patch('app.PairSession') as session:
+            self.window.start_pairing()
+        session.assert_not_called()
+
+    def test_mutations_cannot_overlap_but_emergency_pairing_off_is_allowed(self):
+        self.window.busy.add('update')
+        with patch('app.plain_information') as message, patch('app.threading.Thread') as thread:
+            self.window.job('key', Mock())
+            thread.assert_not_called()
+            message.assert_called_once()
+            self.window.job('off', Mock())
+            thread.assert_called_once()
+
     def test_all_requested_pi_statistics_are_displayed(self):
         self.window.config['host'] = 'audio-pi.example'
         self.window.done('poll', {'services': {'soloist': 'active', 'bluetooth': 'active',

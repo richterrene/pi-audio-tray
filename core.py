@@ -278,8 +278,9 @@ def disable_pairing(config):
 
 
 def store_soloist_key(config, key):
-    if not key or len(key) > 16384 or any(c.isspace() for c in key):
-        raise ValueError('Please enter a valid Soloist API key without whitespace.')
+    if (not isinstance(key, str) or not key or len(key.encode('utf-8')) > 16383
+            or any(not c.isprintable() or c.isspace() for c in key)):
+        raise ValueError('Enter a printable Soloist API key without whitespace (maximum 16383 UTF-8 bytes).')
     client = connect(config)
     try:
         with client.open_sftp() as sftp:

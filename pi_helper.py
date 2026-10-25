@@ -165,12 +165,36 @@ class PairingAgent(dbus.service.Object):
     def __init__(self, bus, loop, props):
         super().__init__(bus, '/org/piaudiotray/agent')
         self.bus, self.loop, self.props = bus, loop, props
+        self.bluez_owner = str(bus.get_name_owner('org.bluez'))
+        self.closing = False
         self.pending = {}
         self.counter = 0
         self.approved = set()
 
+    def check_sender(self, sender):
+        # Unique names are assigned by the bus, never accepted from method arguments.
+        if sender != self.bluez_owner:
+            raise Rejected('Only the registered BlueZ daemon may call this agent')
+
+    def cancel_pending(self):
+        pending, self.pending = self.pending, {}
+        for token, (_, fail, _) in pending.items():
+            try:
+                fail(Rejected('Pairing canceled'))
+            except dbus.DBusException:
+                pass
+            try:
+                emit(event='canceled', token=token)
+            except OSError:
+                pass  # SSH output may already be closed; still close the adapter.
+
+    def stop(self):
+        self.closing = True
+        self.cancel_pending()
+        self.loop.quit()
+
     def request(self, device, kind, ok, fail, code=None):
-        if len(self.pending) >= 8:
+        if self.closing or len(self.pending) >= 8:
             fail(Rejected('Too many pending pairing requests'))
             return
         self.counter += 1
@@ -180,16 +204,19 @@ class PairingAgent(dbus.service.Object):
         emit(event='confirm', token=token, kind=kind, code=code,
              name=safe_name(p.get('Alias', 'Bluetooth device')), address=str(p.get('Address', '')))
 
-    @dbus.service.method(AGENT, in_signature='ou', out_signature='', async_callbacks=('ok', 'fail'))
-    def RequestConfirmation(self, device, passkey, ok, fail):
+    @dbus.service.method(AGENT, in_signature='ou', out_signature='', async_callbacks=('ok', 'fail'), sender_keyword='sender')
+    def RequestConfirmation(self, device, passkey, ok, fail, sender=None):
+        self.check_sender(sender)
         self.request(device, 'passkey', ok, fail, f'{passkey:06d}')
 
-    @dbus.service.method(AGENT, in_signature='o', out_signature='', async_callbacks=('ok', 'fail'))
-    def RequestAuthorization(self, device, ok, fail):
+    @dbus.service.method(AGENT, in_signature='o', out_signature='', async_callbacks=('ok', 'fail'), sender_keyword='sender')
+    def RequestAuthorization(self, device, ok, fail, sender=None):
+        self.check_sender(sender)
         self.request(device, 'authorize', ok, fail)
 
-    @dbus.service.method(AGENT, in_signature='os', out_signature='', async_callbacks=('ok', 'fail'))
-    def AuthorizeService(self, device, uuid, ok, fail):
+    @dbus.service.method(AGENT, in_signature='os', out_signature='', async_callbacks=('ok', 'fail'), sender_keyword='sender')
+    def AuthorizeService(self, device, uuid, ok, fail, sender=None):
+        self.check_sender(sender)
         if str(uuid).lower() not in AUDIO_SERVICES:
             fail(Rejected('Only Bluetooth audio services are permitted by this agent'))
             return
@@ -199,42 +226,50 @@ class PairingAgent(dbus.service.Object):
         else:
             self.request(device, 'service', ok, fail)
 
-    @dbus.service.method(AGENT, in_signature='', out_signature='')
-    def Cancel(self):
-        for token, (_, fail, _) in list(self.pending.items()):
-            fail(Rejected('Pairing canceled'))
-            emit(event='canceled', token=token)
-        self.pending.clear()
+    @dbus.service.method(AGENT, in_signature='', out_signature='', sender_keyword='sender')
+    def Cancel(self, sender=None):
+        self.check_sender(sender)
+        self.cancel_pending()
 
-    @dbus.service.method(AGENT, in_signature='', out_signature='')
-    def Release(self):
-        self.loop.quit()
+    @dbus.service.method(AGENT, in_signature='', out_signature='', sender_keyword='sender')
+    def Release(self, sender=None):
+        self.check_sender(sender)
+        self.stop()
 
-    @dbus.service.method(AGENT, in_signature='o', out_signature='s')
-    def RequestPinCode(self, device):
+    @dbus.service.method(AGENT, in_signature='o', out_signature='s', sender_keyword='sender')
+    def RequestPinCode(self, device, sender=None):
+        self.check_sender(sender)
         raise Rejected('Legacy PIN devices are not supported')
 
-    @dbus.service.method(AGENT, in_signature='o', out_signature='u')
-    def RequestPasskey(self, device):
+    @dbus.service.method(AGENT, in_signature='o', out_signature='u', sender_keyword='sender')
+    def RequestPasskey(self, device, sender=None):
+        self.check_sender(sender)
         raise Rejected('Passkey entry is not supported')
 
-    @dbus.service.method(AGENT, in_signature='os', out_signature='')
-    def DisplayPinCode(self, device, pincode):
+    @dbus.service.method(AGENT, in_signature='os', out_signature='', sender_keyword='sender')
+    def DisplayPinCode(self, device, pincode, sender=None):
+        self.check_sender(sender)
         emit(event='display', code=str(pincode))
 
-    @dbus.service.method(AGENT, in_signature='ouq', out_signature='')
-    def DisplayPasskey(self, device, passkey, entered):
+    @dbus.service.method(AGENT, in_signature='ouq', out_signature='', sender_keyword='sender')
+    def DisplayPasskey(self, device, passkey, entered, sender=None):
+        self.check_sender(sender)
         emit(event='display', code=f'{passkey:06d}')
 
     def command(self, message):
         if not isinstance(message, dict):
             raise ValueError('Invalid pairing command')
         if message.get('action') == 'stop':
-            self.loop.quit()
+            self.stop()
         elif (message.get('action') in ('approve', 'reject')
               and isinstance(message.get('token'), str) and message['token'] in self.pending):
             ok, fail, device = self.pending.pop(message['token'])
             if message.get('action') == 'approve':
+                if self.closing or not all(self.props.Get(ADAPTER, flag)
+                                           for flag in ('Pairable', 'Discoverable')):
+                    fail(Rejected('Pairing is no longer enabled'))
+                    self.stop()
+                    return
                 self.approved.add(device)
                 ok()
             else:
@@ -296,13 +331,15 @@ def pair():
         emit(event='ready', expires=int(time.time()) + 180)
         loop.run()
     finally:
+        agent.closing = True
+        agent.cancel_pending()
         close_error = None
         try:
             close_pairing(props)
         except RuntimeError as exc:
             close_error = exc
         # Trust only devices whose request this user approved and which completed pairing.
-        for device in agent.approved:
+        for device in agent.approved if close_error is None else ():
             try:
                 p = dbus.Interface(bus.get_object('org.bluez', device), PROPS)
                 if p.Get(DEVICE, 'Paired'):

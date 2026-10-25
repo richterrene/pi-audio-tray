@@ -35,7 +35,7 @@ on each deployment; service readiness alone does not prove audible playback.
 
 For a new receiver, follow [Pi setup](docs/PI_SETUP.md) before using the tray.
 The app's **Set up / update Pi helper** installs the status/pairing helper only;
-it does not install the complete audio stack. [Security notes](SECURITY.md)
+it does not install the complete audio stack. [Security model, permissions, incident recovery and audit checks](SECURITY.md)
 explain key handling and privileged operations. Existing installations should
 follow the [0.3 upgrade steps](docs/PI_SETUP.md#upgrading-an-existing-installation);
 updating the desktop package alone does not replace Pi-side maintenance scripts.
@@ -92,8 +92,8 @@ directory and does not connect to a receiver.
 Download the x86_64 AppImage, make it executable, and launch it:
 
 ```sh
-chmod +x PiAudioTray-0.3.0-x86_64.AppImage
-./PiAudioTray-0.3.0-x86_64.AppImage --show
+chmod +x PiAudioTray-0.3.1-x86_64.AppImage
+./PiAudioTray-0.3.1-x86_64.AppImage --show
 ```
 
 Ubuntu's AppIndicator extension must be enabled for the tray icon. When no tray

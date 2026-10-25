@@ -126,6 +126,12 @@ class BoundedSSH(unittest.TestCase):
         session.input.write.assert_not_called()
         self.assertEqual(session.outgoing.get_nowait(), {'action': 'approve', 'token': '1'})
 
+    def test_invalid_or_oversized_key_is_rejected_before_ssh(self):
+        for key in ('a' * 16384, 'é' * 8192, 'test\0key', 'test\nkey', None):
+            with patch.object(core, 'connect') as connect:
+                with self.assertRaises(ValueError): core.store_soloist_key(core.DEFAULTS, key)
+                connect.assert_not_called()
+
     def test_pairing_control_queue_is_bounded(self):
         session = core.PairSession(core.DEFAULTS, Mock())
         for _ in range(16): session.send(action='stop')
@@ -239,6 +245,8 @@ class UpdaterSecurity(unittest.TestCase):
             link.symlink_to(path)
             with self.assertRaises(OSError): launcher.load_key(link)
             path.write_bytes(b'x' * 16385)
+            with self.assertRaises(ValueError): launcher.load_key(path)
+            path.write_bytes(b'test\0key')
             with self.assertRaises(ValueError): launcher.load_key(path)
 
 
