@@ -35,7 +35,7 @@ on each deployment; service readiness alone does not prove audible playback.
 
 For a new receiver, follow [Pi setup](docs/PI_SETUP.md) before using the tray.
 The app's **Set up / update Pi helper** installs the status/pairing helper only;
-it does not install the complete audio stack. [Security notes](SECURITY.md)
+it does not install the complete audio stack. [Security model, permissions, incident recovery and audit checks](SECURITY.md)
 explain key handling and privileged operations. Existing installations should
 follow the [0.3 upgrade steps](docs/PI_SETUP.md#upgrading-an-existing-installation);
 updating the desktop package alone does not replace Pi-side maintenance scripts.
@@ -59,10 +59,14 @@ updating the desktop package alone does not replace Pi-side maintenance scripts.
   Key files on the Pi are private (directory mode 700, file mode 600).
 - Soloist build lifetime and automatic update status, including failed update runs.
 
-CPU usage is sampled across all cores over approximately 100 ms on each refresh;
-load averages are Linux runnable/uninterruptible task counts, not percentages.
+CPU usage is averaged across all cores between refreshes (a one-second sample
+on the first refresh or after a cache reset); the displayed window shows the
+actual averaging interval. One fully busy core on a four-core Pi is about 25%.
+A quiet Pi can correctly show 0.0%. Load averages are Linux runnable/uninterruptible
+task counts, not percentages.
 Memory use subtracts MemAvailable (including reclaimable cache), and disk use
-covers the root filesystem only. These are snapshots, without history storage.
+covers the root filesystem only. Only the previous CPU counters are cached
+privately on the Pi; no historical time series is stored.
 
 Spotify status is the **service status**, not currently playing tracks. Bluetooth
 device status indicates a connection, not proof of current audio playback.
@@ -92,8 +96,8 @@ directory and does not connect to a receiver.
 Download the x86_64 AppImage, make it executable, and launch it:
 
 ```sh
-chmod +x PiAudioTray-0.3.0-x86_64.AppImage
-./PiAudioTray-0.3.0-x86_64.AppImage --show
+chmod +x PiAudioTray-0.3.1-x86_64.AppImage
+./PiAudioTray-0.3.1-x86_64.AppImage --show
 ```
 
 Ubuntu's AppIndicator extension must be enabled for the tray icon. When no tray
@@ -214,6 +218,7 @@ screenshots if you intend to keep device names private.
 ```sh
 python3 -m venv .venv
 . .venv/bin/activate
+python -m pip install --upgrade pip==26.2.0
 pip install -r requirements.txt
 python -m unittest discover -s tests -v
 python app.py --show

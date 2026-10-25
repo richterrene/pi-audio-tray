@@ -128,7 +128,7 @@ class Settings(QDialog):
                 for key, value in self.fields.items()}
 
     def accept(self):
-        if self.parentWidget().busy - {'poll'}:
+        if self.parentWidget().session or self.parentWidget().busy - {'poll'}:
             plain_information(self, 'Pi operation in progress',
                               'Wait for the current Pi operation before saving connection changes.')
             return
@@ -248,6 +248,10 @@ class TrayApp(QWidget):
     def job(self, kind, func):
         if kind in self.busy:
             return
+        if kind not in ('poll', 'off') and self.busy - {'poll'}:
+            plain_information(self, 'Pi operation in progress',
+                              'Wait for the current Pi operation before starting another.')
+            return
         self.busy.add(kind)
         generation = self.generation
         def worker():
@@ -294,7 +298,7 @@ class TrayApp(QWidget):
         self.enable_controls()
 
     def enable_controls(self):
-        can_start = bool(self.snapshot) and self.session is None
+        can_start = bool(self.snapshot) and self.session is None and not self.busy - {'poll'}
         self.on_action.setEnabled(can_start)
         self.pair_button.setEnabled(can_start)
         can_stop = bool(self.snapshot) or self.session is not None
@@ -332,7 +336,9 @@ class TrayApp(QWidget):
             stats = data.get('stats', {})
             temperature, cpu = stats.get('temperature_c'), stats.get('cpu_percent')
             self.row('temperature', f'{temperature:.1f} °C' if temperature is not None else 'Unavailable')
-            self.row('cpu', f'{cpu:.1f} %' if cpu is not None else 'Unavailable')
+            window = stats.get('cpu_window_seconds')
+            self.row('cpu', (f'{cpu:.1f} %' + (f' · {window:.1f}s avg' if window else ''))
+                     if cpu is not None else 'Unavailable')
             load = stats.get('load')
             self.row('load', ' / '.join(f'{v:.2f}' for v in load) if load else 'Unavailable')
             for key, prefix in (('memory', 'memory'), ('disk', 'disk')):
@@ -391,7 +397,11 @@ class TrayApp(QWidget):
             if not config['host'] or not config['username']:
                 plain_warning(self, 'Settings', 'Enter a hostname and SSH username.')
                 return
-            save_config(config)
+            try:
+                save_config(config)
+            except (OSError, ValueError, TypeError) as exc:
+                plain_warning(self, 'Settings', display_text(exc))
+                return
             self.config = config
             self.generation += 1
             self.busy.clear()
@@ -436,7 +446,7 @@ class TrayApp(QWidget):
         self.job('update', lambda: update_soloist(config))
 
     def start_pairing(self):
-        if self.session:
+        if self.session or self.busy - {'poll'}:
             return
         self.session = PairSession(self.config, self.events.pairing.emit)
         self.row('pairing', 'Starting…')

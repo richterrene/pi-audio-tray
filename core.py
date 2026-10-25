@@ -232,7 +232,8 @@ def validate_status(data):
     if not isinstance(raw_stats, dict):
         raise ValueError('Invalid Pi statistics')
     stats = {}
-    for key, minimum, maximum in (('cpu_percent', 0, 100), ('temperature_c', -50, 150)):
+    for key, minimum, maximum in (('cpu_percent', 0, 100), ('temperature_c', -50, 150),
+                                    ('cpu_window_seconds', 0, 3600)):
         value = raw_stats.get(key)
         if value is not None:
             if type(value) not in (int, float) or not math.isfinite(value) or not minimum <= value <= maximum:
@@ -278,8 +279,9 @@ def disable_pairing(config):
 
 
 def store_soloist_key(config, key):
-    if not key or len(key) > 16384 or any(c.isspace() for c in key):
-        raise ValueError('Please enter a valid Soloist API key without whitespace.')
+    if (not isinstance(key, str) or not key or len(key.encode('utf-8')) > 16383
+            or any(not c.isprintable() or c.isspace() for c in key)):
+        raise ValueError('Enter a printable Soloist API key without whitespace (maximum 16383 UTF-8 bytes).')
     client = connect(config)
     try:
         with client.open_sftp() as sftp:

@@ -11,7 +11,7 @@ Do not run the whole session as root: PipeWire and Soloist use user services.
 ```sh
 sudo apt update
 sudo apt install curl bluez python3-dbus python3-gi pipewire pipewire-pulse wireplumber pipewire-bin libspa-0.2-bluetooth
-sudo install -d -m 755 /usr/local/lib/pi-audio-tray
+sudo install -o root -g root -d -m 755 /usr/local/lib/pi-audio-tray
 sudo install -o root -g root -m 755 pi_helper.py /usr/local/lib/pi-audio-tray/pi-helper
 sudo install -o root -g root -m 755 pi/soloist-launch.py /usr/local/lib/pi-audio-tray/soloist-launch
 ```
@@ -83,7 +83,7 @@ systemctl --user show soloist -p ActiveState -p SubState
 
 ```sh
 sudo install -o root -g root -m 755 pi/soloist-update.py /usr/local/lib/pi-audio-tray/soloist-update
-sudo install -d -m 755 /etc/pi-audio-tray
+sudo install -o root -g root -d -m 755 /etc/pi-audio-tray
 id -un | sudo tee /etc/pi-audio-tray/soloist-user >/dev/null
 sudo install -m 644 pi/soloist-update.service pi/soloist-update.timer /etc/systemd/system/
 sudo systemctl daemon-reload
@@ -134,7 +134,7 @@ installer: update the helper manually as an administrator when needed.
 
 ## Upgrading an existing installation
 
-For 0.3, update the desktop package **and** the Pi components. From a reviewed copy
+For security fixes in the 0.3 series, update the desktop package **and** the Pi components. From a reviewed copy
 of this release on the Pi, back up your existing units, then install the helper
 and launcher from step 1, the user unit from step 3, and the updater and its units
 from step 4. If conditional reboots are enabled, also reinstall `reboot-if-needed`

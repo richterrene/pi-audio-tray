@@ -7,6 +7,9 @@ import sys
 import subprocess
 import time
 import shutil
+import stat
+import tempfile
+import math
 import unicodedata
 from pathlib import Path
 
@@ -29,16 +32,81 @@ def safe_name(value):
                    and unicodedata.category(c) != 'Cf')[:128]
 
 
+def cpu_ticks():
+    values = [int(v) for v in Path('/proc/stat').read_text().splitlines()[0].split()[1:9]]
+    return sum(values), values[3] + values[4]
+
+
+def cpu_usage(cache_dir=None):
+    """Average between polls; first poll/cache failures use a one-second sample."""
+    def sample():
+        total, idle = cpu_ticks()
+        return {'total': total, 'idle': idle, 'time': time.monotonic(),
+                'boot': Path('/proc/sys/kernel/random/boot_id').read_text().strip()}
+
+    def percentage(before, after):
+        total = after['total'] - before['total']
+        idle = after['idle'] - before['idle']
+        window = after['time'] - before['time']
+        if total <= 0 or not 0 <= idle <= total or not 0 < window <= 3600:
+            return None, None
+        return round(100 * (1 - idle / total), 1), round(window, 2)
+
+    before, current = None, sample()
+    folder = cache_dir if cache_dir is not None else Path.home() / '.cache/pi-audio-tray'
+    directory = None
+    try:
+        folder.mkdir(mode=0o700, parents=True, exist_ok=True)
+        directory = os.open(folder, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        if os.fstat(directory).st_uid != os.getuid():
+            raise ValueError('Unsafe CPU sample cache')
+        os.fchmod(directory, 0o700)
+        try:
+            fd = os.open('cpu.json', os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory)
+            with os.fdopen(fd, 'rb') as stream:
+                info = os.fstat(stream.fileno())
+                if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or info.st_size > 4096:
+                    raise ValueError('Unsafe CPU sample file')
+                stored = json.loads(stream.read(4097))
+            if (isinstance(stored, dict) and stored.get('boot') == current['boot']
+                    and all(type(stored.get(k)) is int and stored[k] >= 0 for k in ('total', 'idle'))
+                    and type(stored.get('time')) in (int, float) and 0 <= stored['time'] <= 10**12
+                    and math.isfinite(stored['time'])
+                    and 1 <= current['time'] - stored['time'] <= 3600):
+                before = stored
+        except (OSError, ValueError, TypeError):
+            pass
+        if before is None or percentage(before, current)[0] is None:
+            before = current
+            time.sleep(1)
+            current = sample()
+        # Exclusive private temp creation and atomic replacement never follow
+        # an existing cache-file link. Concurrent readers see a complete sample.
+        fd, temp = tempfile.mkstemp(prefix='.cpu-', dir=folder)
+        try:
+            with os.fdopen(fd, 'w') as stream:
+                json.dump(current, stream)
+            os.replace(Path(temp).name, 'cpu.json', src_dir_fd=directory, dst_dir_fd=directory)
+        finally:
+            try:
+                os.unlink(Path(temp).name, dir_fd=directory)
+            except FileNotFoundError:
+                pass
+    except (OSError, ValueError, TypeError):
+        if before is None:
+            before = current
+            time.sleep(1)
+            current = sample()
+    finally:
+        if directory is not None:
+            os.close(directory)
+    return percentage(before, current)
+
+
 def collect_stats():
     result = {}
     try:
-        def ticks():
-            values = [int(v) for v in Path('/proc/stat').read_text().splitlines()[0].split()[1:9]]
-            return sum(values), values[3] + values[4]
-        before, idle_before = ticks()
-        time.sleep(0.1)
-        after, idle_after = ticks()
-        result['cpu_percent'] = round(max(0, min(100, 100 * (1 - (idle_after - idle_before) / (after - before)))), 1) if after > before else None
+        result['cpu_percent'], result['cpu_window_seconds'] = cpu_usage()
     except (OSError, ValueError, IndexError):
         result['cpu_percent'] = None
     try:
@@ -165,12 +233,36 @@ class PairingAgent(dbus.service.Object):
     def __init__(self, bus, loop, props):
         super().__init__(bus, '/org/piaudiotray/agent')
         self.bus, self.loop, self.props = bus, loop, props
+        self.bluez_owner = str(bus.get_name_owner('org.bluez'))
+        self.closing = False
         self.pending = {}
         self.counter = 0
         self.approved = set()
 
+    def check_sender(self, sender):
+        # Unique names are assigned by the bus, never accepted from method arguments.
+        if sender != self.bluez_owner:
+            raise Rejected('Only the registered BlueZ daemon may call this agent')
+
+    def cancel_pending(self):
+        pending, self.pending = self.pending, {}
+        for token, (_, fail, _) in pending.items():
+            try:
+                fail(Rejected('Pairing canceled'))
+            except dbus.DBusException:
+                pass
+            try:
+                emit(event='canceled', token=token)
+            except OSError:
+                pass  # SSH output may already be closed; still close the adapter.
+
+    def stop(self):
+        self.closing = True
+        self.cancel_pending()
+        self.loop.quit()
+
     def request(self, device, kind, ok, fail, code=None):
-        if len(self.pending) >= 8:
+        if self.closing or len(self.pending) >= 8:
             fail(Rejected('Too many pending pairing requests'))
             return
         self.counter += 1
@@ -180,16 +272,19 @@ class PairingAgent(dbus.service.Object):
         emit(event='confirm', token=token, kind=kind, code=code,
              name=safe_name(p.get('Alias', 'Bluetooth device')), address=str(p.get('Address', '')))
 
-    @dbus.service.method(AGENT, in_signature='ou', out_signature='', async_callbacks=('ok', 'fail'))
-    def RequestConfirmation(self, device, passkey, ok, fail):
+    @dbus.service.method(AGENT, in_signature='ou', out_signature='', async_callbacks=('ok', 'fail'), sender_keyword='sender')
+    def RequestConfirmation(self, device, passkey, ok, fail, sender=None):
+        self.check_sender(sender)
         self.request(device, 'passkey', ok, fail, f'{passkey:06d}')
 
-    @dbus.service.method(AGENT, in_signature='o', out_signature='', async_callbacks=('ok', 'fail'))
-    def RequestAuthorization(self, device, ok, fail):
+    @dbus.service.method(AGENT, in_signature='o', out_signature='', async_callbacks=('ok', 'fail'), sender_keyword='sender')
+    def RequestAuthorization(self, device, ok, fail, sender=None):
+        self.check_sender(sender)
         self.request(device, 'authorize', ok, fail)
 
-    @dbus.service.method(AGENT, in_signature='os', out_signature='', async_callbacks=('ok', 'fail'))
-    def AuthorizeService(self, device, uuid, ok, fail):
+    @dbus.service.method(AGENT, in_signature='os', out_signature='', async_callbacks=('ok', 'fail'), sender_keyword='sender')
+    def AuthorizeService(self, device, uuid, ok, fail, sender=None):
+        self.check_sender(sender)
         if str(uuid).lower() not in AUDIO_SERVICES:
             fail(Rejected('Only Bluetooth audio services are permitted by this agent'))
             return
@@ -199,42 +294,50 @@ class PairingAgent(dbus.service.Object):
         else:
             self.request(device, 'service', ok, fail)
 
-    @dbus.service.method(AGENT, in_signature='', out_signature='')
-    def Cancel(self):
-        for token, (_, fail, _) in list(self.pending.items()):
-            fail(Rejected('Pairing canceled'))
-            emit(event='canceled', token=token)
-        self.pending.clear()
+    @dbus.service.method(AGENT, in_signature='', out_signature='', sender_keyword='sender')
+    def Cancel(self, sender=None):
+        self.check_sender(sender)
+        self.cancel_pending()
 
-    @dbus.service.method(AGENT, in_signature='', out_signature='')
-    def Release(self):
-        self.loop.quit()
+    @dbus.service.method(AGENT, in_signature='', out_signature='', sender_keyword='sender')
+    def Release(self, sender=None):
+        self.check_sender(sender)
+        self.stop()
 
-    @dbus.service.method(AGENT, in_signature='o', out_signature='s')
-    def RequestPinCode(self, device):
+    @dbus.service.method(AGENT, in_signature='o', out_signature='s', sender_keyword='sender')
+    def RequestPinCode(self, device, sender=None):
+        self.check_sender(sender)
         raise Rejected('Legacy PIN devices are not supported')
 
-    @dbus.service.method(AGENT, in_signature='o', out_signature='u')
-    def RequestPasskey(self, device):
+    @dbus.service.method(AGENT, in_signature='o', out_signature='u', sender_keyword='sender')
+    def RequestPasskey(self, device, sender=None):
+        self.check_sender(sender)
         raise Rejected('Passkey entry is not supported')
 
-    @dbus.service.method(AGENT, in_signature='os', out_signature='')
-    def DisplayPinCode(self, device, pincode):
+    @dbus.service.method(AGENT, in_signature='os', out_signature='', sender_keyword='sender')
+    def DisplayPinCode(self, device, pincode, sender=None):
+        self.check_sender(sender)
         emit(event='display', code=str(pincode))
 
-    @dbus.service.method(AGENT, in_signature='ouq', out_signature='')
-    def DisplayPasskey(self, device, passkey, entered):
+    @dbus.service.method(AGENT, in_signature='ouq', out_signature='', sender_keyword='sender')
+    def DisplayPasskey(self, device, passkey, entered, sender=None):
+        self.check_sender(sender)
         emit(event='display', code=f'{passkey:06d}')
 
     def command(self, message):
         if not isinstance(message, dict):
             raise ValueError('Invalid pairing command')
         if message.get('action') == 'stop':
-            self.loop.quit()
+            self.stop()
         elif (message.get('action') in ('approve', 'reject')
               and isinstance(message.get('token'), str) and message['token'] in self.pending):
             ok, fail, device = self.pending.pop(message['token'])
             if message.get('action') == 'approve':
+                if self.closing or not all(self.props.Get(ADAPTER, flag)
+                                           for flag in ('Pairable', 'Discoverable')):
+                    fail(Rejected('Pairing is no longer enabled'))
+                    self.stop()
+                    return
                 self.approved.add(device)
                 ok()
             else:
@@ -296,13 +399,15 @@ def pair():
         emit(event='ready', expires=int(time.time()) + 180)
         loop.run()
     finally:
+        agent.closing = True
+        agent.cancel_pending()
         close_error = None
         try:
             close_pairing(props)
         except RuntimeError as exc:
             close_error = exc
         # Trust only devices whose request this user approved and which completed pairing.
-        for device in agent.approved:
+        for device in agent.approved if close_error is None else ():
             try:
                 p = dbus.Interface(bus.get_object('org.bluez', device), PROPS)
                 if p.Get(DEVICE, 'Paired'):

@@ -83,16 +83,39 @@ class PairingDialogs(unittest.TestCase):
         message.assert_called_once()
         self.assertNotEqual(settings.result(), settings.DialogCode.Accepted)
 
+    def test_connection_cannot_be_saved_during_pairing(self):
+        settings = Settings(self.window.config, self.window)
+        with patch('app.plain_information') as message:
+            settings.accept()
+        message.assert_called_once()
+        self.assertNotEqual(settings.result(), settings.DialogCode.Accepted)
+
+    def test_pairing_cannot_start_during_helper_installation(self):
+        self.window.session = None
+        self.window.busy.add('setup')
+        with patch('app.PairSession') as session:
+            self.window.start_pairing()
+        session.assert_not_called()
+
+    def test_mutations_cannot_overlap_but_emergency_pairing_off_is_allowed(self):
+        self.window.busy.add('update')
+        with patch('app.plain_information') as message, patch('app.threading.Thread') as thread:
+            self.window.job('key', Mock())
+            thread.assert_not_called()
+            message.assert_called_once()
+            self.window.job('off', Mock())
+            thread.assert_called_once()
+
     def test_all_requested_pi_statistics_are_displayed(self):
         self.window.config['host'] = 'audio-pi.example'
         self.window.done('poll', {'services': {'soloist': 'active', 'bluetooth': 'active',
             'pipewire': 'active', 'wireplumber': 'active'}, 'adapter': {'Powered': True},
             'devices': [], 'spotify_backend': 'soloist', 'soloist': {}, 'stats': {
-                'cpu_percent': 12.5, 'temperature_c': 43.1, 'load': [0.4, 0.3, 0.2],
+                'cpu_percent': 12.5, 'cpu_window_seconds': 10, 'temperature_c': 43.1, 'load': [0.4, 0.3, 0.2],
                 'memory_total': 1024**3, 'memory_used': 512 * 1024**2,
                 'disk_total': 16 * 1024**3, 'disk_used': 4 * 1024**3, 'uptime_seconds': 90061}})
         self.assertEqual(self.window.rows['temperature'].text(), '43.1 °C')
-        self.assertEqual(self.window.rows['cpu'].text(), '12.5 %')
+        self.assertEqual(self.window.rows['cpu'].text(), '12.5 % · 10.0s avg')
         self.assertEqual(self.window.rows['load'].text(), '0.40 / 0.30 / 0.20')
         self.assertIn('50%', self.window.rows['memory'].text())
         self.assertIn('25%', self.window.rows['disk'].text())

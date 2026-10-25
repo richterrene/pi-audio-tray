@@ -22,7 +22,7 @@ def load_key(path):
         key = raw.decode('utf-8').strip()
     except UnicodeError:
         raise ValueError('Invalid API key file') from None
-    if not key or len(raw) > 16384 or any(c.isspace() for c in key):
+    if not key or len(raw) > 16384 or any(not c.isprintable() or c.isspace() for c in key):
         raise ValueError('Invalid API key file')
     return key
 
