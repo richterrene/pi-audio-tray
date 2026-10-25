@@ -33,6 +33,12 @@ class PrivacyAndHostVerification(unittest.TestCase):
             with self.assertRaises(ValueError):
                 validate_config({**load_config(), **changes})
 
+    def test_macos_uses_application_support_without_an_xdg_override(self):
+        import core
+        with patch.dict(os.environ, {}, clear=True), patch.object(core.sys, 'platform', 'darwin'), \
+             patch.object(core.Path, 'home', return_value=Path(self.temp.name)):
+            self.assertEqual(core.config_dir(), Path(self.temp.name) / 'Library/Application Support/Pi Audio Tray')
+
     def test_unknown_host_requires_explicit_approval(self):
         key = paramiko.RSAKey.generate(2048)
         with self.assertRaises(UnknownHost) as raised:

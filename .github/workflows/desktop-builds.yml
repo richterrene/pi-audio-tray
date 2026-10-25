@@ -1,0 +1,48 @@
+name: Desktop builds
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: sudo apt-get update && sudo apt-get install -y squashfs-tools libegl1 libopengl0
+      - run: python -m venv .venv && .venv/bin/python -m pip install -r requirements.txt
+      - run: .venv/bin/python -m unittest discover -s tests -v
+      - run: .venv/bin/python build_appimage.py
+      - run: QT_QPA_PLATFORM=offscreen APPIMAGE_EXTRACT_AND_RUN=1 dist/*.AppImage --self-test
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PiAudioTray-Linux-x86_64
+          path: dist/*
+          retention-days: 14
+  macos:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x86_64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m venv .venv && .venv/bin/python -m pip install -r requirements.txt
+      - run: .venv/bin/python -m unittest discover -s tests -v
+      - run: .venv/bin/python build_macos.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PiAudioTray-macOS-${{ matrix.arch }}
+          path: dist/*
+          retention-days: 14

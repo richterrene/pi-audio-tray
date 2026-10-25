@@ -13,3 +13,7 @@ id_*
 api-key
 api-key.*
 soloist-user
+*.p12
+*.pfx
+*.mobileprovision
+*.provisionprofile

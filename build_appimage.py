@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Build in a neutral directory so local usernames never enter compiled paths."""
 import hashlib
-import importlib.metadata
 import os
 from pathlib import Path
 import shutil
@@ -10,6 +9,7 @@ import sys
 import tempfile
 import urllib.request
 from version import VERSION
+from packaging_support import prepare_source
 
 ROOT = Path(__file__).resolve().parent
 RUNTIME_URL = 'https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-x86_64'
@@ -21,26 +21,7 @@ def main():
         raise SystemExit('This build script targets x86_64 Linux.')
     work = Path(tempfile.mkdtemp(prefix='pi-audio-tray-build-', dir='/tmp'))
     try:
-        source = work / 'src'
-        source.mkdir()
-        for name in ('app.py', 'core.py', 'pi_helper.py', 'version.py', 'LICENSE', 'THIRD_PARTY.md'):
-            shutil.copy2(ROOT / name, source / name)
-        (source / 'assets').mkdir()
-        shutil.copy2(ROOT / 'assets/pi-audio-tray.svg', source / 'assets/pi-audio-tray.svg')
-        licenses = source / 'licenses'
-        licenses.mkdir()
-        for candidate in (Path(sys.base_prefix) / 'LICENSE.txt',
-                          Path(sys.base_prefix) / 'lib/python3.12/LICENSE.txt'):
-            if candidate.exists():
-                shutil.copy2(candidate, licenses / 'Python-LICENSE.txt')
-                break
-        for distribution in importlib.metadata.distributions():
-            for item in distribution.files or []:
-                text = str(item)
-                if '.dist-info/licenses/' in text:
-                    destination = licenses / text
-                    destination.parent.mkdir(parents=True, exist_ok=True)
-                    shutil.copy2(distribution.locate_file(item), destination)
+        source = prepare_source(work)
         subprocess.run([sys.executable, '-m', 'PyInstaller', '--noconfirm', '--clean',
             '--name', 'pi-audio-tray', '--onedir', '--windowed',
             '--add-data', 'pi_helper.py:.', '--add-data', 'LICENSE:.',

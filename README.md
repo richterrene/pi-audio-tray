@@ -13,8 +13,10 @@ affiliated with Spotify or Raspberry Pi.
 
 | Component | Tested / required |
 | --- | --- |
-| Desktop | Ubuntu 26.04 x86_64, GNOME with the AppIndicator extension |
-| Desktop package | x86_64 AppImage; no desktop ARM, Windows, or macOS release |
+| Linux desktop tested | Ubuntu 26.04 x86_64, GNOME with the AppIndicator extension |
+| Linux package | x86_64 AppImage; other Linux architectures are not packaged |
+| macOS packages | Separate Apple Silicon (arm64) and Intel (x86_64) `.app.zip` builds, targeting macOS 15+; see [macOS notes](docs/MACOS.md) for validation and signing status |
+| Windows | Not supported |
 | Receiver tested | Raspberry Pi 3 Model B+, 1 GB RAM, 64-bit Raspberry Pi OS / Debian 13 Trixie |
 | Receiver audio output tested | Built-in 3.5 mm headphone output; other DACs/HDMI not tested |
 | Recommended audio stack | Spotify Soloist ARM64, PipeWire 1.4, WirePlumber 0.5, BlueZ |
@@ -58,6 +60,8 @@ device status indicates a connection, not proof of current audio playback.
 
 ## Run
 
+### Linux
+
 Download the x86_64 AppImage, make it executable, and launch it:
 
 ```sh
@@ -76,6 +80,14 @@ location. Use an SSH agent for passphrase-protected keys; this app does not save
 passwords or passphrases. If you connect through a different hostname from the
 one already in `~/.ssh/known_hosts`, enter the old name in **Known-host alias**.
 Unknown host keys require explicit fingerprint approval; changed keys are rejected.
+
+### macOS
+
+Download the ZIP matching your Mac's architecture, extract it, and drag **Pi Audio
+Tray.app** into Applications. The app lives in the menu bar; **Open status** shows
+its window. Initial builds are ad-hoc signed, **not Developer ID signed or
+notarized**. See [macOS setup and signing](docs/MACOS.md) before downloading.
+The Pi configuration and SSH permissions are the same as on Linux.
 
 Choose **Set up / update Pi helper** once. This installs `python3-dbus` and
 `python3-gi` from the Pi's apt repositories and a root-owned helper under
@@ -154,7 +166,8 @@ Legacy devices requiring PIN entry are currently unsupported.
 ## Local data and privacy
 
 Configuration and app-approved host keys are stored in
-`$XDG_CONFIG_HOME/pi-audio-tray` (normally `~/.config/pi-audio-tray`). That directory
+`$XDG_CONFIG_HOME/pi-audio-tray` (normally `~/.config/pi-audio-tray` on Linux).
+On macOS the default is `~/Library/Application Support/Pi Audio Tray`. That directory
 is not in the repository or AppImage. SSH private keys stay on the desktop.
 The Soloist API key is deliberately sent to the Pi over SSH and stored there;
 it is never included in Git or AppImage builds. Connected device names and addresses
@@ -187,7 +200,8 @@ The build downloads a versioned official AppImage runtime and verifies its pinne
 SHA-256 checksum. Output and checksum are placed in `dist/`. Qt shared libraries
 and third-party notices can be inspected with `--appimage-extract`.
 
-The optional `packaging/github-actions-build.yml` template builds on Ubuntu 24.04
-and uploads an artifact. To enable it later, copy it to `.github/workflows/build.yml`
-using a GitHub credential with workflow permissions. It does not publish a public
-release or change repository visibility.
+The active `.github/workflows/desktop-builds.yml` workflow builds Linux on Ubuntu
+24.04 and macOS on Apple Silicon and Intel macOS 15 runners. It can be dispatched
+manually or triggered by a version tag. It uploads artifacts, not public releases,
+and does not change repository visibility. Mac builds require native macOS tools;
+run `python build_macos.py` on the desired architecture. See the macOS notes.

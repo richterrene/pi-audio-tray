@@ -17,7 +17,12 @@ DEFAULTS = {'host': '', 'username': '', 'port': 22, 'key_file': '',
 
 
 def config_dir():
-    root = Path(os.environ.get('XDG_CONFIG_HOME', Path.home() / '.config')) / 'pi-audio-tray'
+    if os.environ.get('XDG_CONFIG_HOME'):
+        root = Path(os.environ['XDG_CONFIG_HOME']) / 'pi-audio-tray'
+    elif sys.platform == 'darwin':
+        root = Path.home() / 'Library/Application Support/Pi Audio Tray'
+    else:
+        root = Path.home() / '.config/pi-audio-tray'
     root.mkdir(parents=True, exist_ok=True, mode=0o700)
     return root
 
