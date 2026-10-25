@@ -27,7 +27,11 @@ def main():
         'services': {'soloist': 'active', 'bluetooth': 'active', 'pipewire': 'active', 'wireplumber': 'active'},
         'adapter': {'Powered': True, 'Pairable': False, 'Discoverable': False},
         'devices': [{'name': 'Phone'}], 'spotify_backend': 'soloist',
-        'soloist': {'key_configured': True, 'days_remaining': 88, 'automatic_updates': True, 'update_failed': False}
+        'soloist': {'key_configured': True, 'days_remaining': 88, 'automatic_updates': True, 'update_failed': False},
+        'stats': {'temperature_c': 43.1, 'cpu_percent': 12.5, 'cpu_count': 4,
+                  'load': [0.42, 0.31, 0.22], 'memory_used': 320 * 1024**2,
+                  'memory_total': 900 * 1024**2, 'disk_used': 3 * 1024**3,
+                  'disk_total': 15 * 1024**3, 'uptime_seconds': 183600}
     })
     window.notice.setText('Demo connection · Service status is separate from track playback.')
     window.resize(560, window.sizeHint().height())

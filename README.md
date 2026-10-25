@@ -36,12 +36,16 @@ on each deployment; service readiness alone does not prove audible playback.
 For a new receiver, follow [Pi setup](docs/PI_SETUP.md) before using the tray.
 The app's **Set up / update Pi helper** installs the status/pairing helper only;
 it does not install the complete audio stack. [Security notes](SECURITY.md)
-explain key handling and privileged operations.
+explain key handling and privileged operations. Existing installations should
+follow the [0.3 upgrade steps](docs/PI_SETUP.md#upgrading-an-existing-installation);
+updating the desktop package alone does not replace Pi-side maintenance scripts.
 
 ## Features
 
 - Pi reachability, Soloist/Raspotify service state, Bluetooth power, audio services,
   connected device names, and pairing state.
+- Pi temperature, aggregate CPU usage, 1/5/15-minute load, memory, root-disk use,
+  and uptime in both the status window and tray menu. Missing sensors show N/A.
 - Three-minute pairing window with confirmation dialogs on the desktop.
 - Pairing closes on timeout, normal app exit, or SSH channel closure. BlueZ's
   own pairing/discovery timeouts also limit the window if the helper crashes.
@@ -54,6 +58,11 @@ explain key handling and privileged operations.
 - Soloist API key entry, replacement, and removal without storing a local copy.
   Key files on the Pi are private (directory mode 700, file mode 600).
 - Soloist build lifetime and automatic update status, including failed update runs.
+
+CPU usage is sampled across all cores over approximately 100 ms on each refresh;
+load averages are Linux runnable/uninterruptible task counts, not percentages.
+Memory use subtracts MemAvailable (including reclaimable cache), and disk use
+covers the root filesystem only. These are snapshots, without history storage.
 
 Spotify status is the **service status**, not currently playing tracks. Bluetooth
 device status indicates a connection, not proof of current audio playback.
@@ -83,8 +92,8 @@ directory and does not connect to a receiver.
 Download the x86_64 AppImage, make it executable, and launch it:
 
 ```sh
-chmod +x PiAudioTray-0.2.2-x86_64.AppImage
-./PiAudioTray-0.2.2-x86_64.AppImage --show
+chmod +x PiAudioTray-0.3.0-x86_64.AppImage
+./PiAudioTray-0.3.0-x86_64.AppImage --show
 ```
 
 Ubuntu's AppIndicator extension must be enabled for the tray icon. When no tray
@@ -134,8 +143,10 @@ the secret into a service unit or this repository.
 
 The **90-day lifetime applies to client builds, not API keys**. The optional
 `soloist-update` service downloads ARM64 builds directly from Spotify, checks
-the archive and executable format, verifies the executable can report its
-version, and atomically replaces it only when changed. The previous executable
+bounded archive contents and the ARM64 executable header, and atomically
+replaces it only when changed. It never runs downloaded code as root. Redirects
+stay on Spotify’s official HTTPS download host, and the systemd service limits
+filesystem access and resources. There is no separate vendor signature check. The previous executable
 is retained as `/usr/local/bin/soloist.previous`. Keys and session data are preserved.
 The updater reads the local service account name from `/etc/pi-audio-tray/soloist-user`.
 It requires root ownership for its script and configuration. The daily timer runs
@@ -163,10 +174,12 @@ sudo unattended-upgrade --dry-run --debug
 systemctl list-timers apt-daily.timer apt-daily-upgrade.timer soloist-update.timer pi-audio-reboot.timer
 ```
 
+The supplied Soloist unit disables the unauthenticated WebSocket control server.
+Consequently, `soloist ctl` commands requiring that server are unavailable by
+default; playback is controlled through Spotify Connect.
+
 Logs are available with `journalctl -u soloist-update.service` and under
-`/var/log/unattended-upgrades/`. For Soloist local commands with the supplied
-user unit, use `soloist ctl status -D ~/.local/state/soloist` (the user unit uses
-systemd's state directory instead of the CLI's default data directory).
+`/var/log/unattended-upgrades/`.
 
 If preferred, install manually on the Pi:
 

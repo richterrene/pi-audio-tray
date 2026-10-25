@@ -35,7 +35,7 @@ class ConditionalReboot(unittest.TestCase):
         self.assertEqual(len(self.check('3', busy=True)), 2)
 
     def test_required_reboot_is_requested_only_when_updates_are_idle(self):
-        self.assertEqual(self.check('2')[-1], ['systemctl', 'reboot'])
+        self.assertEqual(self.check('2')[-1], ['/usr/bin/systemctl', 'reboot'])
 
 
 if __name__ == '__main__':
