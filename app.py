@@ -151,7 +151,7 @@ class TrayApp(QWidget):
         self.snapshot = None
         self.closing = False
         self.power_state = None
-        self.menu_open = False
+        self.details_requested = False
         self.generation = 0
         self.setWindowTitle('Pi Audio Tray · ' + VERSION)
         self.setWindowIcon(icon())
@@ -279,7 +279,7 @@ class TrayApp(QWidget):
             self.failed(kind, error)
 
     def details_needed(self):
-        return self.menu_open or (self.isVisible() and not self.isMinimized())
+        return self.menu.isVisible() or (self.isVisible() and not self.isMinimized())
 
     def update_polling(self, refresh=False):
         if not hasattr(self, 'timer'):
@@ -294,8 +294,12 @@ class TrayApp(QWidget):
             self.refresh()
 
     def set_menu_open(self, opened):
-        self.menu_open = opened
-        self.update_polling(refresh=opened)
+        # Native exported menus may emit aboutToShow without aboutToHide, and
+        # their QMenu stays invisible. Never latch continuous polling from it.
+        if opened:
+            self.refresh(force_details=True)
+        self.update_polling()
+        QTimer.singleShot(0, self.update_polling)
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -310,9 +314,13 @@ class TrayApp(QWidget):
         if event.type() == QEvent.Type.WindowStateChange:
             self.update_polling(refresh=True)
 
-    def refresh(self):
-        if self.config['host']:
-            config, detailed = self.config.copy(), self.details_needed()
+    def refresh(self, force_details=False):
+        if force_details:
+            self.details_requested = True
+        self.update_polling()
+        if self.config['host'] and 'poll' not in self.busy:
+            config, detailed = self.config.copy(), self.details_requested or self.details_needed()
+            self.details_requested = False
             if detailed:
                 self.notice.setText('Refreshing receiver details…')
             self.job('poll', lambda: poll(config, detailed=detailed))
@@ -372,9 +380,10 @@ class TrayApp(QWidget):
                     self.notice.setText('Background health checked ' + time.strftime('%H:%M:%S') + ' · Open the window or tray menu for details.')
                 self.enable_controls()
                 # The window/menu may have opened while the light poll was pending.
-                if self.details_needed():
+                if self.details_requested or self.details_needed():
                     self.refresh()
                 return
+            self.details_requested = False
             self.row('spotify', services.get(backend, 'unknown') + ' · ' + backend.title())
             self.row('bluetooth', 'Powered on' if adapter.get('Powered') else 'Powered off / unavailable')
             self.row('audio', 'Ready' if all(services.get(s) == 'active' for s in audio_services) else 'Service stopped')

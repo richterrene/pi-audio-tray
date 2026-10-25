@@ -81,5 +81,5 @@ def main():
 
 if __name__ == '__main__':
     with patch('core.connect', side_effect=AssertionError('Screenshots cannot connect to a receiver')), \
-         patch.object(TrayApp, 'refresh', lambda self: None):
+         patch.object(TrayApp, 'refresh', lambda self, **kwargs: None):
         main()

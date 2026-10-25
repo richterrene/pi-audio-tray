@@ -200,6 +200,7 @@ Soloist’s version command. No additional sudo permission is needed:
 ```
 
 Hidden/minimized clients use this lightweight action at least 60 seconds apart;
-visible status windows and open tray menus use full `status` at the configured
-interval. Older helpers do not support `health` and will show a background
+visible status windows and visible Qt popup menus use full `status` at the
+configured interval. Native exported tray menus refresh details once on opening;
+their sometimes-missing close notifications cannot latch continuous polling. Older helpers do not support `health` and will show a background
 connection error until updated; no silent full-statistics fallback is used.

@@ -123,14 +123,29 @@ class PairingDialogs(unittest.TestCase):
             self.window.update_polling()
         self.assertEqual(self.window.timer.interval(),60000)
 
-    def test_open_menu_enables_immediate_detailed_poll_and_close_restores_background(self):
-        with patch.object(self.window,'isVisible',return_value=False), patch.object(self.window,'refresh') as refresh:
+    def test_open_menu_requests_details_and_visible_menu_uses_foreground_interval(self):
+        with patch.object(self.window,'isVisible',return_value=False), \
+             patch.object(self.window.menu,'isVisible',return_value=True), patch.object(self.window,'refresh') as refresh:
             self.window.set_menu_open(True)
-            refresh.assert_called_once()
+            refresh.assert_called_once_with(force_details=True)
             self.assertTrue(self.window.details_needed())
             self.assertEqual(self.window.timer.interval(),10000)
+        with patch.object(self.window,'isVisible',return_value=False), patch.object(self.window.menu,'isVisible',return_value=False):
             self.window.set_menu_open(False)
             self.assertFalse(self.window.details_needed())
+            self.assertEqual(self.window.timer.interval(),60000)
+
+    def test_native_menu_without_hide_signal_does_not_latch_detailed_polling(self):
+        self.window.config['host']='audio-pi.example'
+        with patch.object(self.window,'isVisible',return_value=False), \
+             patch.object(self.window.menu,'isVisible',return_value=False), \
+             patch.object(self.window,'job') as job, patch('app.poll') as poll:
+            self.window.set_menu_open(True)
+            job.call_args.args[1]()
+            self.assertTrue(poll.call_args.kwargs['detailed'])
+            self.window.refresh()
+            job.call_args.args[1]()
+            self.assertFalse(poll.call_args.kwargs['detailed'])
             self.assertEqual(self.window.timer.interval(),60000)
 
     def test_visible_window_uses_configured_detailed_interval(self):
