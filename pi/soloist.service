@@ -1,0 +1,20 @@
+[Unit]
+Description=Spotify Soloist audio receiver
+Requires=pipewire.service wireplumber.service
+After=pipewire.service wireplumber.service network-online.target
+ConditionPathExists=%h/.config/soloist/api-key
+
+[Service]
+Type=simple
+ExecStart=/usr/local/lib/pi-audio-tray/soloist-launch
+Restart=on-failure
+RestartPreventExitStatus=10 78
+RestartSec=15
+StateDirectory=soloist
+CacheDirectory=soloist
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target

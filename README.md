@@ -1,12 +1,44 @@
 # Pi Audio Tray
 
-A small Linux tray app for a Raspberry Pi running Raspotify and BlueALSA.
+A small Linux tray app for a Raspberry Pi running Spotify Soloist with PipeWire,
+or the older Raspotify / BlueALSA setup.
 Connect over SSH, monitor the receiver, and open or close Bluetooth pairing
 without typing commands. There are no cloud services or telemetry.
 
+**Status: experimental.** The combination below has been tested on real hardware.
+Other distributions and boards have not been validated. This project is not
+affiliated with Spotify or Raspberry Pi.
+
+## Compatibility and requirements
+
+| Component | Tested / required |
+| --- | --- |
+| Desktop | Ubuntu 26.04 x86_64, GNOME with the AppIndicator extension |
+| Desktop package | x86_64 AppImage; no desktop ARM, Windows, or macOS release |
+| Receiver tested | Raspberry Pi 3 Model B+, 1 GB RAM, 64-bit Raspberry Pi OS / Debian 13 Trixie |
+| Receiver audio output tested | Built-in 3.5 mm headphone output; other DACs/HDMI not tested |
+| Recommended audio stack | Spotify Soloist ARM64, PipeWire 1.4, WirePlumber 0.5, BlueZ |
+| Legacy backend | Raspotify / librespot with BlueALSA; Spotify can refuse audio keys even when the service is active |
+| Network | SSH access to the Pi; Bluetooth devices must be in radio range; Spotify discovery requires the local network |
+| SSH authentication | Existing private key or SSH agent; SSH password prompts are not supported |
+| Pi permissions | Read-only status uses normal SSH; setup and pairing require noninteractive sudo for the documented helper commands |
+| Spotify | Each Soloist user needs their own API key; Spotify requires Premium to create it |
+| Development | Python 3.12+, pinned dependencies in `requirements.txt`; AppImage builds additionally need squashfs-tools |
+
+The AppImage bundles Python, Qt, and Paramiko, but still depends on the host's
+Linux desktop/graphics libraries. Compatibility with older Ubuntu releases is
+not established. The CI template uses Ubuntu 24.04; a template alone is not a
+successful compatibility test. Bluetooth audio after migration should be tested
+on each deployment; service readiness alone does not prove audible playback.
+
+For a new receiver, follow [Pi setup](docs/PI_SETUP.md) before using the tray.
+The app's **Set up / update Pi helper** installs the status/pairing helper only;
+it does not install the complete audio stack. [Security notes](SECURITY.md)
+explain key handling and privileged operations.
+
 ## Features
 
-- Pi reachability, Raspotify service state, Bluetooth power, BlueALSA services,
+- Pi reachability, Soloist/Raspotify service state, Bluetooth power, audio services,
   connected device names, and pairing state.
 - Three-minute pairing window with confirmation dialogs on the desktop.
 - Pairing closes on timeout, normal app exit, or SSH channel closure. BlueZ's
@@ -17,6 +49,9 @@ without typing commands. There are no cloud services or telemetry.
   and polling interval. Settings are stored locally, outside the application.
 - AppImage includes the GUI, Python, and SSH libraries. No Python installation
   or tray library package is needed on the desktop.
+- Soloist API key entry, replacement, and removal without storing a local copy.
+  Key files on the Pi are private (directory mode 700, file mode 600).
+- Soloist build lifetime and automatic update status, including failed update runs.
 
 Spotify status is the **service status**, not currently playing tracks. Bluetooth
 device status indicates a connection, not proof of current audio playback.
@@ -26,8 +61,8 @@ device status indicates a connection, not proof of current audio playback.
 Download the x86_64 AppImage, make it executable, and launch it:
 
 ```sh
-chmod +x PiAudioTray-0.1.1-x86_64.AppImage
-./PiAudioTray-0.1.1-x86_64.AppImage --show
+chmod +x PiAudioTray-0.2.1-x86_64.AppImage
+./PiAudioTray-0.2.1-x86_64.AppImage --show
 ```
 
 Ubuntu's AppIndicator extension must be enabled for the tray icon. When no tray
@@ -46,8 +81,62 @@ Choose **Set up / update Pi helper** once. This installs `python3-dbus` and
 `python3-gi` from the Pi's apt repositories and a root-owned helper under
 `/usr/local/lib/pi-audio-tray/pi-helper`. The SSH account needs passwordless sudo
 for setup and pairing. No new sudo permissions are granted by this app.
-Raspberry Pi OS / Debian with BlueZ, Raspotify, and BlueALSA already configured
-is required. This app does not configure the underlying audio routing.
+Raspberry Pi OS / Debian with BlueZ and one of the supported audio stacks already
+configured is required. This app does not silently migrate the underlying audio
+routing. The optional Pi-side service/configuration sources are in `pi/`.
+
+## Spotify Soloist
+
+Download Soloist directly from [Spotify's official downloads](https://developer.spotify.com/documentation/soloist/reference/downloads-and-updates).
+The app and repository do not include or redistribute Spotify's executable.
+Soloist requires PipeWire or PulseAudio on the Pi. `pi/soloist.service` and
+`pi/50-audio-receiver.conf` provide a user-service and headless PipeWire example.
+Enable lingering for that user so audio services start at boot without SSH.
+Avoid running BlueALSA and PipeWire Bluetooth monitors simultaneously.
+
+Generate a personal API key at the [Soloist dashboard](https://developer.spotify.com/dashboard/soloist).
+In **Settings → Spotify Soloist** or the tray submenu, choose **Set / replace API key**. The masked
+dialog sends it over SSH straight to `~/.config/soloist/api-key` on the Pi.
+The desktop app does not save the key locally. **Remove API key** stops Soloist
+and deletes that file; revocation at Spotify remains a separate dashboard action.
+The root-owned launcher reads the private file at startup, rather than putting
+the secret into a service unit or this repository.
+
+The **90-day lifetime applies to client builds, not API keys**. The optional
+`soloist-update` service downloads ARM64 builds directly from Spotify, checks
+the archive and executable format, verifies the executable can report its
+version, and atomically replaces it only when changed. The previous executable
+is retained as `/usr/local/bin/soloist.previous`. Keys and session data are preserved.
+The updater reads the local service account name from `/etc/pi-audio-tray/soloist-user`.
+It requires root ownership for its script and configuration. The daily timer runs
+between 04:00 and 06:00 local time, with catch-up after downtime. The tray action
+**Check for updates now** runs the same service. Updates can briefly interrupt audio.
+
+## Optional automatic system updates
+
+The example APT configuration in `pi/52pi-audio-upgrades` allows updates within
+Debian/Raspberry Pi OS Trixie, plus the already configured Raspotify repository.
+It does not switch to a new distribution release. Review the origins if using
+a different OS version. `apt-daily-timer.conf` refreshes package lists at
+02:30–02:45; `apt-upgrade-timer.conf` installs updates at 03:00–03:15.
+The optional needrestart configuration restarts affected services after upgrades.
+
+`pi-audio-reboot.timer` checks at **05:30 local time**. It reboots only if the
+standard reboot marker is present or needrestart reports an outdated kernel.
+Unknown kernel status does not trigger a reboot. If an update is still running,
+the reboot is deferred until the next day. Missed reboot times are not caught up
+during daytime. Test detection without rebooting using:
+
+```sh
+sudo /usr/local/lib/pi-audio-tray/reboot-if-needed --check-only
+sudo unattended-upgrade --dry-run --debug
+systemctl list-timers apt-daily.timer apt-daily-upgrade.timer soloist-update.timer pi-audio-reboot.timer
+```
+
+Logs are available with `journalctl -u soloist-update.service` and under
+`/var/log/unattended-upgrades/`. For Soloist local commands with the supplied
+user unit, use `soloist ctl status -D ~/.local/state/soloist` (the user unit uses
+systemd's state directory instead of the CLI's default data directory).
 
 If preferred, install manually on the Pi:
 
@@ -66,8 +155,9 @@ Legacy devices requiring PIN entry are currently unsupported.
 
 Configuration and app-approved host keys are stored in
 `$XDG_CONFIG_HOME/pi-audio-tray` (normally `~/.config/pi-audio-tray`). That directory
-is not in the repository or AppImage. Private keys and Spotify credentials are
-never bundled, uploaded, or copied to the Pi. Connected device names and addresses
+is not in the repository or AppImage. SSH private keys stay on the desktop.
+The Soloist API key is deliberately sent to the Pi over SSH and stored there;
+it is never included in Git or AppImage builds. Connected device names and addresses
 are shown at runtime only. There is no persistent application log.
 
 Builds copy source into a neutral temporary path to avoid embedding local account

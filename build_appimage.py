@@ -9,6 +9,7 @@ import subprocess
 import sys
 import tempfile
 import urllib.request
+from version import VERSION
 
 ROOT = Path(__file__).resolve().parent
 RUNTIME_URL = 'https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-x86_64'
@@ -22,7 +23,7 @@ def main():
     try:
         source = work / 'src'
         source.mkdir()
-        for name in ('app.py', 'core.py', 'pi_helper.py', 'LICENSE', 'THIRD_PARTY.md'):
+        for name in ('app.py', 'core.py', 'pi_helper.py', 'version.py', 'LICENSE', 'THIRD_PARTY.md'):
             shutil.copy2(ROOT / name, source / name)
         (source / 'assets').mkdir()
         shutil.copy2(ROOT / 'assets/pi-audio-tray.svg', source / 'assets/pi-audio-tray.svg')
@@ -67,7 +68,7 @@ def main():
         squashfs = work / 'payload.squashfs'
         subprocess.run(['mksquashfs', str(appdir), str(squashfs), '-noappend',
                         '-all-root', '-comp', 'gzip', '-processors', '2', '-no-progress'], check=True)
-        destination = ROOT / 'dist/PiAudioTray-0.1.1-x86_64.AppImage'
+        destination = ROOT / f'dist/PiAudioTray-{VERSION}-x86_64.AppImage'
         destination.parent.mkdir(exist_ok=True)
         with destination.open('wb') as out:
             for part in (runtime, squashfs):

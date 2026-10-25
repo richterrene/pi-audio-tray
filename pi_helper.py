@@ -6,6 +6,7 @@ import signal
 import sys
 import subprocess
 import time
+from pathlib import Path
 
 import dbus
 import dbus.service
@@ -55,8 +56,37 @@ def status():
     for block in result.stdout.strip().split('\n\n'):
         values = dict(line.split('=', 1) for line in block.splitlines() if '=' in line)
         services[values.get('Id', '').removesuffix('.service')] = values.get('ActiveState', 'unknown')
+    user_result = subprocess.run(['systemctl', '--user', 'show', '--no-pager',
+        '-p', 'Id', '-p', 'ActiveState', '-p', 'LoadState', 'soloist.service',
+        'pipewire.service', 'wireplumber.service'], capture_output=True, text=True, timeout=8)
+    backend = 'raspotify'
+    for block in user_result.stdout.strip().split('\n\n'):
+        values = dict(line.split('=', 1) for line in block.splitlines() if '=' in line)
+        name = values.get('Id', '').removesuffix('.service')
+        if values.get('LoadState') == 'loaded':
+            services[name] = values.get('ActiveState', 'unknown')
+            if name == 'soloist':
+                backend = 'soloist'
+    soloist = {'key_configured': (Path.home() / '.config/soloist/api-key').exists()}
+    if backend == 'soloist':
+        import re
+        version = subprocess.run(['/usr/local/bin/soloist', '--version'],
+            capture_output=True, text=True, timeout=5).stdout.strip()
+        soloist['version'] = version
+        match = re.search(r'build (\d+)', version)
+        if match:
+            soloist['days_remaining'] = max(0, int((int(match[1]) + 90 * 86400 - time.time()) / 86400))
+    timers = subprocess.run(['systemctl', 'is-active', 'soloist-update.timer',
+        'apt-daily-upgrade.timer'], capture_output=True, text=True, timeout=5).stdout.splitlines()
+    soloist['automatic_updates'] = len(timers) == 2 and all(s == 'active' for s in timers)
+    update_result = subprocess.run(['systemctl', 'show', '--no-pager', '-p', 'Result',
+        'soloist-update.service', 'apt-daily-upgrade.service'],
+        capture_output=True, text=True, timeout=5)
+    soloist['update_failed'] = any(line.startswith('Result=') and line != 'Result=success'
+        for line in update_result.stdout.splitlines())
     emit(protocol=1, services=services, adapter=adapters[0] if adapters else {},
-         devices=devices, uptime=int(float(open('/proc/uptime').read().split()[0])))
+         devices=devices, spotify_backend=backend, soloist=soloist,
+         uptime=int(float(open('/proc/uptime').read().split()[0])))
 
 
 class Rejected(dbus.DBusException):

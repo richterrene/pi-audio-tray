@@ -1,0 +1,12 @@
+[Unit]
+Description=Update Spotify Soloist from Spotify's official download
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/lib/pi-audio-tray/soloist-update
+TimeoutStartSec=180
+UMask=0022
+NoNewPrivileges=true
+PrivateTmp=true

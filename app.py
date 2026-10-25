@@ -12,11 +12,13 @@ from PySide6.QtCore import QObject, QTimer, Qt, Signal
 from PySide6.QtGui import QAction, QIcon, QPainter, QPixmap
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (QApplication, QDialog, QDialogButtonBox, QFileDialog,
-    QFormLayout, QHBoxLayout, QLabel, QLineEdit, QMenu, QMessageBox,
+    QFormLayout, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QMenu, QMessageBox,
     QPushButton, QSpinBox, QSystemTrayIcon, QVBoxLayout, QWidget)
 
 from core import (PairSession, UnknownHost, config_dir, disable_pairing,
-                  install_helper, load_config, poll, save_config, trust_host)
+                  install_helper, load_config, poll, save_config, store_soloist_key,
+                  remove_soloist_key, update_soloist, trust_host)
+from version import VERSION
 
 
 def icon(color='#8c97a8'):
@@ -75,6 +77,19 @@ class Settings(QDialog):
             self.fields[key] = entry
             form.addRow(label, entry)
         layout.addLayout(form)
+        soloist_label = QLabel('Spotify Soloist')
+        soloist_label.setStyleSheet('font-weight: 600; margin-top: 12px;')
+        layout.addWidget(soloist_label)
+        layout.addWidget(QLabel('The API key is stored only on the configured Pi.'))
+        soloist_controls = QHBoxLayout()
+        key_button = QPushButton('Set / replace API key…')
+        key_button.clicked.connect(lambda: parent.soloist_key(self))
+        remove_button = QPushButton('Remove API key…')
+        remove_button.clicked.connect(parent.remove_key)
+        soloist_controls.addWidget(key_button)
+        soloist_controls.addWidget(remove_button)
+        layout.addLayout(soloist_controls)
+        layout.addWidget(QLabel('These actions use the saved connection. Save connection changes first.'))
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
@@ -106,7 +121,7 @@ class TrayApp(QWidget):
         self.snapshot = None
         self.closing = False
         self.generation = 0
-        self.setWindowTitle('Pi Audio Tray')
+        self.setWindowTitle('Pi Audio Tray · ' + VERSION)
         self.setWindowIcon(icon())
         self.setMinimumWidth(450)
         layout = QVBoxLayout(self)
@@ -122,7 +137,8 @@ class TrayApp(QWidget):
         form.setVerticalSpacing(14)
         for key, label in [('pi', 'Raspberry Pi'), ('spotify', 'Spotify Connect'),
                            ('bluetooth', 'Bluetooth'), ('audio', 'Bluetooth audio'),
-                           ('devices', 'Connected devices'), ('pairing', 'New pairing')]:
+                           ('devices', 'Connected devices'), ('pairing', 'New pairing'),
+                           ('soloist', 'Soloist setup'), ('updates', 'Updates')]:
             value = QLabel('—')
             value.setTextFormat(Qt.TextFormat.PlainText)
             value.setWordWrap(True)
@@ -150,6 +166,13 @@ class TrayApp(QWidget):
             button.clicked.connect(callback)
             extras.addWidget(button)
         layout.addLayout(extras)
+        soloist_controls = QHBoxLayout()
+        for label, callback in [('Soloist API key…', self.soloist_key),
+                                ('Update Soloist', self.update_soloist)]:
+            button = QPushButton(label)
+            button.clicked.connect(callback)
+            soloist_controls.addWidget(button)
+        layout.addLayout(soloist_controls)
 
         self.menu = QMenu()
         self.menu.setTitle('Pi Audio Tray')
@@ -166,7 +189,13 @@ class TrayApp(QWidget):
         self.menu.addAction('Refresh now', self.refresh)
         self.menu.addAction('Settings…', self.settings)
         self.menu.addAction('Set up / update Pi helper…', self.setup)
+        soloist_menu = self.menu.addMenu('Spotify Soloist')
+        soloist_menu.addAction('Set / replace API key…', self.soloist_key)
+        soloist_menu.addAction('Remove API key…', self.remove_key)
+        soloist_menu.addAction('Check for updates now', self.update_soloist)
         self.menu.addSeparator()
+        version_action = self.menu.addAction('Version ' + VERSION)
+        version_action.setEnabled(False)
         self.menu.addAction('Quit', self.quit)
         self.tray = QSystemTrayIcon(icon(), self)
         self.tray.setContextMenu(self.menu)
@@ -205,14 +234,15 @@ class TrayApp(QWidget):
 
     def row(self, key, value):
         labels = {'pi': 'Pi', 'spotify': 'Spotify', 'bluetooth': 'Bluetooth',
-                  'audio': 'BT audio', 'devices': 'Devices', 'pairing': 'Pairing'}
+                  'audio': 'BT audio', 'devices': 'Devices', 'pairing': 'Pairing',
+                  'soloist': 'Soloist', 'updates': 'Updates'}
         self.rows[key].setText(value)
         self.menu_rows[key].setText(labels[key] + ': ' + value)
 
     def render_offline(self, message):
         self.snapshot = None
         self.row('pi', 'Offline / unavailable')
-        for key in ('spotify', 'bluetooth', 'audio', 'devices', 'pairing'):
+        for key in ('spotify', 'bluetooth', 'audio', 'devices', 'pairing', 'soloist', 'updates'):
             self.row(key, 'Unknown')
         self.tray.setIcon(icon('#e07878'))
         self.tray.setToolTip('Pi Audio Tray · unavailable')
@@ -232,13 +262,27 @@ class TrayApp(QWidget):
         if kind == 'poll':
             self.snapshot = data
             services, adapter = data['services'], data['adapter']
-            healthy = adapter.get('Powered') and all(services.get(s) == 'active' for s in ('raspotify', 'bluetooth', 'bluealsa', 'bluealsa-aplay'))
+            backend = data.get('spotify_backend', 'raspotify')
+            audio_services = ('pipewire', 'wireplumber') if backend == 'soloist' else ('bluealsa', 'bluealsa-aplay')
+            healthy = adapter.get('Powered') and all(services.get(s) == 'active' for s in (backend, 'bluetooth', *audio_services))
             self.tray.setIcon(icon('#55d9ad' if healthy else '#e8b75f'))
             self.tray.setToolTip('Pi Audio Tray · ' + ('services running' if healthy else 'check services'))
             self.row('pi', 'Online · ' + self.config['host'])
-            self.row('spotify', services.get('raspotify', 'unknown') + ' (service)')
+            self.row('spotify', services.get(backend, 'unknown') + ' · ' + backend.title())
             self.row('bluetooth', 'Powered on' if adapter.get('Powered') else 'Powered off / unavailable')
-            self.row('audio', 'Ready' if all(services.get(s) == 'active' for s in ('bluealsa', 'bluealsa-aplay')) else 'Service stopped')
+            self.row('audio', 'Ready' if all(services.get(s) == 'active' for s in audio_services) else 'Service stopped')
+            soloist = data.get('soloist', {})
+            if backend == 'soloist':
+                key_state = 'Key configured' if soloist.get('key_configured') else 'API key needed'
+                days = soloist.get('days_remaining')
+                self.row('soloist', key_state + (f' · build valid {days} days' if days is not None else ''))
+            else:
+                self.row('soloist', 'Not installed')
+            if soloist.get('update_failed'):
+                self.row('updates', 'Last update failed — check the Pi')
+                self.tray.setIcon(icon('#e8b75f'))
+            else:
+                self.row('updates', 'Automatic checks enabled' if soloist.get('automatic_updates') else 'Not fully configured')
             self.row('devices', ', '.join(d['name'] for d in data['devices']) or 'None')
             self.row('pairing', 'Enabled' if adapter.get('Pairable') else 'Disabled')
             self.notice.setText('Updated ' + time.strftime('%H:%M:%S') + ' · Spotify status shows the service, not track playback.')
@@ -306,6 +350,26 @@ class TrayApp(QWidget):
         self.notice.setText('Installing helper on the Pi…')
         config = self.config.copy()
         self.job('setup', lambda: install_helper(config))
+
+    def soloist_key(self, parent=None):
+        key, accepted = QInputDialog.getText(parent or self, 'Spotify Soloist API key',
+            'Paste your personal Soloist API key.\nIt is sent directly to your Pi over SSH.',
+            QLineEdit.EchoMode.Password)
+        if accepted and key.strip():
+            config = self.config.copy()
+            self.job('key', lambda: store_soloist_key(config, key.strip()))
+
+    def remove_key(self):
+        if QMessageBox.question(self, 'Remove Soloist API key',
+            'Stop Soloist and remove its API key from the Pi?\n'
+            'This does not revoke the key at Spotify.') == QMessageBox.StandardButton.Yes:
+            config = self.config.copy()
+            self.job('key', lambda: remove_soloist_key(config))
+
+    def update_soloist(self):
+        self.notice.setText('Checking the official Soloist download for an update…')
+        config = self.config.copy()
+        self.job('update', lambda: update_soloist(config))
 
     def start_pairing(self):
         if self.session:
@@ -398,6 +462,21 @@ def main():
         print(json.dumps(poll(load_config())))
         return 0
     app = QApplication(sys.argv)
+    if '--soloist-key' in sys.argv:
+        key, accepted = QInputDialog.getText(None, 'Spotify Soloist — geschützte Schlüsseleingabe',
+            'Persönlichen Soloist-API-Schlüssel hier einfügen.\n'
+            'Er wird direkt per SSH auf dem Pi gespeichert, nicht im Chat oder Repository.',
+            QLineEdit.EchoMode.Password)
+        if not accepted or not key.strip():
+            return 1
+        try:
+            store_soloist_key(load_config(), key.strip())
+        except Exception as exc:
+            QMessageBox.warning(None, 'Soloist-Einrichtung', str(exc))
+            return 1
+        QMessageBox.information(None, 'Soloist-Einrichtung',
+            'Der Schlüssel wurde geschützt auf dem Pi gespeichert. Soloist wird gestartet.')
+        return 0
     if '--self-test' in sys.argv:
         from PySide6.QtCore import qVersion
         assert not icon().isNull()
@@ -405,6 +484,7 @@ def main():
                           'tray_available': QSystemTrayIcon.isSystemTrayAvailable()}))
         return 0
     app.setApplicationName('Pi Audio Tray')
+    app.setApplicationVersion(VERSION)
     app.setQuitOnLastWindowClosed(False)
     lock = open(config_dir() / 'instance.lock', 'w')
     try:

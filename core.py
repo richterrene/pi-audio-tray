@@ -129,6 +129,52 @@ def disable_pairing(config):
         client.close()
 
 
+def store_soloist_key(config, key):
+    if not key or len(key) > 16384 or any(c.isspace() for c in key):
+        raise ValueError('Please enter a valid Soloist API key without whitespace.')
+    client = connect(config)
+    try:
+        with client.open_sftp() as sftp:
+            folder = sftp.normalize('.') + '/.config/soloist'
+            sftp.chmod(folder, 0o700)
+            temp = folder + '/.api-key-' + uuid.uuid4().hex
+            try:
+                with sftp.open(temp, 'wx') as f:
+                    f.chmod(0o600)
+                    f.write(key + '\n')
+                sftp.posix_rename(temp, folder + '/api-key')
+            finally:
+                try:
+                    sftp.remove(temp)
+                except OSError:
+                    pass
+        run(client, 'systemctl --user restart soloist.service')
+    finally:
+        client.close()
+
+
+def remove_soloist_key(config):
+    client = connect(config)
+    try:
+        run(client, 'systemctl --user stop soloist.service')
+        with client.open_sftp() as sftp:
+            path = sftp.normalize('.') + '/.config/soloist/api-key'
+            try:
+                sftp.remove(path)
+            except FileNotFoundError:
+                pass
+    finally:
+        client.close()
+
+
+def update_soloist(config):
+    client = connect(config)
+    try:
+        run(client, 'sudo -n systemctl start soloist-update.service', timeout=190)
+    finally:
+        client.close()
+
+
 def install_helper(config):
     root = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
     data = (root / 'pi_helper.py').read_bytes()

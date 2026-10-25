@@ -1,0 +1,7 @@
+[Unit]
+Description=Reboot audio receiver only when required by updates
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/lib/pi-audio-tray/reboot-if-needed
+TimeoutStartSec=90

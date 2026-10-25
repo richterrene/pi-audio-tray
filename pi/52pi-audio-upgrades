@@ -1,0 +1,16 @@
+// Remain within Debian 13 / Raspberry Pi OS Trixie.
+#clear Unattended-Upgrade::Origins-Pattern;
+Unattended-Upgrade::Origins-Pattern {
+    "origin=Debian,codename=trixie";
+    "origin=Debian,codename=trixie-updates";
+    "origin=Debian,codename=trixie-security";
+    "origin=Raspberry Pi Foundation,codename=trixie";
+    "site=dtcooper.github.io,codename=raspotify";
+};
+APT::Periodic::Enable "1";
+APT::Periodic::Update-Package-Lists "1";
+APT::Periodic::Unattended-Upgrade "1";
+APT::Periodic::AutocleanInterval "7";
+Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
+Unattended-Upgrade::Remove-Unused-Dependencies "false";
+Unattended-Upgrade::Automatic-Reboot "false";

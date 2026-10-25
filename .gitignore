@@ -10,3 +10,6 @@ known_hosts
 *.pem
 id_*
 .env*
+api-key
+api-key.*
+soloist-user

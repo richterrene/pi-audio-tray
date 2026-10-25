@@ -1,0 +1,11 @@
+[Unit]
+Description=Check for a required reboot at 05:30 local time
+
+[Timer]
+OnCalendar=*-*-* 05:30:00
+RandomizedDelaySec=0
+AccuracySec=1s
+Persistent=false
+
+[Install]
+WantedBy=timers.target
