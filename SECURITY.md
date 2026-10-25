@@ -283,7 +283,7 @@ plaintext bootstrap file until the user removes it.
 
 ### Local music review evidence (0.5.0)
 
-The expanded production/build scan reports 67 findings (60 low, 7 medium), all
+The expanded production/build scan reports 71 findings (64 low, 7 medium), all
 reviewed rather than suppressed. The additional medium B310 is the installer's
 fixed upstream HTTPS signing-key URL: its expected fingerprint is verified before
 APT accepts the dedicated source. No arbitrary URL is accepted there. New low
