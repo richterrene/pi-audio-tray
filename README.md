@@ -1,6 +1,7 @@
 # Pi Audio Tray
 
-A small Linux tray app for a Raspberry Pi running Spotify Soloist with PipeWire,
+A small Linux tray and macOS menu-bar app for a Raspberry Pi running Spotify
+Soloist with PipeWire,
 or the older Raspotify / BlueALSA setup.
 Connect over SSH, monitor the receiver, and open or close Bluetooth pairing
 without typing commands. There are no cloud services or telemetry.
@@ -29,8 +30,8 @@ affiliated with Spotify or Raspberry Pi.
 
 The AppImage bundles Python, Qt, and Paramiko, but still depends on the host's
 Linux desktop/graphics libraries. Compatibility with older Ubuntu releases is
-not established. The CI template uses Ubuntu 24.04; a template alone is not a
-successful compatibility test. Bluetooth audio after migration should be tested
+not established. Release packages are built and smoke-tested on Ubuntu 24.04;
+interactive desktop use has been tested on the Ubuntu version listed above. Bluetooth audio after migration should be tested
 on each deployment; service readiness alone does not prove audible playback.
 
 For a new receiver, follow [Pi setup](docs/PI_SETUP.md) before using the tray.
@@ -45,7 +46,7 @@ updating the desktop package alone does not replace Pi-side maintenance scripts.
 - Pi reachability, Soloist/Raspotify service state, Bluetooth power, audio services,
   connected device names, and pairing state.
 - Pi temperature, aggregate CPU usage, 1/5/15-minute load, memory, root-disk use,
-  and uptime in both the status window and tray menu. Missing sensors show N/A.
+  and uptime in both the status window and tray menu. Missing sensors show Unavailable.
 - Confirmed graceful Pi shutdown from the tray, with an optional exact sudo rule.
   Known scheduled updates block the request; starting again requires reconnecting power.
 - Three-minute pairing window with confirmation dialogs on the desktop.
@@ -87,9 +88,30 @@ native window and menu-bar presentation.
 
 <img src="assets/screenshots/settings.png" alt="Connection settings and buttons for securely setting or removing the Soloist API key" width="590">
 
+### Tray menu
+
+<img src="assets/screenshots/tray-menu.png" alt="Tray menu showing Pi statistics and the Shut down Pi action separately from Quit" width="480">
+
+### Shutdown confirmation
+
+<img src="assets/screenshots/shutdown-confirmation.png" alt="Shutdown confirmation naming the demo Pi, explaining audio and SSH will stop, with No selected by default" width="560">
+
 Regenerate these screenshots from the actual widgets using
 `python tools/generate_screenshots.py`; the script uses a temporary config
 directory and does not connect to a receiver.
+
+## Shutting down the receiver
+
+Open the tray menu and choose **Shut down Pi…**. Check the hostname in the
+confirmation, then choose **Yes**. The default is **No**. Pairing or another Pi
+operation must finish first; the app also checks the known scheduled update
+services. Audio and SSH will stop. Wait for the Pi’s activity LED to settle before
+unplugging, and reconnect power to start it again. A submitted request or lost
+SSH connection does not prove that shutdown has completed.
+
+The action needs the [optional exact sudo rule](docs/PI_SETUP.md#optional-tray-shutdown)
+on the Pi. Updating the desktop alone does not grant that permission. **Quit**
+closes only the tray application; **Shut down Pi…** powers off the receiver.
 
 ## Run
 
