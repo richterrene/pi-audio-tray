@@ -163,7 +163,7 @@ class ProtocolValidation(unittest.TestCase):
         self.assertEqual(clean['devices'][0]['name'], 'Phoneevil')
 
     def test_valid_stats_are_preserved(self):
-        stats = {'cpu_percent': 12.5, 'temperature_c': 45, 'load': [0.5, 0.3, 0.2],
+        stats = {'cpu_percent': 12.5, 'cpu_window_seconds': 10, 'temperature_c': 45, 'load': [0.5, 0.3, 0.2],
                  'cpu_count': 4, 'memory_total': 100, 'memory_used': 50, 'uptime_seconds': 90}
         self.assertEqual(core.validate_status(self.status(stats=stats))['stats'], stats)
 

@@ -122,3 +122,17 @@ Source changes require upgrading the desktop and Pi helper/launcher; repository
 settings take effect immediately. A green source test does not prove that an
 older installed package or helper contains these fixes. CI runs for the follow-up
 record native build/test results separately. See the documented upgrade procedure.
+
+
+Final verification after installing the reviewed helper and launcher on the
+receiver: both installed file hashes matched the reviewed source; normal-user
+status returned an inter-refresh CPU averaging interval; Soloist, PipeWire,
+WirePlumber and Bluetooth remained active; a fresh pairing session opened and
+stopped, with Pairable and Discoverable verified false afterward. Audio playback
+was not restarted for this helper/launcher update.
+
+The corrected clean Linux CI audit also passed with pip 26.2.0. Its exact
+[inventory](security/ci-dependencies-2026-10-25.txt) and
+[advisory result](security/ci-dependency-audit-2026-10-25.json) are retained here;
+these complement the separate local snapshot above. CI passed all 57 regressions
+and the real D-Bus test. Native package results are linked from the release/PR.

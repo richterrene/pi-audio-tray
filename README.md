@@ -62,10 +62,11 @@ updating the desktop package alone does not replace Pi-side maintenance scripts.
 CPU usage is averaged across all cores between refreshes (a one-second sample
 on the first refresh or after a cache reset); the displayed window shows the
 actual averaging interval. One fully busy core on a four-core Pi is about 25%.
-A quiet Pi can correctly show 0.0%. Load averages are Linux runnable/uninterruptible task counts, not percentages.
+A quiet Pi can correctly show 0.0%. Load averages are Linux runnable/uninterruptible
+task counts, not percentages.
 Memory use subtracts MemAvailable (including reclaimable cache), and disk use
-covers the root filesystem only. Only the previous CPU counters are cached privately on the Pi; no historical
-time series is stored.
+covers the root filesystem only. Only the previous CPU counters are cached
+privately on the Pi; no historical time series is stored.
 
 Spotify status is the **service status**, not currently playing tracks. Bluetooth
 device status indicates a connection, not proof of current audio playback.

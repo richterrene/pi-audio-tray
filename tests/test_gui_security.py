@@ -111,11 +111,11 @@ class PairingDialogs(unittest.TestCase):
         self.window.done('poll', {'services': {'soloist': 'active', 'bluetooth': 'active',
             'pipewire': 'active', 'wireplumber': 'active'}, 'adapter': {'Powered': True},
             'devices': [], 'spotify_backend': 'soloist', 'soloist': {}, 'stats': {
-                'cpu_percent': 12.5, 'temperature_c': 43.1, 'load': [0.4, 0.3, 0.2],
+                'cpu_percent': 12.5, 'cpu_window_seconds': 10, 'temperature_c': 43.1, 'load': [0.4, 0.3, 0.2],
                 'memory_total': 1024**3, 'memory_used': 512 * 1024**2,
                 'disk_total': 16 * 1024**3, 'disk_used': 4 * 1024**3, 'uptime_seconds': 90061}})
         self.assertEqual(self.window.rows['temperature'].text(), '43.1 °C')
-        self.assertEqual(self.window.rows['cpu'].text(), '12.5 %')
+        self.assertEqual(self.window.rows['cpu'].text(), '12.5 % · 10.0s avg')
         self.assertEqual(self.window.rows['load'].text(), '0.40 / 0.30 / 0.20')
         self.assertIn('50%', self.window.rows['memory'].text())
         self.assertIn('25%', self.window.rows['disk'].text())
