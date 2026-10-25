@@ -1,4 +1,5 @@
 import importlib.util
+import os
 from pathlib import Path
 import sys
 import types
@@ -137,6 +138,7 @@ class PairingSafety(unittest.TestCase):
         fail.assert_called_once()
         agent.loop.quit.assert_called_once()
 
+    @unittest.skipIf(os.name == 'nt', 'Pi pairing lock is Linux-only; tested on Linux')
     def test_failed_pairing_closure_does_not_trust_approved_devices(self):
         bus, props, manager, loop = Mock(), Mock(), Mock(), Mock()
         bus.get_name_owner.return_value = ':1.42'
@@ -157,7 +159,7 @@ class PairingSafety(unittest.TestCase):
         self.assertFalse(any(call.args[1] == helper.PROPS for call in make_interface.call_args_list))
 
     def test_root_status_cannot_execute_the_downloaded_client(self):
-        with patch.object(helper.sys, 'argv', ['helper', 'status']), patch.object(helper.os, 'geteuid', return_value=0), \
+        with patch.object(helper.sys, 'argv', ['helper', 'status']), patch.object(helper.os, 'geteuid', return_value=0, create=True), \
              patch.object(helper, 'status') as status:
             with self.assertRaises(RuntimeError): helper.main()
             status.assert_not_called()
@@ -189,6 +191,7 @@ class LightweightHealth(unittest.TestCase):
         self.assertEqual(emit.call_args.kwargs['spotify_backend'], 'soloist')
 
 
+@unittest.skipIf(os.name == 'nt', 'Linux /proc sensors are validated on Linux')
 class PiStats(unittest.TestCase):
     def test_cpu_temperature_memory_disk_and_uptime_are_collected(self):
         ticks = iter(['cpu 100 0 20 80 0 0 0 0\n', 'cpu 120 0 30 90 0 0 0 0\n'])
@@ -218,6 +221,7 @@ class PiStats(unittest.TestCase):
 
 
 
+@unittest.skipIf(os.name == 'nt', 'Pi CPU cache uses Linux file APIs; tested on Linux')
 class CpuSampling(unittest.TestCase):
     def test_average_between_refreshes_includes_work_outside_the_old_short_window(self):
         with tempfile.TemporaryDirectory() as temp, \

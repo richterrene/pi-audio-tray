@@ -124,6 +124,24 @@ SSH/audio account. Do not expose this experimental receiver directly to the inte
 The [2026-10-25 review](docs/SECURITY_REVIEW_2026-10-25.md) records scope,
 validation and remaining limitations; it is not an independent audit.
 
+## Windows private storage (0.4.0+)
+
+Windows stores settings in the current user's AppData profile. Native security
+APIs replace Unix ownership/mode operations: protected DACLs grant the current
+user and LocalSystem access, with no Everyone/Users/Authenticated Users grants.
+The ownership check accepts the current user or privileged Administrators owner;
+administrators and same-user malware remain trusted. NTFS/private profile parent
+paths are required. Unsupported ACLs fail closed. Managed links/reparse points
+are refused; atomic temporary files are restricted before data is written.
+Windows byte-range locking provides single-instance behavior. Native CI covers
+ACLs and junction rejection as well as lock exclusion by a second process.
+
+Windows artifacts are unsigned portable ZIPs; SHA-256 files do not independently
+authenticate the publisher. There is no Windows installer, elevation request,
+automatic startup registration or local server. The packaged self-test uses only
+private temporary data. CI is not a substitute for interactive testing on a user's
+Windows 11 computer. [Windows details](docs/WINDOWS.md).
+
 ## Deployment and recovery
 
 - Follow [Pi setup and upgrades](docs/PI_SETUP.md). Upgrade root helpers, user
@@ -162,7 +180,7 @@ validation and remaining limitations; it is not an independent audit.
   may contain credentials. Apply private permissions and appropriate encryption;
   exclude them from Git and shared cloud folders. The app has no telemetry or
   persistent application log; this does not govern Spotify or OS logging.
-- Check release SHA-256 files and source/CI provenance. The Linux AppImage has no
+- Check release SHA-256 files and source/CI provenance. The Linux AppImage and Windows ZIP have no
   independent release signature; macOS uses ad-hoc signing and is not notarized.
   The tray itself has no automatic desktop update mechanism; install new releases
   manually. macOS signing and App Store limitations are in [MACOS.md](docs/MACOS.md).
@@ -196,7 +214,7 @@ python tools/dependency_inventory.py > /tmp/pi-audio-dependencies.txt
 # Install these in a separate audit environment, not in the inventoried one:
 # pip-audit==2.10.1 bandit==1.9.4
 pip-audit --disable-pip --no-deps -r /tmp/pi-audio-dependencies.txt -f json
-bandit -r app.py core.py pi_helper.py pi packaging_support.py build_appimage.py build_macos.py
+bandit -r app.py core.py platform_support.py pi_helper.py pi packaging_support.py build_appimage.py build_macos.py build_windows.py
 # Linux, requires native python3-dbus/python3-gi and dbus:
 dbus-run-session -- /usr/bin/python3 -I tools/check_dbus_agent.py
 # Gitleaks 8.30.1; verify its official archive checksum before installing:
@@ -238,3 +256,13 @@ credential first. Use the enabled [GitHub private vulnerability reporting](https
 Include affected version/commit, preconditions, impact and redacted reproduction
 steps. Do not post credentials or personal data in a public issue. There is no
 guaranteed response time; urgent credential revocation should not wait for a reply.
+
+
+The Windows port adds native DACL/locking code and a Windows build script to the
+review scope. DLLs are loaded from System32, SDDL is generated from the process
+user SID (never caller-supplied ACL text), and ownership/reparse checks precede
+ACL changes. Packaging subprocesses use argument lists and trusted build paths.
+Pi-specific POSIX permission/cache tests run on Linux rather than being treated
+as Windows coverage. Platform-specific pass/skip counts are retained in CI logs.
+The older 42-finding Bandit tally above describes the dated 0.3.x review; newer
+CI artifacts contain findings for the expanded source set.

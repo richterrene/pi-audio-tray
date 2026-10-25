@@ -1,6 +1,6 @@
 # Pi Audio Tray
 
-A small Linux tray and macOS menu-bar app for a Raspberry Pi running Spotify
+A small Linux/Windows tray and macOS menu-bar app for a Raspberry Pi running Spotify
 Soloist with PipeWire,
 or the older Raspotify / BlueALSA setup.
 Connect over SSH, monitor the receiver, and open or close Bluetooth pairing
@@ -17,7 +17,7 @@ affiliated with Spotify or Raspberry Pi.
 | Linux desktop tested | Ubuntu 26.04 x86_64, GNOME with the AppIndicator extension |
 | Linux package | x86_64 AppImage; other Linux architectures are not packaged |
 | macOS packages | Separate Apple Silicon (arm64) and Intel (x86_64) `.app.zip` builds, targeting macOS 15+; see [macOS notes](docs/MACOS.md) for validation and signing status |
-| Windows | Not supported |
+| Windows package | x86_64 portable ZIP targeting Windows 11; native tests/build on Windows Server 2022 CI; see [Windows notes](docs/WINDOWS.md) for validation and signing limits |
 | Receiver tested | Raspberry Pi 3 Model B+, 1 GB RAM, 64-bit Raspberry Pi OS / Debian 13 Trixie |
 | Receiver audio output tested | Built-in 3.5 mm headphone output; other DACs/HDMI not tested |
 | Recommended audio stack | Spotify Soloist ARM64, PipeWire 1.4, WirePlumber 0.5, BlueZ |
@@ -91,7 +91,8 @@ device status indicates a connection, not proof of current audio playback.
 
 The Linux/Qt interface below uses **fictional demo connection details**. No real
 account, device address, SSH key, or Soloist API key is shown. macOS uses its
-native window and menu-bar presentation.
+native window and menu-bar presentation. Windows uses its system tray; see the
+platform notes for native validation limits.
 
 ### Receiver status
 
@@ -133,8 +134,8 @@ closes only the tray application; **Shut down Pi…** powers off the receiver.
 Download the x86_64 AppImage, make it executable, and launch it:
 
 ```sh
-chmod +x PiAudioTray-0.3.4-x86_64.AppImage
-./PiAudioTray-0.3.4-x86_64.AppImage --show
+chmod +x PiAudioTray-0.4.0-x86_64.AppImage
+./PiAudioTray-0.4.0-x86_64.AppImage --show
 ```
 
 Ubuntu's AppIndicator extension must be enabled for the tray icon. When no tray
@@ -148,6 +149,14 @@ location. Use an SSH agent for passphrase-protected keys; this app does not save
 passwords or passphrases. If you connect through a different hostname from the
 one already in `~/.ssh/known_hosts`, enter the old name in **Known-host alias**.
 Unknown host keys require explicit fingerprint approval; changed keys are rejected.
+
+### Windows
+
+Download and fully extract `PiAudioTray-0.4.0-Windows-x86_64.zip`, then run
+**Pi Audio Tray.exe** inside the extracted folder. Keep `_internal` beside it.
+No Python installation is needed. The build is unsigned; see [Windows setup and
+security](docs/WINDOWS.md). Receiver configuration and shutdown/pairing permissions
+are the same as on Linux/macOS.
 
 ### macOS
 
@@ -239,7 +248,8 @@ Legacy devices requiring PIN entry are currently unsupported.
 
 Configuration and app-approved host keys are stored in
 `$XDG_CONFIG_HOME/pi-audio-tray` (normally `~/.config/pi-audio-tray` on Linux).
-On macOS the default is `~/Library/Application Support/Pi Audio Tray`. That directory
+On Windows the default is `%APPDATA%\Pi Audio Tray`, protected using native
+Windows ACLs rather than POSIX modes. On macOS the default is `~/Library/Application Support/Pi Audio Tray`. That directory
 is not in the repository or AppImage. SSH private keys stay on the desktop.
 The Soloist API key is deliberately sent to the Pi over SSH and stored there;
 it is never included in Git or AppImage builds. Connected device names and addresses
@@ -274,7 +284,15 @@ SHA-256 checksum. Output and checksum are placed in `dist/`. Qt shared libraries
 and third-party notices can be inspected with `--appimage-extract`.
 
 The active `.github/workflows/desktop-builds.yml` workflow builds Linux on Ubuntu
-24.04 and macOS on Apple Silicon and Intel macOS 15 runners. It can be dispatched
+24.04, macOS on Apple Silicon and Intel macOS 15 runners, and Windows x64 on
+Windows Server 2022. It can be dispatched
 manually or triggered by a version tag. It uploads artifacts, not public releases,
 and does not change repository visibility. Mac builds require native macOS tools;
 run `python build_macos.py` on the desired architecture. See the macOS notes.
+
+
+## Build Windows
+
+Run `python build_windows.py` on native Windows x64. It creates a portable ZIP,
+checks the executable architecture, and runs a frozen GUI/private-storage smoke
+test. See [Windows prerequisites and limits](docs/WINDOWS.md#building).

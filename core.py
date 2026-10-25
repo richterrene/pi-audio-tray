@@ -17,6 +17,7 @@ import math
 import uuid
 
 import paramiko
+from platform_support import secure_directory, private_file, open_instance_lock
 
 REMOTE_HELPER = '/usr/local/lib/pi-audio-tray/pi-helper'
 DEFAULTS = {'host': '', 'username': '', 'port': 22, 'key_file': '',
@@ -35,7 +36,7 @@ def atomic_private_write(path, data):
     fd, temp = tempfile.mkstemp(prefix='.' + path.name + '-', dir=path.parent)
     try:
         with os.fdopen(fd, 'wb') as f:
-            os.fchmod(f.fileno(), 0o600)
+            private_file(f.fileno(), Path(temp))
             f.write(data)
             f.flush()
             os.fsync(f.fileno())
@@ -46,30 +47,20 @@ def atomic_private_write(path, data):
 
 
 def instance_lock_file():
-    fd = os.open(config_dir() / 'instance.lock', os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
-    info = os.fstat(fd)
-    if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid():
-        os.close(fd)
-        raise ValueError('Unsafe instance lock file')
-    os.fchmod(fd, 0o600)
-    return os.fdopen(fd, 'r+')
+    return open_instance_lock(config_dir() / 'instance.lock')
 
 
 def config_dir():
     if os.environ.get('XDG_CONFIG_HOME'):
         root = Path(os.environ['XDG_CONFIG_HOME']) / 'pi-audio-tray'
+    elif sys.platform == 'win32':
+        root = Path(os.environ.get('APPDATA', str(Path.home() / 'AppData/Roaming'))) / 'Pi Audio Tray'
     elif sys.platform == 'darwin':
         root = Path.home() / 'Library/Application Support/Pi Audio Tray'
     else:
         root = Path.home() / '.config/pi-audio-tray'
     root.mkdir(parents=True, exist_ok=True, mode=0o700)
-    fd = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
-    try:
-        if os.fstat(fd).st_uid != os.getuid():
-            raise PermissionError('Configuration directory belongs to another user')
-        os.fchmod(fd, 0o700)
-    finally:
-        os.close(fd)
+    secure_directory(root)
     return root
 
 

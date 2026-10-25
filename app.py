@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Pi Audio Tray: a small, configurable SSH-based audio monitor."""
-import fcntl
 import json
 import os
 from pathlib import Path
 import sys
 import threading
+import tempfile
 import time
 
 from PySide6.QtCore import QObject, QTimer, Qt, Signal, QEvent
@@ -19,6 +19,7 @@ from core import (PairSession, UnknownHost, config_dir, disable_pairing,
                   install_helper, load_config, poll, save_config, store_soloist_key,
                   remove_soloist_key, update_soloist, trust_host, display_text, instance_lock_file, shutdown_pi)
 from version import VERSION
+from platform_support import lock_instance
 
 
 def plain_message(parent, icon_type, title, text, buttons, default):
@@ -661,15 +662,31 @@ def main():
     if '--self-test' in sys.argv:
         from PySide6.QtCore import qVersion
         assert not icon().isNull()
+        previous = os.environ.get('XDG_CONFIG_HOME')
+        try:
+            with tempfile.TemporaryDirectory(prefix='pi-audio-self-test-') as folder:
+                os.environ['XDG_CONFIG_HOME'] = folder
+                save_config(load_config())
+                with instance_lock_file() as test_lock:
+                    lock_instance(test_lock)
+        finally:
+            if previous is None:
+                os.environ.pop('XDG_CONFIG_HOME', None)
+            else:
+                os.environ['XDG_CONFIG_HOME'] = previous
         print(json.dumps({'gui': 'ok', 'qt': qVersion(),
                           'tray_available': QSystemTrayIcon.isSystemTrayAvailable()}))
         return 0
     app.setApplicationName('Pi Audio Tray')
     app.setApplicationVersion(VERSION)
     app.setQuitOnLastWindowClosed(False)
-    lock = instance_lock_file()
     try:
-        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        lock = instance_lock_file()
+    except (OSError, ValueError) as exc:
+        plain_warning(None, 'Cannot secure local settings', str(exc))
+        return 78
+    try:
+        lock_instance(lock)
     except BlockingIOError:
         plain_information(None, 'Pi Audio Tray', 'Pi Audio Tray is already running. Open it from the tray icon.')
         return 0

@@ -41,7 +41,8 @@ class PrivateStorage(unittest.TestCase):
         root = Path(self.temp.name) / 'pi-audio-tray'
         root.mkdir(mode=0o755)
         core.config_dir()
-        self.assertEqual(root.stat().st_mode & 0o777, 0o700)
+        if os.name != 'nt':
+            self.assertEqual(root.stat().st_mode & 0o777, 0o700)
 
     def test_config_directory_cannot_be_a_symlink(self):
         target = Path(self.temp.name) / 'target'
@@ -57,7 +58,8 @@ class PrivateStorage(unittest.TestCase):
         (root / 'config.json.tmp').symlink_to(target)
         core.save_config(core.DEFAULTS)
         self.assertEqual(target.read_text(), 'preserve me')
-        self.assertEqual((root / 'config.json').stat().st_mode & 0o777, 0o600)
+        if os.name != 'nt':
+            self.assertEqual((root / 'config.json').stat().st_mode & 0o777, 0o600)
 
     def test_instance_lock_refuses_symlink_without_truncating_target(self):
         root = core.config_dir()
@@ -250,6 +252,7 @@ class UpdaterSecurity(unittest.TestCase):
                     'https://soloist-builds.spotifycdn.com.evil.example/file', 'file:///etc/passwd'):
             with self.assertRaises(ValueError): redirect.redirect_request(request, None, 302, '', {}, url)
 
+    @unittest.skipIf(os.name == 'nt', 'Pi updater uses Linux file modes; tested on Linux')
     def test_installation_never_executes_downloaded_bytes_and_backup_does_not_follow_symlink(self):
         with tempfile.TemporaryDirectory() as temp:
             destination = Path(temp) / 'soloist'
@@ -264,6 +267,7 @@ class UpdaterSecurity(unittest.TestCase):
             self.assertEqual(victim.read_bytes(), b'preserve me')
             self.assertEqual(destination.with_name('soloist.previous').read_bytes(), b'old client')
 
+    @unittest.skipIf(os.name == 'nt', 'Pi launcher uses Linux file modes; tested on Linux')
     def test_key_loader_rejects_symlinks_world_readable_files_and_large_files(self):
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / 'key'
