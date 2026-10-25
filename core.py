@@ -325,6 +325,20 @@ def update_soloist(config):
         client.close()
 
 
+def shutdown_pi(config):
+    """Request graceful shutdown; never force poweroff or ignore update failures."""
+    client = connect(config)
+    try:
+        states = run(client, '/usr/bin/systemctl show --property=ActiveState --value '
+                     'apt-daily.service apt-daily-upgrade.service soloist-update.service '
+                     '2>/dev/null || true').split()
+        if len(states) != 3 or any(state not in ('inactive', 'failed') for state in states):
+            raise RuntimeError('A Pi update is running, or its state could not be verified. Wait and try again.')
+        run(client, 'sudo -n /usr/bin/systemctl --no-block poweroff', timeout=15)
+    finally:
+        client.close()
+
+
 def install_helper(config):
     root = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
     data = (root / 'pi_helper.py').read_bytes()

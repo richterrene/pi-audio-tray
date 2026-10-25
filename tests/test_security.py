@@ -144,6 +144,26 @@ class BoundedSSH(unittest.TestCase):
         self.assertEqual(callback.call_args.args[0]['session_id'], session.session_id)
 
 
+class ShutdownSafety(unittest.TestCase):
+    def test_only_fixed_nonblocking_poweroff_is_sent_after_update_check(self):
+        client = Mock()
+        with patch.object(core, 'connect', return_value=client), \
+             patch.object(core, 'run', side_effect=['inactive\nfailed\ninactive\n', '']) as run:
+            core.shutdown_pi(core.DEFAULTS)
+        self.assertEqual(run.call_count, 2)
+        self.assertEqual(run.call_args.args, (client, 'sudo -n /usr/bin/systemctl --no-block poweroff'))
+        client.close.assert_called_once()
+
+    def test_running_or_unknown_update_state_blocks_poweroff(self):
+        for states in ('active inactive inactive', 'inactive activating inactive', '', 'inactive inactive unknown'):
+            client = Mock()
+            with patch.object(core, 'connect', return_value=client), \
+                 patch.object(core, 'run', return_value=states) as run:
+                with self.assertRaises(RuntimeError): core.shutdown_pi(core.DEFAULTS)
+            self.assertEqual(run.call_count, 1)
+            client.close.assert_called_once()
+
+
 class ProtocolValidation(unittest.TestCase):
     def status(self, **changes):
         return {'protocol': 1, 'services': {'soloist': 'active'}, 'adapter': {}, 'devices': [], **changes}

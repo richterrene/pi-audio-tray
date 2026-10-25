@@ -19,7 +19,7 @@ corrected by the follow-up. No independent audit or penetration test is claimed.
 | Desktop → Pi | SSH encryption and host-key verification. A new host requires independent fingerprint confirmation; changed keys fail. The selected Pi/SSH account is trusted to supply truthful status. No agent forwarding is requested. |
 | Local desktop | The desktop OS, Python/Qt bundle, SSH agent and logged-in user are trusted. Settings contain host/user/key paths but not private key contents. Private directories must have trusted parent directories. Same-user malware can read memory or alter settings. |
 | Bluetooth → Pi | Nearby devices and their names are untrusted. Confirm the device and, when shown, the matching passkey. Just Works authorization has no numeric identity proof. BlueZ owns authentication/encryption; the app’s agent accepts callbacks only from its captured unique bus owner. |
-| SSH user → root | Exact helper pair/off commands and a fixed systemd update start. These permit pairing and update-triggered interruption, not arbitrary administrative commands. Root-owned helpers, units and all parent paths must be non-writable by that user. |
+| SSH user → root | Exact helper pair/off commands, a fixed systemd update start, and optional graceful poweroff. These permit pairing, update-triggered interruption and optional poweroff, not arbitrary administrative commands. Root-owned helpers, units and all parent paths must be non-writable by that user. |
 | Updates → system | APT repositories can deliver root-executed code; trust their signing keys/origins. Soloist trusts Spotify’s HTTPS/CDN and runs as the audio account after structural validation. Third-party audio/client internals are outside this code review. |
 | Repository → desktop | GitHub, PyPI packages, Actions runners and maintainers are trusted. Direct Python dependencies and Actions revisions are pinned, but transitive dependencies lack a complete hash-locked set. Package checksums detect transfer changes; they are not independent publisher signatures. |
 
@@ -73,6 +73,22 @@ AUDIO_USER ALL=(root) NOPASSWD: /usr/local/lib/pi-audio-tray/pi-helper pair
 AUDIO_USER ALL=(root) NOPASSWD: /usr/local/lib/pi-audio-tray/pi-helper off
 AUDIO_USER ALL=(root) NOPASSWD: /usr/bin/systemctl start soloist-update.service
 ```
+
+Optional shutdown (0.3.2+) needs one additional exact rule:
+
+```sudoers
+AUDIO_USER ALL=(root) NOPASSWD: /usr/bin/systemctl --no-block poweroff
+```
+
+This explicitly grants the SSH account power to stop the Pi, even without the
+GUI confirmation if invoked directly. It does not grant arbitrary systemctl
+arguments. The GUI defaults confirmation to No, binds it to the selected
+connection, refuses overlap with pairing/mutations, and blocks known active
+scheduled updates. This is not an atomic lock against all manual package
+operations. No forced shutdown or automatic retry is performed. Successful SSH
+acknowledgment means the request was submitted, not proof that poweroff completed;
+network loss cannot prove it either. Check the Pi’s activity LED before unplugging.
+Reconnecting power is required to start this receiver again.
 
 Read-only monitoring and Soloist key storage use the normal SSH user's rights.
 The GUI helper installer needs broader administrative rights during setup and

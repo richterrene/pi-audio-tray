@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (QApplication, QDialog, QDialogButtonBox, QFileDia
 
 from core import (PairSession, UnknownHost, config_dir, disable_pairing,
                   install_helper, load_config, poll, save_config, store_soloist_key,
-                  remove_soloist_key, update_soloist, trust_host, display_text, instance_lock_file)
+                  remove_soloist_key, update_soloist, trust_host, display_text, instance_lock_file, shutdown_pi)
 from version import VERSION
 
 
@@ -150,6 +150,7 @@ class TrayApp(QWidget):
         self.dialogs = {}
         self.snapshot = None
         self.closing = False
+        self.power_state = None
         self.generation = 0
         self.setWindowTitle('Pi Audio Tray · ' + VERSION)
         self.setWindowIcon(icon())
@@ -227,6 +228,8 @@ class TrayApp(QWidget):
         soloist_menu.addAction('Remove API key…', self.remove_key)
         soloist_menu.addAction('Check for updates now', self.update_soloist)
         self.menu.addSeparator()
+        self.shutdown_action = self.menu.addAction('Shut down Pi…', self.shutdown)
+        self.menu.addSeparator()
         version_action = self.menu.addAction('Version ' + VERSION)
         version_action.setEnabled(False)
         self.menu.addAction('Quit', self.quit)
@@ -287,6 +290,10 @@ class TrayApp(QWidget):
 
     def render_offline(self, message):
         self.snapshot = None
+        if self.power_state:
+            self.power_state = 'disconnected'
+            message = ('Pi unreachable after shutdown request. Check its activity LED before removing power. '
+                       'Reconnect power to start it again.')
         self.row('pi', 'Offline / unavailable')
         for key in self.rows:
             if key == 'pi':
@@ -298,16 +305,19 @@ class TrayApp(QWidget):
         self.enable_controls()
 
     def enable_controls(self):
-        can_start = bool(self.snapshot) and self.session is None and not self.busy - {'poll'}
+        can_start = bool(self.snapshot) and self.session is None and not self.busy - {'poll'} and not self.power_state
         self.on_action.setEnabled(can_start)
         self.pair_button.setEnabled(can_start)
         can_stop = bool(self.snapshot) or self.session is not None
         self.off_action.setEnabled(can_stop)
         self.off_button.setEnabled(can_stop)
+        self.shutdown_action.setEnabled(can_start)
 
     def done(self, kind, data):
         self.busy.discard(kind)
         if kind == 'poll':
+            if self.power_state == 'disconnected':
+                self.power_state = None
             self.snapshot = data
             services, adapter = data['services'], data['adapter']
             backend = data.get('spotify_backend', 'raspotify')
@@ -352,8 +362,15 @@ class TrayApp(QWidget):
             else:
                 self.row('uptime', 'Unavailable')
             self.notice.setText('Updated ' + time.strftime('%H:%M:%S') + ' · Spotify status shows the service, not track playback.')
+            if self.power_state:
+                self.notice.setText('Shutdown requested. Waiting for the Pi to disconnect. Reconnect power to start it again.')
             self.update_countdown()
             self.enable_controls()
+        elif kind == 'shutdown':
+            self.power_state = 'requested'
+            self.notice.setText('Shutdown requested. Waiting for the Pi to disconnect. Reconnect power to start it again.')
+            self.enable_controls()
+            self.refresh()
         else:
             if kind == 'setup':
                 self.notice.setText('Pi helper installed. Checking connection…')
@@ -379,6 +396,9 @@ class TrayApp(QWidget):
         elif kind == 'poll':
             self.render_offline(str(error))
         else:
+            if kind == 'shutdown':
+                self.notice.setText('Shutdown was not confirmed. Refresh the Pi status before retrying.')
+                self.enable_controls()
             plain_warning(self, 'Pi Audio Tray', str(error))
 
     def open_window(self):
@@ -403,6 +423,7 @@ class TrayApp(QWidget):
                 plain_warning(self, 'Settings', display_text(exc))
                 return
             self.config = config
+            self.power_state = None
             self.generation += 1
             self.busy.clear()
             self.render_offline('Connecting…')
@@ -445,8 +466,29 @@ class TrayApp(QWidget):
         config = self.config.copy()
         self.job('update', lambda: update_soloist(config))
 
+    def shutdown(self):
+        if not self.snapshot or self.session or self.busy - {'poll'} or self.power_state:
+            plain_information(self, 'Pi shutdown unavailable',
+                              'Connect to the Pi and finish pairing or the current operation first.')
+            return
+        config, generation = self.config.copy(), self.generation
+        if plain_question(self, 'Shut down Pi?',
+            f"Shut down {config['host']}?\n\n"
+            'Audio playback and SSH connections will stop.\n'
+            'Wait for the activity LED to stop before unplugging.\n'
+            'You will need to reconnect power to start the Pi again.') != QMessageBox.StandardButton.Yes:
+            return
+        if config != self.config or generation != self.generation:
+            plain_information(self, 'Connection changed', 'Review the current Pi connection before requesting shutdown.')
+            return
+        if self.session or self.busy - {'poll'} or self.power_state:
+            return
+        self.notice.setText('Requesting Pi shutdown…')
+        self.job('shutdown', lambda: shutdown_pi(config))
+        self.enable_controls()
+
     def start_pairing(self):
-        if self.session or self.busy - {'poll'}:
+        if self.session or self.busy - {'poll'} or self.power_state:
             return
         self.session = PairSession(self.config, self.events.pairing.emit)
         self.row('pairing', 'Starting…')

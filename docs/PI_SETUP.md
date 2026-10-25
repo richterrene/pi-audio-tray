@@ -173,3 +173,15 @@ first. Revert the live change with `sudo mount -o remount,hidepid=0 /proc` and
 remove that option from fstab if monitoring tools are affected. This does not hide
 the key from root or the audio account. It is an administrator opt-in; the tray app
 does not change mount policy.
+
+
+## Optional tray shutdown
+
+Version 0.3.2 adds **Shut down Pi…** to the tray. No Pi-helper replacement is
+needed for this action. An administrator must add the exact optional poweroff
+sudo rule in [SECURITY.md](../SECURITY.md), replacing `AUDIO_USER` with the normal
+SSH account, and validate it with `visudo -cf`. Keep the rule root-owned mode 440.
+The action checks the known scheduled update units first and uses systemd’s
+normal, non-forced poweroff. It requires desktop confirmation and does not
+provide Wake-on-LAN. Wait for shutdown before removing power; reconnect power
+to boot the Pi again. A failed/closed SSH connection is not proof of poweroff.
