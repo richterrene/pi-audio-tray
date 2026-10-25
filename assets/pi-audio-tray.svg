@@ -1,1 +1,15 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 64 64"><rect x="10" y="8" width="44" height="48" rx="9" fill="#253247" stroke="#e5e9f0" stroke-width="4"/><path d="M21 21h22M21 29h16" stroke="#e5e9f0" stroke-width="3"/><circle cx="44" cy="46" r="7" fill="#55d9ad"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="body" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#344165"/><stop offset="1" stop-color="#131c30"/>
+    </linearGradient>
+    <linearGradient id="wave" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#a3f7e4"/><stop offset="1" stop-color="#38c9c0"/>
+    </linearGradient>
+  </defs>
+  <rect x="3" y="3" width="58" height="58" rx="17" fill="url(#body)"/>
+  <rect x="3.75" y="3.75" width="56.5" height="56.5" rx="16.25" fill="none" stroke="#7c90bf" stroke-opacity=".35" stroke-width="1.5"/>
+  <path d="M16 27v10M24 20v24M32 15v34M40 22v20M48 27v10" fill="none" stroke="url(#wave)" stroke-width="4.5" stroke-linecap="round"/>
+  <circle cx="51" cy="51" r="9" fill="#131c30"/>
+  <circle cx="51" cy="51" r="6" fill="#22c58b"/>
+</svg>

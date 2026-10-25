@@ -24,6 +24,8 @@ def main():
         source.mkdir()
         for name in ('app.py', 'core.py', 'pi_helper.py', 'LICENSE', 'THIRD_PARTY.md'):
             shutil.copy2(ROOT / name, source / name)
+        (source / 'assets').mkdir()
+        shutil.copy2(ROOT / 'assets/pi-audio-tray.svg', source / 'assets/pi-audio-tray.svg')
         licenses = source / 'licenses'
         licenses.mkdir()
         for candidate in (Path(sys.base_prefix) / 'LICENSE.txt',
@@ -42,6 +44,7 @@ def main():
             '--name', 'pi-audio-tray', '--onedir', '--windowed',
             '--add-data', 'pi_helper.py:.', '--add-data', 'LICENSE:.',
             '--add-data', 'THIRD_PARTY.md:.', '--add-data', 'licenses:licenses',
+            '--add-data', 'assets/pi-audio-tray.svg:assets',
             '--distpath', str(work / 'frozen'), '--workpath', str(work / 'pyinstaller'),
             '--specpath', str(source), 'app.py'], cwd=source, check=True,
             env={**os.environ, 'PYINSTALLER_CONFIG_DIR': str(work / 'cache')})
@@ -64,7 +67,7 @@ def main():
         squashfs = work / 'payload.squashfs'
         subprocess.run(['mksquashfs', str(appdir), str(squashfs), '-noappend',
                         '-all-root', '-comp', 'gzip', '-processors', '2', '-no-progress'], check=True)
-        destination = ROOT / 'dist/PiAudioTray-0.1.0-x86_64.AppImage'
+        destination = ROOT / 'dist/PiAudioTray-0.1.1-x86_64.AppImage'
         destination.parent.mkdir(exist_ok=True)
         with destination.open('wb') as out:
             for part in (runtime, squashfs):

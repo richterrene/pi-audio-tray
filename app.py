@@ -9,7 +9,8 @@ import threading
 import time
 
 from PySide6.QtCore import QObject, QTimer, Qt, Signal
-from PySide6.QtGui import QAction, QColor, QIcon, QPainter, QPen, QPixmap
+from PySide6.QtGui import QAction, QIcon, QPainter, QPixmap
+from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (QApplication, QDialog, QDialogButtonBox, QFileDialog,
     QFormLayout, QHBoxLayout, QLabel, QLineEdit, QMenu, QMessageBox,
     QPushButton, QSpinBox, QSystemTrayIcon, QVBoxLayout, QWidget)
@@ -19,21 +20,18 @@ from core import (PairSession, UnknownHost, config_dir, disable_pairing,
 
 
 def icon(color='#8c97a8'):
-    image = QPixmap(64, 64)
-    image.fill(Qt.GlobalColor.transparent)
-    p = QPainter(image)
-    p.setRenderHint(QPainter.RenderHint.Antialiasing)
-    p.setPen(QPen(QColor('#e5e9f0'), 4))
-    p.setBrush(QColor('#253247'))
-    p.drawRoundedRect(10, 8, 44, 48, 9, 9)
-    p.setPen(QPen(QColor('#e5e9f0'), 3))
-    p.drawLine(21, 21, 43, 21)
-    p.drawLine(21, 29, 37, 29)
-    p.setPen(Qt.PenStyle.NoPen)
-    p.setBrush(QColor(color))
-    p.drawEllipse(37, 39, 14, 14)
-    p.end()
-    return QIcon(image)
+    root = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
+    svg = (root / 'assets/pi-audio-tray.svg').read_text().replace('#22c58b', color)
+    renderer = QSvgRenderer(svg.encode())
+    result = QIcon()
+    for size in (16, 22, 32, 48, 64, 128, 256):
+        image = QPixmap(size, size)
+        image.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(image)
+        renderer.render(painter)
+        painter.end()
+        result.addPixmap(image)
+    return result
 
 
 class Events(QObject):

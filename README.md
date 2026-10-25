@@ -26,8 +26,8 @@ device status indicates a connection, not proof of current audio playback.
 Download the x86_64 AppImage, make it executable, and launch it:
 
 ```sh
-chmod +x PiAudioTray-0.1.0-x86_64.AppImage
-./PiAudioTray-0.1.0-x86_64.AppImage --show
+chmod +x PiAudioTray-0.1.1-x86_64.AppImage
+./PiAudioTray-0.1.1-x86_64.AppImage --show
 ```
 
 Ubuntu's AppIndicator extension must be enabled for the tray icon. When no tray
