@@ -158,6 +158,13 @@ credential or securely erase flash storage/backups. Preserve only redacted
 incident evidence. A compromised audio/desktop account requires remediation of
 that account/host, not just replacement of the visible key file.
 
+The Pi CPU sampler stores only its latest counters, monotonic timestamp and
+boot identifier in `~/.cache/pi-audio-tray/cpu.json` (private directory/file).
+The file is bounded and validated; reads reject links/non-regular files and
+replacement is atomic. Reboot, stale/reset counters or unavailable cache cause
+a fresh one-second sample. Concurrent status clients may shorten the displayed
+averaging window; no process names, command lines or credentials are stored.
+
 ## Reproducing checks
 
 Use a disposable virtual environment and a reviewed checkout:

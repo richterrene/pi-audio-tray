@@ -2,6 +2,8 @@ import importlib.util
 from pathlib import Path
 import sys
 import types
+import tempfile
+import json
 import unittest
 from unittest.mock import Mock, patch
 
@@ -171,7 +173,7 @@ class PiStats(unittest.TestCase):
             if name == '/proc/meminfo': return 'MemTotal: 1000 kB\nMemAvailable: 250 kB\n'
             if name == '/proc/uptime': return '90061.5 0.0'
             raise OSError('not available')
-        with patch.object(helper.Path, 'read_text', read), patch.object(helper.time, 'sleep'), \
+        with patch.object(helper.Path, 'read_text', read), patch.object(helper, 'cpu_usage', return_value=(75, 1)), \
              patch.object(helper.os, 'getloadavg', return_value=(0.5, 0.3, 0.2)), \
              patch.object(helper.os, 'cpu_count', return_value=4), \
              patch.object(helper.shutil, 'disk_usage', return_value=types.SimpleNamespace(total=100000, used=25000)):
@@ -188,5 +190,44 @@ class PiStats(unittest.TestCase):
              patch.object(helper.shutil, 'disk_usage', side_effect=OSError):
             self.assertEqual(helper.collect_stats(), {'cpu_percent': None, 'temperature_c': None})
 
+
+
+class CpuSampling(unittest.TestCase):
+    def test_average_between_refreshes_includes_work_outside_the_old_short_window(self):
+        with tempfile.TemporaryDirectory() as temp, \
+             patch.object(helper, 'cpu_ticks', side_effect=[(200, 80), (400, 230), (800, 530)]), \
+             patch.object(helper.Path, 'read_text', return_value='test-boot'), \
+             patch.object(helper.time, 'monotonic', side_effect=[0, 1, 11]), \
+             patch.object(helper.time, 'sleep') as sleep:
+            cache = Path(temp) / 'stats'
+            self.assertEqual(helper.cpu_usage(cache), (25.0, 1))
+            self.assertEqual(helper.cpu_usage(cache), (25.0, 10))
+            sleep.assert_called_once_with(1)
+            self.assertEqual((cache / 'cpu.json').stat().st_mode & 0o777, 0o600)
+
+    def test_reboot_or_counter_reset_replaces_the_baseline(self):
+        with tempfile.TemporaryDirectory() as temp:
+            cache = Path(temp)
+            (cache / 'cpu.json').write_text(json.dumps({'boot': 'old-boot', 'total': 9000, 'idle': 8000, 'time': 0}))
+            with patch.object(helper, 'cpu_ticks', side_effect=[(100, 50), (500, 350)]), \
+                 patch.object(helper.Path, 'read_text', return_value='new-boot'), \
+                 patch.object(helper.time, 'monotonic', side_effect=[10, 11]), \
+                 patch.object(helper.time, 'sleep'):
+                self.assertEqual(helper.cpu_usage(cache), (25.0, 1))
+
+    def test_cache_symlink_cannot_overwrite_an_unrelated_file(self):
+        with tempfile.TemporaryDirectory() as temp:
+            cache = Path(temp) / 'stats'
+            cache.mkdir()
+            victim = Path(temp) / 'victim'
+            victim.write_text('preserve')
+            (cache / 'cpu.json').symlink_to(victim)
+            with patch.object(helper, 'cpu_ticks', side_effect=[(100, 50), (500, 450)]), \
+                 patch.object(helper.Path, 'read_text', return_value='test-boot'), \
+                 patch.object(helper.time, 'monotonic', side_effect=[0, 1]), \
+                 patch.object(helper.time, 'sleep'):
+                self.assertEqual(helper.cpu_usage(cache), (0.0, 1))
+            self.assertEqual(victim.read_text(), 'preserve')
+            self.assertFalse((cache / 'cpu.json').is_symlink())
 
 if __name__ == '__main__': unittest.main()

@@ -7,6 +7,9 @@ import sys
 import subprocess
 import time
 import shutil
+import stat
+import tempfile
+import math
 import unicodedata
 from pathlib import Path
 
@@ -29,16 +32,81 @@ def safe_name(value):
                    and unicodedata.category(c) != 'Cf')[:128]
 
 
+def cpu_ticks():
+    values = [int(v) for v in Path('/proc/stat').read_text().splitlines()[0].split()[1:9]]
+    return sum(values), values[3] + values[4]
+
+
+def cpu_usage(cache_dir=None):
+    """Average between polls; first poll/cache failures use a one-second sample."""
+    def sample():
+        total, idle = cpu_ticks()
+        return {'total': total, 'idle': idle, 'time': time.monotonic(),
+                'boot': Path('/proc/sys/kernel/random/boot_id').read_text().strip()}
+
+    def percentage(before, after):
+        total = after['total'] - before['total']
+        idle = after['idle'] - before['idle']
+        window = after['time'] - before['time']
+        if total <= 0 or not 0 <= idle <= total or not 0 < window <= 3600:
+            return None, None
+        return round(100 * (1 - idle / total), 1), round(window, 2)
+
+    before, current = None, sample()
+    folder = cache_dir if cache_dir is not None else Path.home() / '.cache/pi-audio-tray'
+    directory = None
+    try:
+        folder.mkdir(mode=0o700, parents=True, exist_ok=True)
+        directory = os.open(folder, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        if os.fstat(directory).st_uid != os.getuid():
+            raise ValueError('Unsafe CPU sample cache')
+        os.fchmod(directory, 0o700)
+        try:
+            fd = os.open('cpu.json', os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory)
+            with os.fdopen(fd, 'rb') as stream:
+                info = os.fstat(stream.fileno())
+                if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or info.st_size > 4096:
+                    raise ValueError('Unsafe CPU sample file')
+                stored = json.loads(stream.read(4097))
+            if (isinstance(stored, dict) and stored.get('boot') == current['boot']
+                    and all(type(stored.get(k)) is int and stored[k] >= 0 for k in ('total', 'idle'))
+                    and type(stored.get('time')) in (int, float) and 0 <= stored['time'] <= 10**12
+                    and math.isfinite(stored['time'])
+                    and 1 <= current['time'] - stored['time'] <= 3600):
+                before = stored
+        except (OSError, ValueError, TypeError):
+            pass
+        if before is None or percentage(before, current)[0] is None:
+            before = current
+            time.sleep(1)
+            current = sample()
+        # Exclusive private temp creation and atomic replacement never follow
+        # an existing cache-file link. Concurrent readers see a complete sample.
+        fd, temp = tempfile.mkstemp(prefix='.cpu-', dir=folder)
+        try:
+            with os.fdopen(fd, 'w') as stream:
+                json.dump(current, stream)
+            os.replace(Path(temp).name, 'cpu.json', src_dir_fd=directory, dst_dir_fd=directory)
+        finally:
+            try:
+                os.unlink(Path(temp).name, dir_fd=directory)
+            except FileNotFoundError:
+                pass
+    except (OSError, ValueError, TypeError):
+        if before is None:
+            before = current
+            time.sleep(1)
+            current = sample()
+    finally:
+        if directory is not None:
+            os.close(directory)
+    return percentage(before, current)
+
+
 def collect_stats():
     result = {}
     try:
-        def ticks():
-            values = [int(v) for v in Path('/proc/stat').read_text().splitlines()[0].split()[1:9]]
-            return sum(values), values[3] + values[4]
-        before, idle_before = ticks()
-        time.sleep(0.1)
-        after, idle_after = ticks()
-        result['cpu_percent'] = round(max(0, min(100, 100 * (1 - (idle_after - idle_before) / (after - before)))), 1) if after > before else None
+        result['cpu_percent'], result['cpu_window_seconds'] = cpu_usage()
     except (OSError, ValueError, IndexError):
         result['cpu_percent'] = None
     try:

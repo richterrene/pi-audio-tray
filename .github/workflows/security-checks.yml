@@ -18,8 +18,8 @@ jobs:
         with:
           python-version: '3.12'
       - run: sudo apt-get update && sudo apt-get install -y libegl1 libopengl0 python3-dbus python3-gi dbus
-      - run: python -m venv .venv && .venv/bin/python -m pip install -r requirements.txt
-      - run: python -m venv .audit && .audit/bin/python -m pip install pip-audit==2.10.1 bandit==1.9.4
+      - run: python -m venv .venv && .venv/bin/python -m pip install --upgrade pip==26.2.0 && .venv/bin/python -m pip install -r requirements.txt
+      - run: python -m venv .audit && .audit/bin/python -m pip install --upgrade pip==26.2.0 && .audit/bin/python -m pip install pip-audit==2.10.1 bandit==1.9.4
       - run: .venv/bin/python -m unittest discover -s tests -v
       - run: /usr/bin/dbus-run-session -- /usr/bin/python3 -I tools/check_dbus_agent.py
       - name: Record exact dependencies and scan known advisories

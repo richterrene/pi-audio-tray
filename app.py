@@ -336,7 +336,9 @@ class TrayApp(QWidget):
             stats = data.get('stats', {})
             temperature, cpu = stats.get('temperature_c'), stats.get('cpu_percent')
             self.row('temperature', f'{temperature:.1f} °C' if temperature is not None else 'Unavailable')
-            self.row('cpu', f'{cpu:.1f} %' if cpu is not None else 'Unavailable')
+            window = stats.get('cpu_window_seconds')
+            self.row('cpu', (f'{cpu:.1f} %' + (f' · {window:.1f}s avg' if window else ''))
+                     if cpu is not None else 'Unavailable')
             load = stats.get('load')
             self.row('load', ' / '.join(f'{v:.2f}' for v in load) if load else 'Unavailable')
             for key, prefix in (('memory', 'memory'), ('disk', 'disk')):

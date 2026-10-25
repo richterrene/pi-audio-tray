@@ -52,6 +52,7 @@ On a native ARM64 or Intel Mac with Python 3.12 and Xcode command-line tools:
 
 ```sh
 python3 -m venv .venv
+.venv/bin/python -m pip install --upgrade pip==26.2.0
 .venv/bin/python -m pip install -r requirements.txt
 .venv/bin/python -m unittest discover -s tests -v
 .venv/bin/python build_macos.py

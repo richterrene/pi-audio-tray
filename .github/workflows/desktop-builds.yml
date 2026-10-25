@@ -17,7 +17,7 @@ jobs:
         with:
           python-version: '3.12'
       - run: sudo apt-get update && sudo apt-get install -y squashfs-tools libegl1 libopengl0
-      - run: python -m venv .venv && .venv/bin/python -m pip install -r requirements.txt
+      - run: python -m venv .venv && .venv/bin/python -m pip install --upgrade pip==26.2.0 && .venv/bin/python -m pip install -r requirements.txt
       - run: .venv/bin/python -m unittest discover -s tests -v
       - run: .venv/bin/python build_appimage.py
       - run: QT_QPA_PLATFORM=offscreen APPIMAGE_EXTRACT_AND_RUN=1 dist/*.AppImage --self-test
@@ -47,6 +47,7 @@ jobs:
       - name: Install dependencies with isolated OpenSSL for source builds
         run: |
           python -m venv .venv
+          .venv/bin/python -m pip install --upgrade pip==26.2.0
           OPENSSL_DIR="$(brew --prefix openssl@3)" OPENSSL_STATIC=1 .venv/bin/python -m pip install --no-cache-dir -r requirements.txt
       - run: .venv/bin/python -m unittest discover -s tests -v
       - run: .venv/bin/python build_macos.py

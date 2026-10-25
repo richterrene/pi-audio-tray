@@ -232,7 +232,8 @@ def validate_status(data):
     if not isinstance(raw_stats, dict):
         raise ValueError('Invalid Pi statistics')
     stats = {}
-    for key, minimum, maximum in (('cpu_percent', 0, 100), ('temperature_c', -50, 150)):
+    for key, minimum, maximum in (('cpu_percent', 0, 100), ('temperature_c', -50, 150),
+                                    ('cpu_window_seconds', 0, 3600)):
         value = raw_stats.get(key)
         if value is not None:
             if type(value) not in (int, float) or not math.isfinite(value) or not minimum <= value <= maximum:

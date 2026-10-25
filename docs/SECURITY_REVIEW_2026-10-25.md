@@ -81,11 +81,12 @@ whether the earlier documentation matched the implementation.
 | F-02 | Cleanup still trusted approved/paired devices after close_pairing failed, contrary to the initial review’s wording. Pending requests also survived a stop, and approvals were not rechecked against adapter flags. | Skip new trust when closure cannot be verified; cancel pending callbacks during stop/cleanup; refuse approvals when pairing/discovery is off. Existing trusted devices are not untrusted automatically. |
 | F-03 | Different GUI mutation jobs could overlap, and settings-save validation errors were not caught. | Serialize mutations, retain an emergency pairing-off path, and report invalid settings without changing the saved connection. |
 | F-04 | Desktop key validation counted characters while the launcher enforced bytes; NUL/control characters could reach exec validation. | Apply a UTF-8 byte bound reserving the trailing newline and reject nonprintable/whitespace characters before connecting; apply matching printable-key checks in the launcher. |
+| F-05 | Clean CI used pip 25.0.1, which the new exact-inventory audit flagged with 12 advisory entries (6 distinct IDs). The local 14-package build snapshot had no pip distribution and therefore did not cover that tool. | Bootstrap build/audit environments with pinned pip 26.2.0 before installing dependencies; retain CI advisory failure as a gate. |
 | D-01 | Repository vulnerability reporting, dependency alerts and secret scanning protections were disabled. The original review also lacked a full-history secret scan and repeatable CI audit. | Enable private reporting, dependency alerts, secret scanning and secret push protection; scan reachable history with Gitleaks; add PR/main/manual security checks with exact dependency inventories and a real D-Bus integration test. |
 
 Follow-up evidence:
 
-- **54** unit/regression tests passed locally, including all nine exported Agent1
+- **57** unit/regression tests passed locally, including all nine exported Agent1
   methods rejecting missing/foreign senders, cancellation/late approval, closure
   failure, overlapping jobs and key byte/control bounds.
 - `tools/check_dbus_agent.py` passed using real dbus-python connections on an
@@ -107,6 +108,15 @@ Follow-up evidence:
   rule-by-rule disposition in [SECURITY.md](../SECURITY.md#static-analysis-disposition).
 - GitHub settings were verified after enabling them. Dependency and secret alert
   queries returned no alerts at that point; GitHub’s background analysis may lag.
+
+The CPU display investigation also reproduced a 0.0% 100 ms sample while a
+one-second sample showed activity. CPU measurement now uses the interval between
+polls, with a one-second first/reset fallback and an explicit averaging window.
+A temporary unprivileged copy was verified on the receiver with a short controlled
+single-core workload; production service configuration was not changed by that
+test. Three added tests cover inter-poll averaging, reboot reset, and cache-link
+safety. The private bounded CPU cache and remaining snapshot limits are documented
+in SECURITY.md and README.
 
 Source changes require upgrading the desktop and Pi helper/launcher; repository
 settings take effect immediately. A green source test does not prove that an
