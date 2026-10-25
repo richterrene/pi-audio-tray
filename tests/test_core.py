@@ -24,7 +24,8 @@ class PrivacyAndHostVerification(unittest.TestCase):
         config.update(host='audio-pi.example', username='audio', key_file='~/.ssh/example-key')
         save_config(config)
         path = Path(self.temp.name) / 'pi-audio-tray/config.json'
-        self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+        if os.name != 'nt':
+            self.assertEqual(path.stat().st_mode & 0o777, 0o600)
         self.assertEqual(load_config(), config)
         self.assertNotIn('password', path.read_text())
 
@@ -50,7 +51,8 @@ class PrivacyAndHostVerification(unittest.TestCase):
         hosts = paramiko.HostKeys(str(path))
         self.assertTrue(hosts.check('audio-pi.example', key))
         self.assertFalse(hosts.check('audio-pi.example', paramiko.RSAKey.generate(2048)))
-        self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+        if os.name != 'nt':
+            self.assertEqual(path.stat().st_mode & 0o777, 0o600)
 
 
 if __name__ == '__main__':

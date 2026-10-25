@@ -1,12 +1,10 @@
 #!/usr/bin/python3 -I
 """Bounded official-client updates. Downloaded code is never executed as root."""
-import fcntl
 import gzip
 import hashlib
 import io
 import os
-from pathlib import Path
-import pwd
+from pathlib import Path, PurePosixPath
 import re
 import stat
 import subprocess
@@ -58,7 +56,7 @@ def extract_binary(archive):
             for member in tar:
                 count += 1
                 total += member.size
-                path = Path(member.name)
+                path = PurePosixPath(member.name)
                 if (count > 64 or total > MAX_UNPACKED or len(member.name) > 256
                         or path.is_absolute() or '..' in path.parts):
                     raise ValueError('Unexpected archive contents')
@@ -104,6 +102,7 @@ def atomic_write(path, data, mode=0o600):
 
 
 def service_account():
+    import pwd
     trusted_file(USER_FILE)
     if USER_FILE.stat().st_size > 256:
         raise ValueError('Invalid service account configuration')
@@ -128,6 +127,7 @@ def install_binary(binary, current):
 
 
 def main():
+    import fcntl
     os.environ['PATH'] = '/usr/sbin:/usr/bin:/sbin:/bin'
     if os.geteuid() != 0:
         raise SystemExit('Run the updater through its system service')
