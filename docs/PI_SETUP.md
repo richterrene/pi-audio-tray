@@ -76,7 +76,7 @@ Verify without printing command-line secrets:
 
 ```sh
 systemctl --user is-active soloist pipewire wireplumber
-soloist ctl status -D ~/.local/state/soloist
+systemctl --user show soloist -p ActiveState -p SubState
 ```
 
 ## 4. Optional daily Soloist updates
@@ -93,7 +93,8 @@ systemctl show soloist-update.service -p Result
 ```
 
 This updater currently supports **ARM64 only**. It uses HTTPS and validates the
-download format/version; it does not verify a separate Spotify signature. Its
+bounded archive contents and an ARM64 ELF header without executing the download
+as root; it does not verify a separate Spotify signature. Its
 privileged download trust is the official Spotify CDN and the local CA store.
 Keep the script and `/etc/pi-audio-tray` configuration root-owned.
 
@@ -121,3 +122,54 @@ sudo /usr/local/lib/pi-audio-tray/reboot-if-needed --check-only
 See the main README for exact schedules and limitations. Logs are retained by
 systemd and unattended-upgrades. The app shows timer configuration and the last
 service result; it is not a guarantee that every package or service is healthy.
+
+
+## Runtime permissions
+
+After administrative setup, use the three exact sudo rules in [SECURITY.md](../SECURITY.md)
+for pairing and updates. Validate the file with `visudo -cf` before installing it
+as root-owned mode 440 under `/etc/sudoers.d/`. Replace the example username with
+the real audio account. These rules deliberately do not allow the GUI helper
+installer: update the helper manually as an administrator when needed.
+
+## Upgrading an existing installation
+
+For 0.3, update the desktop package **and** the Pi components. From a reviewed copy
+of this release on the Pi, back up your existing units, then install the helper
+and launcher from step 1, the user unit from step 3, and the updater and its units
+from step 4. If conditional reboots are enabled, also reinstall `reboot-if-needed`
+and `pi-audio-reboot.service` from step 5. Preserve the existing key and audio
+configuration. Reload system units and restart the user service:
+
+```sh
+sudo systemctl daemon-reload
+systemctl --user daemon-reload
+systemctl --user restart soloist.service
+systemctl --user is-active soloist pipewire wireplumber
+/usr/local/lib/pi-audio-tray/pi-helper status
+sudo systemctl start soloist-update.service
+systemctl show soloist-update.service -p Result
+```
+
+Restarting Soloist interrupts playback briefly. The new launcher disables the
+unauthenticated WebSocket server, so local `soloist ctl` operations needing it
+no longer work by default. Spotify Connect remains the playback controller.
+The status helper must run as the ordinary audio user, never root.
+
+## Optional process privacy
+
+Soloist currently receives its API key in its command-line arguments. Other
+local accounts can see those arguments on a permissive `/proc` mount. On a
+single-purpose Pi, `hidepid=2` can hide other users’ process details:
+
+```sh
+sudo mount -o remount,hidepid=2 /proc
+```
+
+Test SSH, desktop status, pairing, Spotify and any monitoring tools you use before
+persisting it. Add `hidepid=2` to the existing `proc` entry’s options in `/etc/fstab`
+(or add a proc entry if absent); keep only one entry for `/proc`. Back up fstab
+first. Revert the live change with `sudo mount -o remount,hidepid=0 /proc` and
+remove that option from fstab if monitoring tools are affected. This does not hide
+the key from root or the audio account. It is an administrator opt-in; the tray app
+does not change mount policy.

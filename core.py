@@ -6,7 +6,14 @@ import os
 from pathlib import Path
 import shlex
 import socket
+import stat
 import sys
+import tempfile
+import time
+import queue
+import re
+import unicodedata
+import math
 import uuid
 
 import paramiko
@@ -14,6 +21,38 @@ import paramiko
 REMOTE_HELPER = '/usr/local/lib/pi-audio-tray/pi-helper'
 DEFAULTS = {'host': '', 'username': '', 'port': 22, 'key_file': '',
             'host_key_alias': '', 'poll_seconds': 10}
+MAX_OUTPUT = 128 * 1024
+MAX_PAIR_LINE = 8192
+
+
+def display_text(value, limit=1024):
+    """Untrusted device names/errors must not inject control or bidi characters."""
+    return ''.join(c for c in str(value) if c.isprintable()
+                   and unicodedata.category(c) != 'Cf')[:limit]
+
+
+def atomic_private_write(path, data):
+    fd, temp = tempfile.mkstemp(prefix='.' + path.name + '-', dir=path.parent)
+    try:
+        with os.fdopen(fd, 'wb') as f:
+            os.fchmod(f.fileno(), 0o600)
+            f.write(data)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(temp, path)
+    finally:
+        if os.path.exists(temp):
+            os.unlink(temp)
+
+
+def instance_lock_file():
+    fd = os.open(config_dir() / 'instance.lock', os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    info = os.fstat(fd)
+    if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid():
+        os.close(fd)
+        raise ValueError('Unsafe instance lock file')
+    os.fchmod(fd, 0o600)
+    return os.fdopen(fd, 'r+')
 
 
 def config_dir():
@@ -24,6 +63,13 @@ def config_dir():
     else:
         root = Path.home() / '.config/pi-audio-tray'
     root.mkdir(parents=True, exist_ok=True, mode=0o700)
+    fd = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        if os.fstat(fd).st_uid != os.getuid():
+            raise PermissionError('Configuration directory belongs to another user')
+        os.fchmod(fd, 0o700)
+    finally:
+        os.close(fd)
     return root
 
 
@@ -36,11 +82,17 @@ def load_config():
 
 
 def validate_config(data):
+    if not isinstance(data, dict):
+        raise ValueError('Invalid connection settings')
     result = {key: data.get(key, value) for key, value in DEFAULTS.items()}
     for key in ('host', 'username', 'key_file', 'host_key_alias'):
-        if not isinstance(result[key], str) or any(ord(c) < 32 for c in result[key]):
+        if not isinstance(result[key], str) or len(result[key]) > 4096 or any(
+                not c.isprintable() or unicodedata.category(c) == 'Cf' for c in result[key]):
             raise ValueError('Invalid connection settings')
         result[key] = result[key].strip()
+    for key in ('host', 'host_key_alias', 'username'):
+        if any(c.isspace() or c in ',#' for c in result[key]):
+            raise ValueError('Hostnames, aliases, and usernames cannot contain whitespace, commas, or #')
     result['port'] = int(result['port'])
     result['poll_seconds'] = int(result['poll_seconds'])
     if not 1 <= result['port'] <= 65535 or not 5 <= result['poll_seconds'] <= 300:
@@ -51,12 +103,7 @@ def validate_config(data):
 def save_config(data):
     data = validate_config(data)
     root = config_dir()
-    tmp = root / 'config.json.tmp'
-    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, 'w') as f:
-        json.dump(data, f, indent=2)
-        f.write('\n')
-    tmp.replace(root / 'config.json')
+    atomic_private_write(root / 'config.json', (json.dumps(data, indent=2) + '\n').encode())
 
 
 class UnknownHost(Exception):
@@ -75,13 +122,20 @@ def trust_host(error):
     path = config_dir() / 'known_hosts'
     keys = paramiko.HostKeys()
     if path.exists():
+        if path.is_symlink():
+            raise ValueError('Refusing a symbolic-link host-key store')
         keys.load(str(path))
+    existing = keys.lookup(error.hostname)
+    if existing and any(key != error.key for key in existing.values()):
+        raise ValueError('A different key is already trusted for this host; refusing replacement')
     keys.add(error.hostname, error.key.get_name(), error.key)
-    keys.save(str(path))
-    path.chmod(0o600)
+    contents = ''.join(paramiko.hostkeys.HostKeyEntry([host], key).to_line()
+                       for host, entries in keys.items() for key in entries.values())
+    atomic_private_write(path, contents.encode())
 
 
 def connect(config):
+    config = validate_config(config)
     if not config['host'] or not config['username']:
         raise ValueError('Open Settings and enter the Pi host and SSH username.')
     client = paramiko.SSHClient()
@@ -108,20 +162,109 @@ def connect(config):
 def run(client, command, timeout=20):
     stdin, stdout, stderr = client.exec_command(command, timeout=timeout)
     stdin.close()
-    output = stdout.read().decode('utf-8', errors='replace')
-    error = stderr.read().decode('utf-8', errors='replace')
-    if stdout.channel.recv_exit_status():
-        raise RuntimeError(error.strip() or output.strip() or 'Remote command failed')
-    return output
+    channel = stdout.channel
+    output, errors = bytearray(), bytearray()
+    deadline = time.monotonic() + timeout
+    channel.settimeout(0.25)
+    try:
+        while True:
+            if time.monotonic() >= deadline:
+                raise TimeoutError('Remote command exceeded its time limit')
+            progressed = False
+            for ready, receive, buffer in ((channel.recv_ready, channel.recv, output),
+                                            (channel.recv_stderr_ready, channel.recv_stderr, errors)):
+                if ready():
+                    buffer.extend(receive(16384))
+                    progressed = True
+                    if len(output) + len(errors) > MAX_OUTPUT:
+                        raise RuntimeError('Remote command exceeded its output limit')
+            if channel.exit_status_ready() and not channel.recv_ready() and not channel.recv_stderr_ready():
+                break
+            if not progressed:
+                time.sleep(0.02)
+        if channel.recv_exit_status():
+            raise RuntimeError(display_text(errors.decode('utf-8', errors='replace').strip()
+                or output.decode('utf-8', errors='replace').strip() or 'Remote command failed', 2048))
+        return output.decode('utf-8', errors='replace')
+    finally:
+        channel.close()
+
+
+def validate_status(data):
+    if not isinstance(data, dict) or data.get('protocol') != 1:
+        raise ValueError('Invalid status protocol; update the Pi helper')
+    services, adapter = data.get('services'), data.get('adapter')
+    devices, soloist = data.get('devices'), data.get('soloist', {})
+    if not isinstance(services, dict) or len(services) > 32 or not isinstance(adapter, dict):
+        raise ValueError('Invalid service status')
+    if not isinstance(devices, list) or len(devices) > 32 or not isinstance(soloist, dict):
+        raise ValueError('Invalid device status')
+    states = {'active', 'inactive', 'failed', 'activating', 'deactivating', 'reloading', 'maintenance', 'unknown'}
+    if any(not isinstance(k, str) or len(k) > 64 or not isinstance(v, str) or v not in states
+           for k, v in services.items()):
+        raise ValueError('Invalid service state')
+    backend = data.get('spotify_backend', 'raspotify')
+    if backend not in ('raspotify', 'soloist'):
+        raise ValueError('Invalid audio backend')
+    clean_devices = []
+    for device in devices:
+        if not isinstance(device, dict) or not isinstance(device.get('name'), str):
+            raise ValueError('Invalid Bluetooth device')
+        clean_devices.append({'name': display_text(device['name'], 128)})
+    clean_adapter = {}
+    for key in ('Powered', 'Pairable', 'Discoverable'):
+        value = adapter.get(key, False)
+        if not isinstance(value, bool):
+            raise ValueError('Invalid adapter flag')
+        clean_adapter[key] = value
+    clean_soloist = {}
+    for key in ('key_configured', 'automatic_updates', 'update_failed'):
+        value = soloist.get(key, False)
+        if not isinstance(value, bool):
+            raise ValueError('Invalid Soloist flag')
+        clean_soloist[key] = value
+    days = soloist.get('days_remaining')
+    if days is not None:
+        if type(days) is not int or not 0 <= days <= 90:
+            raise ValueError('Invalid build lifetime')
+        clean_soloist['days_remaining'] = days
+    raw_stats = data.get('stats', {})
+    if not isinstance(raw_stats, dict):
+        raise ValueError('Invalid Pi statistics')
+    stats = {}
+    for key, minimum, maximum in (('cpu_percent', 0, 100), ('temperature_c', -50, 150)):
+        value = raw_stats.get(key)
+        if value is not None:
+            if type(value) not in (int, float) or not math.isfinite(value) or not minimum <= value <= maximum:
+                raise ValueError('Invalid Pi statistic: ' + key)
+            stats[key] = value
+    load = raw_stats.get('load')
+    if load is not None:
+        if (not isinstance(load, list) or len(load) != 3 or any(type(v) not in (int, float)
+                or not math.isfinite(v) or not 0 <= v <= 1000000 for v in load)):
+            raise ValueError('Invalid load averages')
+        stats['load'] = load
+    for key in ('cpu_count', 'uptime_seconds', 'memory_total', 'memory_used', 'disk_total', 'disk_used'):
+        if key in raw_stats:
+            value = raw_stats[key]
+            if type(value) is not int or not 0 <= value < 2**63:
+                raise ValueError('Invalid Pi statistic: ' + key)
+            stats[key] = value
+    for prefix in ('memory', 'disk'):
+        if prefix + '_used' in stats or prefix + '_total' in stats:
+            total, used = stats.get(prefix + '_total', 0), stats.get(prefix + '_used', -1)
+            if not 0 <= used <= total or total <= 0:
+                raise ValueError('Invalid usage statistics')
+    if 'cpu_count' in stats and not 1 <= stats['cpu_count'] <= 4096:
+        raise ValueError('Invalid CPU count')
+    return {'protocol': 1, 'services': services, 'adapter': clean_adapter,
+            'devices': clean_devices, 'spotify_backend': backend, 'soloist': clean_soloist, 'stats': stats}
 
 
 def poll(config):
     client = connect(config)
     try:
-        result = json.loads(run(client, REMOTE_HELPER + ' status'))
-        if result.get('protocol') != 1:
-            raise RuntimeError(result.get('message', 'Please install or update the Pi helper.'))
-        return result
+        return validate_status(json.loads(run(client, REMOTE_HELPER + ' status')))
     finally:
         client.close()
 
@@ -188,8 +331,8 @@ def install_helper(config):
     try:
         with client.open_sftp() as sftp:
             with sftp.open(temp, 'wx') as f:
+                f.chmod(0o600)
                 f.write(data)
-            sftp.chmod(temp, 0o600)
         run(client, 'sudo -n apt-get install -y python3-dbus python3-gi', timeout=180)
         run(client, 'sudo -n install -d -m 755 /usr/local/lib/pi-audio-tray && '
             'sudo -n install -o root -g root -m 755 ' + shlex.quote(temp) + ' ' + REMOTE_HELPER)
@@ -202,11 +345,52 @@ def install_helper(config):
         client.close()
 
 
+def validate_pair_event(data):
+    if not isinstance(data, dict):
+        raise ValueError('Invalid pairing message')
+    kind = data.get('event')
+    if kind not in ('ready', 'confirm', 'canceled', 'display', 'error', 'closed'):
+        raise ValueError('Unknown pairing message')
+    result = {'event': kind}
+    if kind == 'ready':
+        expires = data.get('expires')
+        if type(expires) is not int or not 0 < expires < 2**48:
+            raise ValueError('Invalid pairing expiration')
+        result['expires'] = expires
+    if kind in ('confirm', 'canceled'):
+        token = data.get('token')
+        if not isinstance(token, str) or not re.fullmatch(r'[0-9]{1,20}', token):
+            raise ValueError('Invalid pairing request identifier')
+        result['token'] = token
+    if kind == 'confirm':
+        address = data.get('address')
+        if not isinstance(address, str) or not re.fullmatch(r'(?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}', address):
+            raise ValueError('Invalid Bluetooth address')
+        if data.get('kind') not in ('passkey', 'authorize', 'service') or not isinstance(data.get('name'), str):
+            raise ValueError('Invalid pairing request')
+        result.update(address=address, name=display_text(data['name'], 128), kind=data['kind'])
+        if data['kind'] == 'passkey':
+            code = data.get('code')
+            if not isinstance(code, str) or not re.fullmatch(r'[0-9]{6}', code):
+                raise ValueError('Invalid Bluetooth confirmation code')
+            result['code'] = code
+    if kind == 'display':
+        result['code'] = display_text(data.get('code', ''), 16)
+    if kind == 'error':
+        result['message'] = display_text(data.get('message', 'Pairing failed'))
+    return result
+
+
 class PairSession:
     def __init__(self, config, event):
         self.config, self.event = config.copy(), event
         self.client = self.channel = self.input = None
         self.stopping = False
+        self.session_id = uuid.uuid4().hex
+        self.outgoing = queue.Queue(maxsize=16)
+
+    def emit(self, event):
+        self.event({**event, 'session_id': self.session_id})
 
     def run(self):
         try:
@@ -214,24 +398,58 @@ class PairSession:
             self.input, stdout, stderr = self.client.exec_command(
                 'sudo -n ' + REMOTE_HELPER + ' pair', timeout=210)
             self.channel = stdout.channel
-            if self.stopping:
-                self.send(action='stop')
-            for line in stdout:
-                self.event(json.loads(line))
-            error = stderr.read().decode('utf-8', errors='replace')
-            if self.channel.recv_exit_status():
-                raise RuntimeError(error.strip() or 'Pairing helper failed')
+            self.channel.settimeout(0.25)
+            deadline = time.monotonic() + 200
+            buffer, errors = bytearray(), bytearray()
+            total = 0
+            reported_error = False
+            while True:
+                if time.monotonic() >= deadline:
+                    raise TimeoutError('Pairing session exceeded its time limit')
+                while not self.outgoing.empty():
+                    message = self.outgoing.get_nowait()
+                    self.channel.sendall((json.dumps(message) + '\n').encode())
+                if self.channel.recv_ready():
+                    chunk = self.channel.recv(4096)
+                    total += len(chunk)
+                    buffer.extend(chunk)
+                    while b'\n' in buffer:
+                        line, _, tail = buffer.partition(b'\n')
+                        buffer[:] = tail
+                        if len(line) > MAX_PAIR_LINE:
+                            raise ValueError('Pairing message exceeded its size limit')
+                        event = validate_pair_event(json.loads(line))
+                        reported_error |= event['event'] == 'error'
+                        self.emit(event)
+                if self.channel.recv_stderr_ready():
+                    chunk = self.channel.recv_stderr(4096)
+                    total += len(chunk)
+                    errors.extend(chunk)
+                if total > MAX_OUTPUT or len(buffer) > MAX_PAIR_LINE:
+                    raise ValueError('Pairing session exceeded its output limit')
+                if self.channel.exit_status_ready() and not self.channel.recv_ready() and not self.channel.recv_stderr_ready():
+                    if buffer:
+                        raise ValueError('Incomplete pairing message')
+                    break
+                time.sleep(0.02)
+            if self.channel.recv_exit_status() and not reported_error:
+                raise RuntimeError(display_text(errors.decode('utf-8', errors='replace')) or 'Pairing helper failed')
         except Exception as exc:
-            self.event({'event': 'error', 'message': str(exc)})
+            self.emit({'event': 'error', 'message': display_text(exc)})
         finally:
             if self.client:
                 self.client.close()
-            self.event({'event': 'ended'})
+            self.emit({'event': 'ended'})
 
     def send(self, **message):
-        if self.input:
-            self.input.write(json.dumps(message) + '\n')
-            self.input.flush()
+        if message.get('action') not in ('stop', 'approve', 'reject'):
+            raise ValueError('Invalid pairing action')
+        if message['action'] != 'stop' and not re.fullmatch(r'[0-9]{1,20}', str(message.get('token', ''))):
+            raise ValueError('Invalid pairing request identifier')
+        try:
+            self.outgoing.put_nowait(message)
+        except queue.Full:
+            raise RuntimeError('Too many pending pairing actions') from None
 
     def stop(self):
         self.stopping = True

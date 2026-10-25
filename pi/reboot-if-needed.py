@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/python3 -I
 """Called only by the 05:30 timer. --check-only never reboots."""
 from pathlib import Path
 import subprocess
@@ -15,12 +15,12 @@ def main():
     if '--check-only' in sys.argv or not required:
         return
     # Never interrupt a package installation or client replacement.
-    busy = subprocess.run(['systemctl', 'is-active', '--quiet', 'apt-daily.service',
-        'apt-daily-upgrade.service', 'soloist-update.service']).returncode == 0
+    busy = subprocess.run(['/usr/bin/systemctl', 'is-active', '--quiet', 'apt-daily.service',
+        'apt-daily-upgrade.service', 'soloist-update.service'], timeout=10).returncode == 0
     if busy:
         print('Update still running; postponing reboot until the next 05:30 window.')
         return
-    subprocess.run(['systemctl', 'reboot'], check=True)
+    subprocess.run(['/usr/bin/systemctl', 'reboot'], check=True, timeout=10)
 
 
 if __name__ == '__main__':

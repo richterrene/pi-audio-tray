@@ -24,7 +24,7 @@ def prepare_source(work):
     for distribution in importlib.metadata.distributions():
         for item in distribution.files or []:
             text = str(item)
-            if '.dist-info/licenses/' in text:
+            if '.dist-info/licenses/' in text and not item.is_absolute() and '..' not in item.parts:
                 destination = licenses / text
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(distribution.locate_file(item), destination)

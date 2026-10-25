@@ -15,6 +15,7 @@ CacheDirectory=soloist
 UMask=0077
 NoNewPrivileges=true
 PrivateTmp=true
+LimitCORE=0
 
 [Install]
 WantedBy=default.target

@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/python3 -I
 """Pi-side JSON protocol; install root-owned before running with sudo."""
 import json
 import os
@@ -6,6 +6,8 @@ import signal
 import sys
 import subprocess
 import time
+import shutil
+import unicodedata
 from pathlib import Path
 
 import dbus
@@ -18,6 +20,71 @@ DEVICE = 'org.bluez.Device1'
 PROPS = 'org.freedesktop.DBus.Properties'
 AGENT = 'org.bluez.Agent1'
 SERVICES = ('raspotify', 'bluetooth', 'bluealsa', 'bluealsa-aplay')
+AUDIO_SERVICES = {f'0000{value}-0000-1000-8000-00805f9b34fb'
+                  for value in ('110a', '110b', '110c', '110d', '110e', '110f')}
+
+
+def safe_name(value):
+    return ''.join(c for c in str(value) if c.isprintable()
+                   and unicodedata.category(c) != 'Cf')[:128]
+
+
+def collect_stats():
+    result = {}
+    try:
+        def ticks():
+            values = [int(v) for v in Path('/proc/stat').read_text().splitlines()[0].split()[1:9]]
+            return sum(values), values[3] + values[4]
+        before, idle_before = ticks()
+        time.sleep(0.1)
+        after, idle_after = ticks()
+        result['cpu_percent'] = round(max(0, min(100, 100 * (1 - (idle_after - idle_before) / (after - before)))), 1) if after > before else None
+    except (OSError, ValueError, IndexError):
+        result['cpu_percent'] = None
+    try:
+        result['temperature_c'] = round(float(Path('/sys/class/thermal/thermal_zone0/temp').read_text()) / 1000, 1)
+    except (OSError, ValueError):
+        result['temperature_c'] = None
+    try:
+        result['load'] = list(os.getloadavg())
+        result['cpu_count'] = os.cpu_count() or 1
+    except OSError:
+        pass
+    try:
+        memory = {}
+        for line in Path('/proc/meminfo').read_text().splitlines():
+            key, value = line.split(':', 1)
+            memory[key] = int(value.split()[0]) * 1024
+        total = memory['MemTotal']
+        result['memory_total'] = total
+        result['memory_used'] = max(0, total - memory['MemAvailable'])
+    except (OSError, ValueError, KeyError, IndexError):
+        pass
+    try:
+        disk = shutil.disk_usage('/')
+        result.update(disk_total=disk.total, disk_used=disk.used)
+        result['uptime_seconds'] = int(float(Path('/proc/uptime').read_text().split()[0]))
+    except (OSError, ValueError, IndexError):
+        pass
+    return result
+
+
+def close_pairing(props):
+    # Attempt both switches even if the first D-Bus operation fails.
+    for name in ('Pairable', 'Discoverable'):
+        try:
+            props.Set(ADAPTER, name, dbus.Boolean(False))
+        except dbus.DBusException:
+            pass
+    failed = []
+    for name in ('Pairable', 'Discoverable'):
+        try:
+            if props.Get(ADAPTER, name):
+                failed.append(name)
+        except dbus.DBusException:
+            failed.append(name)
+    if failed:
+        raise RuntimeError('Could not confirm pairing is disabled: ' + ', '.join(failed))
 
 
 def emit(**event):
@@ -47,7 +114,7 @@ def status():
         if DEVICE in interfaces:
             p = interfaces[DEVICE]
             if p.get('Connected'):
-                devices.append({'name': str(p.get('Alias', 'Bluetooth device')),
+                devices.append({'name': safe_name(p.get('Alias', 'Bluetooth device')),
                                 'address': str(p.get('Address', ''))})
     result = subprocess.run(['systemctl', 'show', '--no-pager', '-p', 'Id',
                              '-p', 'ActiveState', *[s + '.service' for s in SERVICES]],
@@ -86,6 +153,7 @@ def status():
         for line in update_result.stdout.splitlines())
     emit(protocol=1, services=services, adapter=adapters[0] if adapters else {},
          devices=devices, spotify_backend=backend, soloist=soloist,
+         stats=collect_stats(),
          uptime=int(float(open('/proc/uptime').read().split()[0])))
 
 
@@ -102,12 +170,15 @@ class PairingAgent(dbus.service.Object):
         self.approved = set()
 
     def request(self, device, kind, ok, fail, code=None):
+        if len(self.pending) >= 8:
+            fail(Rejected('Too many pending pairing requests'))
+            return
         self.counter += 1
         token = str(self.counter)
         self.pending[token] = (ok, fail, str(device))
         p = dbus.Interface(self.bus.get_object('org.bluez', device), PROPS).GetAll(DEVICE)
         emit(event='confirm', token=token, kind=kind, code=code,
-             name=str(p.get('Alias', 'Bluetooth device')), address=str(p.get('Address', '')))
+             name=safe_name(p.get('Alias', 'Bluetooth device')), address=str(p.get('Address', '')))
 
     @dbus.service.method(AGENT, in_signature='ou', out_signature='', async_callbacks=('ok', 'fail'))
     def RequestConfirmation(self, device, passkey, ok, fail):
@@ -119,6 +190,9 @@ class PairingAgent(dbus.service.Object):
 
     @dbus.service.method(AGENT, in_signature='os', out_signature='', async_callbacks=('ok', 'fail'))
     def AuthorizeService(self, device, uuid, ok, fail):
+        if str(uuid).lower() not in AUDIO_SERVICES:
+            fail(Rejected('Only Bluetooth audio services are permitted by this agent'))
+            return
         p = dbus.Interface(self.bus.get_object('org.bluez', device), PROPS)
         if p.Get(DEVICE, 'Trusted') or str(device) in self.approved:
             ok()
@@ -153,9 +227,12 @@ class PairingAgent(dbus.service.Object):
         emit(event='display', code=f'{passkey:06d}')
 
     def command(self, message):
+        if not isinstance(message, dict):
+            raise ValueError('Invalid pairing command')
         if message.get('action') == 'stop':
             self.loop.quit()
-        elif message.get('token') in self.pending:
+        elif (message.get('action') in ('approve', 'reject')
+              and isinstance(message.get('token'), str) and message['token'] in self.pending):
             ok, fail, device = self.pending.pop(message['token'])
             if message.get('action') == 'approve':
                 self.approved.add(device)
@@ -167,7 +244,8 @@ class PairingAgent(dbus.service.Object):
 def pair():
     # A process lock also prevents two desktops from taking over one another.
     import fcntl
-    lock = open('/run/pi-audio-tray-pairing.lock', 'w')
+    fd = os.open('/run/pi-audio-tray-pairing.lock', os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    lock = os.fdopen(fd, 'w')
     fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
     DBusGMainLoop(set_as_default=True)
     bus = dbus.SystemBus()
@@ -186,13 +264,19 @@ def pair():
             loop.quit()
             return False
         buffer.extend(data)
+        if len(buffer) > 8192:
+            emit(event='error', message='Pairing command exceeded its size limit')
+            loop.quit()
+            return False
         while b'\n' in buffer:
             line, _, tail = buffer.partition(b'\n')
             buffer[:] = tail
             try:
                 agent.command(json.loads(line))
             except (ValueError, TypeError):
-                pass
+                emit(event='error', message='Invalid pairing command')
+                loop.quit()
+                return False
         return True
 
     old_timeout = props.Get(ADAPTER, 'DiscoverableTimeout')
@@ -212,6 +296,11 @@ def pair():
         emit(event='ready', expires=int(time.time()) + 180)
         loop.run()
     finally:
+        close_error = None
+        try:
+            close_pairing(props)
+        except RuntimeError as exc:
+            close_error = exc
         # Trust only devices whose request this user approved and which completed pairing.
         for device in agent.approved:
             try:
@@ -220,27 +309,37 @@ def pair():
                     p.Set(DEVICE, 'Trusted', dbus.Boolean(True))
             except dbus.DBusException:
                 pass
-        for name in ('Discoverable', 'Pairable'):
-            props.Set(ADAPTER, name, dbus.Boolean(False))
-        props.Set(ADAPTER, 'DiscoverableTimeout', old_timeout)
-        props.Set(ADAPTER, 'PairableTimeout', old_pair_timeout)
+        if close_error is None:
+            for name, value in (('DiscoverableTimeout', old_timeout), ('PairableTimeout', old_pair_timeout)):
+                try:
+                    props.Set(ADAPTER, name, value)
+                except dbus.DBusException:
+                    pass
         try:
             manager.UnregisterAgent('/org/piaudiotray/agent')
         except dbus.DBusException:
             pass
+        if close_error:
+            raise close_error
         emit(event='closed')
 
 
 def main():
+    os.environ['PATH'] = '/usr/sbin:/usr/bin:/sbin:/bin'
     action = sys.argv[1] if len(sys.argv) == 2 else ''
     if action == 'status':
+        if os.geteuid() == 0:
+            raise RuntimeError('Run status as the normal SSH user, not root')
         status()
     elif action == 'pair':
+        if os.geteuid() != 0:
+            raise RuntimeError('Pairing requires the privileged helper')
         pair()
     elif action == 'off':
+        if os.geteuid() != 0:
+            raise RuntimeError('Pairing requires the privileged helper')
         props = adapter(dbus.SystemBus())
-        props.Set(ADAPTER, 'Discoverable', dbus.Boolean(False))
-        props.Set(ADAPTER, 'Pairable', dbus.Boolean(False))
+        close_pairing(props)
         emit(event='closed')
     else:
         raise SystemExit('Usage: pi-helper status|pair|off')
