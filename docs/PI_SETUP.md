@@ -185,3 +185,21 @@ The action checks the known scheduled update units first and uses systemd’s
 normal, non-forced poweroff. It requires desktop confirmation and does not
 provide Wake-on-LAN. Wait for shutdown before removing power; reconnect power
 to boot the Pi again. A failed/closed SSH connection is not proof of poweroff.
+
+
+## Background monitoring (0.3.3+)
+
+Upgrade `pi_helper.py` at `/usr/local/lib/pi-audio-tray/pi-helper` using the
+root-owned installation command from step 1 before installing the new desktop
+package. The new normal-user `health` action checks service, Bluetooth-adapter
+and update state, without statistics, device-name enumeration or executing
+Soloist’s version command. No additional sudo permission is needed:
+
+```sh
+/usr/local/lib/pi-audio-tray/pi-helper health
+```
+
+Hidden/minimized clients use this lightweight action at least 60 seconds apart;
+visible status windows and open tray menus use full `status` at the configured
+interval. Older helpers do not support `health` and will show a background
+connection error until updated; no silent full-statistics fallback is used.

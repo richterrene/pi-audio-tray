@@ -262,10 +262,13 @@ def validate_status(data):
             'devices': clean_devices, 'spotify_backend': backend, 'soloist': clean_soloist, 'stats': stats}
 
 
-def poll(config):
+def poll(config, detailed=True):
     client = connect(config)
     try:
-        return validate_status(json.loads(run(client, REMOTE_HELPER + ' status')))
+        command = ' status' if detailed else ' health'
+        result = validate_status(json.loads(run(client, REMOTE_HELPER + command)))
+        result['_detailed'] = bool(detailed)
+        return result
     finally:
         client.close()
 

@@ -106,6 +106,49 @@ class PairingDialogs(unittest.TestCase):
             self.window.job('off', Mock())
             thread.assert_called_once()
 
+    def test_hidden_window_uses_light_poll_and_at_least_a_minute_interval(self):
+        self.window.config['host']='audio-pi.example'
+        with patch.object(self.window,'isVisible',return_value=False), \
+             patch.object(self.window,'job') as job, patch('app.poll') as poll:
+            self.window.update_polling()
+            self.assertEqual(self.window.timer.interval(),60000)
+            self.window.refresh()
+            job.call_args.args[1]()
+        poll.assert_called_once_with(self.window.config,detailed=False)
+
+    def test_minimized_window_uses_background_polling(self):
+        with patch.object(self.window,'isVisible',return_value=True), \
+             patch.object(self.window,'isMinimized',return_value=True):
+            self.assertFalse(self.window.details_needed())
+            self.window.update_polling()
+        self.assertEqual(self.window.timer.interval(),60000)
+
+    def test_open_menu_enables_immediate_detailed_poll_and_close_restores_background(self):
+        with patch.object(self.window,'isVisible',return_value=False), patch.object(self.window,'refresh') as refresh:
+            self.window.set_menu_open(True)
+            refresh.assert_called_once()
+            self.assertTrue(self.window.details_needed())
+            self.assertEqual(self.window.timer.interval(),10000)
+            self.window.set_menu_open(False)
+            self.assertFalse(self.window.details_needed())
+            self.assertEqual(self.window.timer.interval(),60000)
+
+    def test_visible_window_uses_configured_detailed_interval(self):
+        with patch.object(self.window,'isVisible',return_value=True), \
+             patch.object(self.window,'isMinimized',return_value=False):
+            self.window.config['poll_seconds']=15
+            self.window.update_polling()
+            self.assertEqual(self.window.timer.interval(),15000)
+            self.assertTrue(self.window.details_needed())
+
+    def test_light_reply_does_not_clear_cached_metrics_and_open_window_gets_full_refresh(self):
+        self.window.rows['cpu'].setText('12.5 %')
+        health={'_detailed':False,'services':{},'adapter':{},'devices':[],'soloist':{}}
+        with patch.object(self.window,'details_needed',return_value=True), patch.object(self.window,'refresh') as refresh:
+            self.window.done('poll',health)
+        self.assertEqual(self.window.rows['cpu'].text(),'12.5 %')
+        refresh.assert_called_once()
+
     def prepare_shutdown(self):
         self.window.session = None
         self.window.snapshot = {'online': True}

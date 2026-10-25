@@ -171,7 +171,7 @@ def adapter(bus):
     raise RuntimeError('No Bluetooth adapter found')
 
 
-def status():
+def status(detailed=True):
     bus = dbus.SystemBus()
     devices, adapters = [], []
     for path, interfaces in objects(bus).items():
@@ -179,7 +179,7 @@ def status():
             p = interfaces[ADAPTER]
             adapters.append({k: bool(p.get(k, False)) for k in
                              ('Powered', 'Pairable', 'Discoverable')})
-        if DEVICE in interfaces:
+        if detailed and DEVICE in interfaces:
             p = interfaces[DEVICE]
             if p.get('Connected'):
                 devices.append({'name': safe_name(p.get('Alias', 'Bluetooth device')),
@@ -202,8 +202,10 @@ def status():
             services[name] = values.get('ActiveState', 'unknown')
             if name == 'soloist':
                 backend = 'soloist'
-    soloist = {'key_configured': (Path.home() / '.config/soloist/api-key').exists()}
-    if backend == 'soloist':
+    soloist = {}
+    if detailed:
+        soloist['key_configured'] = (Path.home() / '.config/soloist/api-key').exists()
+    if detailed and backend == 'soloist':
         import re
         version = subprocess.run(['/usr/local/bin/soloist', '--version'],
             capture_output=True, text=True, timeout=5).stdout.strip()
@@ -221,8 +223,7 @@ def status():
         for line in update_result.stdout.splitlines())
     emit(protocol=1, services=services, adapter=adapters[0] if adapters else {},
          devices=devices, spotify_backend=backend, soloist=soloist,
-         stats=collect_stats(),
-         uptime=int(float(open('/proc/uptime').read().split()[0])))
+         stats=collect_stats() if detailed else {})
 
 
 class Rejected(dbus.DBusException):
@@ -432,10 +433,13 @@ def pair():
 def main():
     os.environ['PATH'] = '/usr/sbin:/usr/bin:/sbin:/bin'
     action = sys.argv[1] if len(sys.argv) == 2 else ''
-    if action == 'status':
+    if action in ('status', 'health'):
         if os.geteuid() == 0:
             raise RuntimeError('Run status as the normal SSH user, not root')
-        status()
+        if action == 'status':
+            status()
+        else:
+            status(detailed=False)
     elif action == 'pair':
         if os.geteuid() != 0:
             raise RuntimeError('Pairing requires the privileged helper')
@@ -447,7 +451,7 @@ def main():
         close_pairing(props)
         emit(event='closed')
     else:
-        raise SystemExit('Usage: pi-helper status|pair|off')
+        raise SystemExit('Usage: pi-helper status|health|pair|off')
 
 
 if __name__ == '__main__':

@@ -174,6 +174,11 @@ credential or securely erase flash storage/backups. Preserve only redacted
 incident evidence. A compromised audio/desktop account requires remediation of
 that account/host, not just replacement of the visible key file.
 
+Idle background monitoring uses a normal-user `health` helper action. It reads
+service/adapter/update health without CPU sampling, returning device aliases, key-file checks
+or execution of the proprietary client. Opening a detail view uses full status.
+This changes polling cost, not the host/account trust boundary or sudo permissions.
+
 The Pi CPU sampler stores only its latest counters, monotonic timestamp and
 boot identifier in `~/.cache/pi-audio-tray/cpu.json` (private directory/file).
 The file is bounded and validated; reads reject links/non-regular files and

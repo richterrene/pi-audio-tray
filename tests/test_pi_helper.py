@@ -163,6 +163,32 @@ class PairingSafety(unittest.TestCase):
             status.assert_not_called()
 
 
+class LightweightHealth(unittest.TestCase):
+    def test_background_health_never_collects_stats_or_runs_soloist_version(self):
+        def command(args, **kwargs):
+            if args[:3] == ['systemctl', 'show', '--no-pager']:
+                return types.SimpleNamespace(stdout='Id=bluetooth.service\nActiveState=active\n')
+            if '--user' in args:
+                return types.SimpleNamespace(stdout='Id=soloist.service\nActiveState=active\nLoadState=loaded\n')
+            if 'is-active' in args:
+                return types.SimpleNamespace(stdout='active\nactive\n')
+            if 'show' in args:
+                return types.SimpleNamespace(stdout='Result=success\nResult=success\n')
+            raise AssertionError('Unexpected command during lightweight health check')
+        with patch.object(helper.dbus, 'SystemBus', create=True), \
+             patch.object(helper, 'objects', return_value={}), \
+             patch.object(helper.subprocess, 'run', side_effect=command) as run, \
+             patch.object(helper, 'collect_stats') as stats, \
+             patch.object(helper.Path, 'home') as home, patch.object(helper, 'emit') as emit:
+            helper.status(detailed=False)
+        stats.assert_not_called()
+        home.assert_not_called()
+        self.assertFalse(any(call.args[0][0].endswith('soloist') for call in run.call_args_list))
+        self.assertEqual(emit.call_args.kwargs['stats'], {})
+        self.assertEqual(emit.call_args.kwargs['devices'], [])
+        self.assertEqual(emit.call_args.kwargs['spotify_backend'], 'soloist')
+
+
 class PiStats(unittest.TestCase):
     def test_cpu_temperature_memory_disk_and_uptime_are_collected(self):
         ticks = iter(['cpu 100 0 20 80 0 0 0 0\n', 'cpu 120 0 30 90 0 0 0 0\n'])
