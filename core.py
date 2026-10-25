@@ -21,7 +21,7 @@ from platform_support import secure_directory, private_file, open_instance_lock
 
 REMOTE_HELPER = '/usr/local/lib/pi-audio-tray/pi-helper'
 DEFAULTS = {'host': '', 'username': '', 'port': 22, 'key_file': '',
-            'host_key_alias': '', 'poll_seconds': 10}
+            'host_key_alias': '', 'poll_seconds': 10, 'music_web_url': ''}
 MAX_OUTPUT = 128 * 1024
 MAX_PAIR_LINE = 8192
 
@@ -76,7 +76,7 @@ def validate_config(data):
     if not isinstance(data, dict):
         raise ValueError('Invalid connection settings')
     result = {key: data.get(key, value) for key, value in DEFAULTS.items()}
-    for key in ('host', 'username', 'key_file', 'host_key_alias'):
+    for key in ('host', 'username', 'key_file', 'host_key_alias', 'music_web_url'):
         if not isinstance(result[key], str) or len(result[key]) > 4096 or any(
                 not c.isprintable() or unicodedata.category(c) == 'Cf' for c in result[key]):
             raise ValueError('Invalid connection settings')
@@ -84,6 +84,13 @@ def validate_config(data):
     for key in ('host', 'host_key_alias', 'username'):
         if any(c.isspace() or c in ',#' for c in result[key]):
             raise ValueError('Hostnames, aliases, and usernames cannot contain whitespace, commas, or #')
+    if result['music_web_url']:
+        from urllib.parse import urlsplit
+        url = urlsplit(result['music_web_url'])
+        if url.scheme != 'https' or not url.hostname or url.username or url.password or url.fragment:
+            raise ValueError('Music web address must be HTTPS without credentials or a fragment')
+        if url.port is not None and not 1 <= url.port <= 65535:
+            raise ValueError('Invalid music web port')
     result['port'] = int(result['port'])
     result['poll_seconds'] = int(result['poll_seconds'])
     if not 1 <= result['port'] <= 65535 or not 5 <= result['poll_seconds'] <= 300:
@@ -150,8 +157,11 @@ def connect(config):
         raise
 
 
-def run(client, command, timeout=20):
+def run(client, command, timeout=20, input_data=None):
     stdin, stdout, stderr = client.exec_command(command, timeout=timeout)
+    if input_data is not None:
+        stdin.write(input_data)
+        stdin.flush()
     stdin.close()
     channel = stdout.channel
     output, errors = bytearray(), bytearray()
@@ -333,25 +343,54 @@ def shutdown_pi(config):
         client.close()
 
 
+def music_request(config, request):
+    """Send bounded structured data over SSH; never interpolate music metadata into a shell."""
+    data = json.dumps(request, ensure_ascii=True) + '\n'
+    if len(data.encode()) > 8192:
+        raise ValueError('Music request exceeded its limit')
+    client = connect(config)
+    try:
+        response = json.loads(run(client, '/usr/local/lib/pi-audio-tray/pi-music', input_data=data, timeout=20))
+        if not isinstance(response, dict) or 'error' in response:
+            raise ValueError(display_text(response.get('error', 'Invalid music response')) if isinstance(response, dict) else 'Invalid music response')
+        return response
+    finally:
+        client.close()
+
+
+def music_web_url(config):
+    config = validate_config(config)
+    if config['music_web_url']:
+        return config['music_web_url']
+    host = config['host']
+    if not host or any(c in host for c in '/?@%\\'):
+        raise ValueError('Set an HTTPS music address in Settings')
+    return 'https://' + ('[' + host + ']' if ':' in host else host) + ':8443/'
+
+
 def install_helper(config):
     root = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
-    data = (root / 'pi_helper.py').read_bytes()
     client = connect(config)
-    temp = '/tmp/pi-audio-tray-' + uuid.uuid4().hex
+    temporary = []
     try:
-        with client.open_sftp() as sftp:
-            with sftp.open(temp, 'wx') as f:
-                f.chmod(0o600)
-                f.write(data)
-        run(client, 'sudo -n apt-get install -y python3-dbus python3-gi', timeout=180)
-        run(client, 'sudo -n install -d -m 755 /usr/local/lib/pi-audio-tray && '
-            'sudo -n install -o root -g root -m 755 ' + shlex.quote(temp) + ' ' + REMOTE_HELPER)
-    finally:
-        try:
+        for source, destination in (('pi_helper.py', REMOTE_HELPER),
+                                     ('pi_music.py', '/usr/local/lib/pi-audio-tray/pi-music')):
+            temp = '/tmp/pi-audio-tray-' + uuid.uuid4().hex
+            temporary.append(temp)
             with client.open_sftp() as sftp:
-                sftp.remove(temp)
-        except Exception:
-            pass
+                with sftp.open(temp, 'wx') as f:
+                    f.chmod(0o600)
+                    f.write((root / source).read_bytes())
+            run(client, 'sudo -n install -d -m 755 /usr/local/lib/pi-audio-tray && '
+                'sudo -n install -o root -g root -m 755 ' + shlex.quote(temp) + ' ' + destination)
+        run(client, 'sudo -n apt-get install -y python3-dbus python3-gi', timeout=180)
+    finally:
+        for temp in temporary:
+            try:
+                with client.open_sftp() as sftp:
+                    sftp.remove(temp)
+            except Exception:
+                pass
         client.close()
 
 

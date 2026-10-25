@@ -38,5 +38,43 @@ class ConditionalReboot(unittest.TestCase):
         self.assertEqual(self.check('2')[-1], ['/usr/bin/systemctl', 'reboot'])
 
 
+class MusicTLSRenewal(unittest.TestCase):
+    def setUp(self):
+        import tempfile
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        (self.root / 'server.pem').write_text('existing certificate')
+        spec = importlib.util.spec_from_file_location('music_tls',
+            Path(__file__).resolve().parents[1] / 'pi/renew-music-tls.py')
+        self.module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.module)
+
+    def test_unverified_replacement_cannot_replace_current_certificate_or_reload(self):
+        import subprocess
+        calls = []
+        def run(args, **kwargs):
+            calls.append(args)
+            if args[1] == 'verify':
+                raise subprocess.CalledProcessError(1, args)
+            return SimpleNamespace(returncode=1 if '-checkend' in args else 0)
+        with patch.object(self.module.os, 'geteuid', return_value=0, create=True), \
+             patch.object(self.module, 'Path', side_effect=lambda *args: self.root if args == ('/etc/pi-audio-tray/music/tls',) else Path(*args)), \
+             patch.object(self.module.subprocess, 'run', side_effect=run):
+            with self.assertRaises(subprocess.CalledProcessError):
+                self.module.main()
+        self.assertEqual((self.root / 'server.pem').read_text(), 'existing certificate')
+        self.assertFalse(any(args[0] == 'systemctl' for args in calls))
+        self.assertEqual(len(list(self.root.iterdir())), 1)
+
+    def test_current_certificate_does_not_trigger_issuance_or_reload(self):
+        with patch.object(self.module.os, 'geteuid', return_value=0, create=True), \
+             patch.object(self.module, 'Path', return_value=self.root), \
+             patch.object(self.module.subprocess, 'run', return_value=SimpleNamespace(returncode=0)) as run:
+            self.module.main()
+        run.assert_called_once()
+        self.assertIn('-checkend', run.call_args.args[0])
+
+
 if __name__ == '__main__':
     unittest.main()

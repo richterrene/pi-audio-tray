@@ -214,7 +214,7 @@ python tools/dependency_inventory.py > /tmp/pi-audio-dependencies.txt
 # Install these in a separate audit environment, not in the inventoried one:
 # pip-audit==2.10.1 bandit==1.9.4
 pip-audit --disable-pip --no-deps -r /tmp/pi-audio-dependencies.txt -f json
-bandit -r app.py core.py platform_support.py pi_helper.py pi packaging_support.py build_appimage.py build_macos.py build_windows.py
+bandit -r app.py core.py platform_support.py music_ui.py pi_music.py pi_helper.py pi packaging_support.py build_appimage.py build_macos.py build_windows.py
 # Linux, requires native python3-dbus/python3-gi and dbus:
 dbus-run-session -- /usr/bin/python3 -I tools/check_dbus_agent.py
 # Gitleaks 8.30.1; verify its official archive checksum before installing:
@@ -266,3 +266,33 @@ Pi-specific POSIX permission/cache tests run on Linux rather than being treated
 as Windows coverage. Platform-specific pass/skip counts are retained in CI logs.
 The older 42-finding Bandit tally above describes the dated 0.3.x review; newer
 CI artifacts contain findings for the expanded source set.
+
+
+## Optional local music and HTTPS boundary (0.5.0)
+
+The optional MPD/myMPD integration adds a separate web attack surface. Read
+[LOCAL_MUSIC.md](docs/LOCAL_MUSIC.md#security-boundary-and-maintenance) for account
+isolation, socket/group permissions, the read-only USB mount, bounded SSH music
+requests, HTTPS login/origin checks, root-owned TLS renewal, bootstrap credential
+handling and third-party APT repository trust. A myMPD PIN is not authentication.
+No internet access, port forwarding or automatic CA trust installation is needed.
+The music HTTPS listener is private-IPv4-only by access policy; trusted music users
+can control the shared queue. The initial random credential is a protected
+plaintext bootstrap file until the user removes it.
+
+
+### Local music review evidence (0.5.0)
+
+The expanded production/build scan reports 71 findings (64 low, 7 medium), all
+reviewed rather than suppressed. The additional medium B310 is the installer's
+fixed upstream HTTPS signing-key URL: its expected fingerprint is verified before
+APT accepts the dedicated source. No arbitrary URL is accepted there. New low
+subprocess findings use explicit argument arrays for administrator installation
+and certificate renewal; shell execution is not used. The runtime MPD bridge uses
+a Unix socket and bounded protocol quoting, with separate tests for traversal,
+control characters, operation allowlists, numeric validation, pagination, hidden
+window polling, stale results and plain-text metadata. Source secret scanning
+found no leaks. Live checks verify login-required UI/API, valid CA+hostname TLS,
+cross-origin/script rejection, backend loopback binding, account/key isolation,
+read-only mount and 0660 socket, and muted MPD playback through PipeWire. These
+checks do not constitute a penetration test or an audit of upstream myMPD/nginx/MPD.
