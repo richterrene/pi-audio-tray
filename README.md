@@ -58,6 +58,24 @@ explain key handling and privileged operations.
 Spotify status is the **service status**, not currently playing tracks. Bluetooth
 device status indicates a connection, not proof of current audio playback.
 
+## Screenshots
+
+The Linux/Qt interface below uses **fictional demo connection details**. No real
+account, device address, SSH key, or Soloist API key is shown. macOS uses its
+native window and menu-bar presentation.
+
+### Receiver status
+
+<img src="assets/screenshots/status.png" alt="Receiver status window showing Soloist, Bluetooth, pairing and automatic updates" width="560">
+
+### Connection and Soloist key settings
+
+<img src="assets/screenshots/settings.png" alt="Connection settings and buttons for securely setting or removing the Soloist API key" width="590">
+
+Regenerate these screenshots from the actual widgets using
+`python tools/generate_screenshots.py`; the script uses a temporary config
+directory and does not connect to a receiver.
+
 ## Run
 
 ### Linux
@@ -65,8 +83,8 @@ device status indicates a connection, not proof of current audio playback.
 Download the x86_64 AppImage, make it executable, and launch it:
 
 ```sh
-chmod +x PiAudioTray-0.2.1-x86_64.AppImage
-./PiAudioTray-0.2.1-x86_64.AppImage --show
+chmod +x PiAudioTray-0.2.2-x86_64.AppImage
+./PiAudioTray-0.2.2-x86_64.AppImage --show
 ```
 
 Ubuntu's AppIndicator extension must be enabled for the tray icon. When no tray

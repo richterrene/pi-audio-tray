@@ -57,6 +57,18 @@ python3 -m venv .venv
 .venv/bin/python build_macos.py
 ```
 
+For Intel Macs, current cryptography packages may build from source. Install
+Homebrew's `openssl@3` and Rust, and use static linking to avoid a mismatch with
+Python's separate OpenSSL library in the frozen app:
+
+```sh
+brew install openssl@3 rust
+OPENSSL_DIR="$(brew --prefix openssl@3)" OPENSSL_STATIC=1 .venv/bin/python -m pip install --no-cache-dir --force-reinstall -r requirements.txt
+```
+
+Run this dependency installation before building the bundle. The CI workflow
+already applies the static-link settings.
+
 The script renders an `.icns` icon from the shared SVG, bundles Python/Qt/SSH
 libraries, sets the app's version and menu-bar behavior, verifies the ad-hoc
 signature, runs a headless GUI smoke test, and exports a ZIP plus SHA-256 checksum.
