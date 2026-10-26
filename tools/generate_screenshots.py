@@ -82,7 +82,7 @@ def main():
         music.show()
         music.timer.stop()
         music.path = 'Example Artist/First Album'
-        music.operation_done(({'action': 'browse'}, {'items': [
+        music.operation_done(({'action': 'browse', 'path': music.path, 'offset': 0}, {'items': [
             {'file': 'Example Artist/First Album/01 - Morning.mp3', 'Title': 'Morning', 'Artist': 'Example Artist'},
             {'file': 'Example Artist/First Album/02 - Home.mp3', 'Title': 'Home', 'Artist': 'Example Artist'},
             {'file': 'Example Artist/First Album/03 - Evening.mp3', 'Title': 'Evening', 'Artist': 'Example Artist'}], 'more': False},

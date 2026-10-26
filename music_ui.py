@@ -1,7 +1,7 @@
 """Optional local-library window. Playback details are polled only while visible."""
 from pathlib import PurePosixPath
 import threading
-from PySide6.QtCore import QObject, Qt, QTimer, Signal, QUrl
+from PySide6.QtCore import QObject, Qt, QTimer, Signal, QUrl, QSignalBlocker
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (QDialog, QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
                                QPushButton, QSpinBox, QTabWidget, QVBoxLayout)
@@ -19,6 +19,9 @@ class MusicWindow(QDialog):
         self.resize(780, 580)
         self.path, self.offset, self.more, self.busy = '', 0, False, False
         self.queue_offset = 0
+        self.pending_requests = []
+        self.active_background = False
+        self.page_contexts = {}
         self.events = MusicEvents(self)
         self.events.finished.connect(self.operation_done)
         layout = QVBoxLayout(self)
@@ -80,32 +83,65 @@ class MusicWindow(QDialog):
         self.timer.setInterval(5000)
         self.timer.timeout.connect(self.refresh_status)
 
-    def request(self, request):
-        if self.busy or not self.isVisible() or self.isMinimized():
+    def request(self, request, background=False):
+        if not self.isVisible() or self.isMinimized():
             return
-        self.busy = True
-        self.tabs.setEnabled(False)
+        if background and (self.busy or self.pending_requests):
+            return
+        request = request.copy()
+        action = request.get('action')
+        # Coalesce obsolete page reads/volume edits while retaining user commands.
+        if action in ('browse', 'queue', 'status'):
+            self.pending_requests = [job for job in self.pending_requests
+                                     if job[0].get('action') not in ('browse', 'queue', 'status')]
+        elif action == 'volume':
+            self.pending_requests = [job for job in self.pending_requests if job[0].get('action') != 'volume']
+        if len(self.pending_requests) >= 32:
+            self.message.setText('Too many pending commands. Wait for the Pi to respond.')
+            return
         config = self.parent().config.copy()
-        for button in self.buttons:
-            button.setEnabled(False)
-        self.volume.setEnabled(False)
-        def work():
-            try:
-                result = music_request(config, request)
-                status = result if request['action'] == 'status' else music_request(config, {'action': 'status'})
-                self.events.finished.emit((request, result, status, config), None)
-            except Exception as exc:
-                self.events.finished.emit((request, None, None, config), exc)
-        threading.Thread(target=work, daemon=True).start()
+        generation = getattr(self.parent(), 'generation', 0)
+        self.pending_requests.append((request, config, generation, background))
+        self.start_pending()
+
+    def start_pending(self):
+        if self.busy:
+            return
+        if not self.isVisible() or self.isMinimized():
+            self.pending_requests.clear()
+            return
+        while self.pending_requests:
+            # Playback commands take priority over queued navigation reads.
+            index = next((i for i, job in enumerate(self.pending_requests)
+                          if job[0].get('action') not in ('browse', 'queue', 'status')), 0)
+            request, config, generation, background = self.pending_requests.pop(index)
+            if config != self.parent().config or generation != getattr(self.parent(), 'generation', 0):
+                continue
+            self.busy, self.active_background = True, background
+            def work():
+                try:
+                    result = music_request(config, request)
+                    status = result if request['action'] == 'status' else music_request(config, {'action': 'status'})
+                    self.events.finished.emit((request, result, status, config, generation), None)
+                except Exception as exc:
+                    self.events.finished.emit((request, None, None, config, generation), exc)
+            threading.Thread(target=work, daemon=True).start()
+            return
 
     def operation_done(self, payload, error):
-        self.busy = False
-        self.tabs.setEnabled(True)
-        for button in self.buttons:
-            button.setEnabled(True)
-        self.volume.setEnabled(True)
-        request, result, status, config = payload
-        if config != self.parent().config:
+        background = self.active_background
+        self.active_background = False
+        # Keep completion callbacks from starting another read ahead of queued controls.
+        self.busy = True
+        try:
+            self.apply_result(payload, error, background)
+        finally:
+            self.busy = False
+            self.start_pending()
+
+    def apply_result(self, payload, error, background=False):
+        request, result, status, config, *generation = payload
+        if config != self.parent().config or (generation and generation[0] != getattr(self.parent(), 'generation', 0)):
             return
         if error:
             self.message.setText('Music unavailable: ' + display_text(error) +
@@ -120,48 +156,93 @@ class MusicWindow(QDialog):
                          (' — ' + display_text(current['Artist']) if current.get('Artist') else ''))
         try:
             volume = int(state.get('volume', -1))
-            if 0 <= volume <= 100 and not self.volume.hasFocus():
+            volume_pending = any(job[0].get('action') == 'volume' for job in self.pending_requests)
+            if 0 <= volume <= 100 and not volume_pending and not self.volume.hasFocus() and not self.volume.lineEdit().hasFocus():
                 self.volume.setValue(volume)
         except (ValueError, TypeError):
             pass
         action = request['action']
         if action in ('browse', 'queue'):
-            widget = self.library if action == 'browse' else self.queue
+            # A navigation request may finish after the user has changed folder/tab/page.
+            if action == 'browse':
+                context = (request.get('path', ''), request.get('offset', 0))
+                if self.tabs.currentIndex() != 0 or context != (self.path, self.offset):
+                    return
+                widget = self.library
+            else:
+                context = (request.get('offset', 0),)
+                if self.tabs.currentIndex() != 1 or context != (self.queue_offset,):
+                    return
+                widget = self.queue
             items = result.get('items')
-            if not isinstance(items, list) or len(items) > 100 or any(not isinstance(x, dict) for x in items):
+            if not isinstance(items, list) or len(items) > 100 or any(
+                    not isinstance(row, dict) or not isinstance(row.get('directory', row.get('file')), str)
+                    for row in items):
                 self.message.setText('Invalid music page received')
                 return
-            widget.clear()
-            for row in items:
-                path = row.get('directory') or row.get('file', '')
-                title = row.get('Title') or PurePosixPath(str(path)).name
-                text = ('[Folder] ' if 'directory' in row else '') + display_text(title)
-                if row.get('Artist'):
-                    text += ' — ' + display_text(row['Artist'])
-                item = QListWidgetItem(text, widget)
-                item.setData(Qt.ItemDataRole.UserRole, row)
+            preserve = self.page_contexts.get(action) == context
+            self.update_items(widget, items, preserve)
+            self.page_contexts[action] = context
             self.more = result.get('more') is True
-            self.location.setText(('Library / ' + self.path if action == 'browse' else 'Queue') +
-                                  f' · entries {request.get("offset", 0) + 1}–{request.get("offset", 0) + len(items)}')
-            self.message.setText('Double-click a folder to browse, or a track to play it.' +
-                                 (' More entries on the next page.' if self.more else ''))
+            count = f'entries {request.get("offset", 0) + 1}–{request.get("offset", 0) + len(items)}' if items else 'No entries'
+            self.location.setText(('Library / ' + self.path if action == 'browse' else 'Queue') + ' · ' + count)
+            if not background:
+                self.message.setText('Double-click a folder to browse, or a track to play it.' +
+                                     (' More entries on the next page.' if self.more else ''))
         elif action != 'status':
             self.message.setText('Player updated.')
             self.reload_page()
 
-    def reload_page(self, *args):
+    @staticmethod
+    def item_key(row):
+        if 'Id' in row:
+            return ('id', str(row['Id']))
+        return ('directory', row['directory']) if 'directory' in row else ('file', row.get('file', ''))
+
+    def update_items(self, widget, rows, preserve):
+        existing = [widget.item(i).data(Qt.ItemDataRole.UserRole) for i in range(widget.count())]
+        if preserve and existing == rows:
+            return
+        selected = widget.currentItem()
+        selected_key = self.item_key(selected.data(Qt.ItemDataRole.UserRole)) if preserve and selected else None
+        scroll = widget.verticalScrollBar().value() if preserve else 0
+        blocker = QSignalBlocker(widget)
+        for index, row in enumerate(rows):
+            key = self.item_key(row)
+            item = widget.item(index)
+            if item is None or self.item_key(item.data(Qt.ItemDataRole.UserRole)) != key:
+                found = next((i for i in range(index + 1, widget.count())
+                              if self.item_key(widget.item(i).data(Qt.ItemDataRole.UserRole)) == key), None)
+                item = widget.takeItem(found) if found is not None else QListWidgetItem()
+                widget.insertItem(index, item)
+            path = row.get('directory') or row.get('file', '')
+            title = row.get('Title') or PurePosixPath(str(path)).name
+            text = ('[Folder] ' if 'directory' in row else '') + display_text(title)
+            if row.get('Artist'):
+                text += ' — ' + display_text(row['Artist'])
+            if item.text() != text:
+                item.setText(text)
+            if item.data(Qt.ItemDataRole.UserRole) != row:
+                item.setData(Qt.ItemDataRole.UserRole, row)
+        while widget.count() > len(rows):
+            widget.takeItem(widget.count() - 1)
+        selected_row = next((i for i, row in enumerate(rows) if self.item_key(row) == selected_key), -1)
+        widget.setCurrentRow(selected_row)
+        widget.verticalScrollBar().setValue(scroll)
+        del blocker
+
+    def reload_page(self, *args, background=False):
         if self.tabs.currentIndex() == 0:
-            self.request({'action': 'browse', 'path': self.path, 'offset': self.offset})
+            self.request({'action': 'browse', 'path': self.path, 'offset': self.offset}, background=background)
         else:
-            self.request({'action': 'queue', 'offset': self.queue_offset})
+            self.request({'action': 'queue', 'offset': self.queue_offset}, background=background)
 
     def refresh_status(self):
         if self.isVisible() and not self.isMinimized():
-            # Queue changes from the phone become visible when its tab is open.
             if self.tabs.currentIndex() == 1:
-                self.reload_page()
+                self.reload_page(background=True)
             else:
-                self.request({'action': 'status'})
+                self.request({'action': 'status'}, background=True)
 
     def activate_library(self, item):
         row = item.data(Qt.ItemDataRole.UserRole)
@@ -211,5 +292,6 @@ class MusicWindow(QDialog):
         self.reload_page()
 
     def hideEvent(self, event):
+        self.pending_requests.clear()
         self.timer.stop()
         super().hideEvent(event)

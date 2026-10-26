@@ -296,3 +296,17 @@ found no leaks. Live checks verify login-required UI/API, valid CA+hostname TLS,
 cross-origin/script rejection, backend loopback binding, account/key isolation,
 read-only mount and 0660 socket, and muted MPD playback through PipeWire. These
 checks do not constitute a penetration test or an audit of upstream myMPD/nginx/MPD.
+
+
+## Music refresh interaction (0.5.1)
+
+Music requests remain serial over the existing verified SSH transport. Background
+polls are skipped while work is pending; user commands have a bounded queue
+(maximum 32 pending requests), and redundant navigation/volume requests are
+coalesced. Captured connection settings and generation are checked before
+dispatch and before applying results, preventing queued actions from reaching a
+different configured Pi. Closing the music window discards unsent requests; an
+already running request can finish. No helper permissions, protocol operations,
+credentials, dependencies or Pi services change. The expanded 95-test suite
+covers interactive background refreshes, retained input, stale generation/page
+results, hidden polling and stable list selection/scrolling.
