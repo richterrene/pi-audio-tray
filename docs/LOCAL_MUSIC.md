@@ -59,8 +59,10 @@ The installer does not format the drive or start playback. It adds a UUID mount
 at `/srv/pi-audio-music`, read-only with `nosuid,nodev,noexec`, limited to the audio
 owner and music group. It expects a `Music` directory at the drive root. A missing
 drive does not prevent boot. Database, queue and cache live on the SD, not the USB.
-The initial local-player volume is 30%; raise it gradually when first testing.
-A repeated installation also resets this local volume to 30%.
+The local-player volume defaults to 100% at installation and every service start,
+including after a reboot. A systemd post-start command applies this after MPD
+loads its saved state. You can adjust it during playback; the next service start
+resets it to 100%. Set your amplifier/speaker level appropriately before playback.
 
 The existing helper installer updates the unprivileged music bridge too. It does
 **not** install MPD, mount a drive, set up HTTPS, or grant broad runtime sudo.

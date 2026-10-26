@@ -188,6 +188,8 @@ PrivateTmp=yes
 PrivateDevices=yes
 RestrictSUIDSGID=yes
 ''' + common + '[Install]\nWantedBy=multi-user.target\n')
+    directory('/etc/systemd/system/pi-audio-mpd.service.d')
+    write('/etc/systemd/system/pi-audio-mpd.service.d/volume.conf', '[Service]\nExecStartPost=/usr/bin/mpc -h /run/pi-audio-mpd/socket volume 100\n')
     # Dedicated CA; root owns all TLS material. No audio-user-writable root inputs.
     ssl = conf / 'tls'
     directory(ssl, 0o700)
@@ -298,7 +300,7 @@ WantedBy=multi-user.target
     run('systemctl', 'daemon-reload')
     run('systemctl', 'enable', 'pi-audio-mpd.service', 'pi-audio-mympd.service')
     run('systemctl', 'restart', 'pi-audio-mpd.service', 'pi-audio-mympd.service')
-    user_run('mpc', '-h', '/run/pi-audio-mpd/socket', 'volume', '30')
+    user_run('mpc', '-h', '/run/pi-audio-mpd/socket', 'volume', '100')
     user_run('mpc', '-h', '/run/pi-audio-mpd/socket', 'update')
     run('systemctl', 'enable', '--now', 'pi-audio-music-tls.timer')
     run('systemctl', 'enable', 'pi-audio-web.service')
