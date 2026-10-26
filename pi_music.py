@@ -1,8 +1,9 @@
 #!/usr/bin/python3 -I
 """Bounded, unprivileged MPD bridge. Receives one JSON request on stdin."""
 import json
+import importlib.util
 import os
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 import socket
 import sys
 import time
@@ -72,6 +73,13 @@ def records(rows):
 
 
 def dispatch(mpd, request):
+    if isinstance(request, dict) and isinstance(request.get('action'), str) and request['action'].startswith('network_'):
+        # -I excludes the script directory from sys.path. Load only our reviewed
+        # sibling module in the same root-owned installation directory.
+        spec = importlib.util.spec_from_file_location('pi_upnp', Path(__file__).with_name('pi_upnp.py'))
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module.dispatch(mpd, request)
     if not isinstance(request, dict) or set(request) - {'action', 'path', 'offset', 'value'}:
         raise ValueError('Invalid music request')
     action = request.get('action')

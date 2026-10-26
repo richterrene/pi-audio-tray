@@ -374,6 +374,7 @@ def install_helper(config):
     temporary = []
     try:
         for source, destination in (('pi_helper.py', REMOTE_HELPER),
+                                     ('pi_upnp.py', '/usr/local/lib/pi-audio-tray/pi_upnp.py'),
                                      ('pi_music.py', '/usr/local/lib/pi-audio-tray/pi-music')):
             temp = '/tmp/pi-audio-tray-' + uuid.uuid4().hex
             temporary.append(temp)

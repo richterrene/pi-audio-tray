@@ -200,7 +200,7 @@ class TrayApp(QWidget):
         layout.addLayout(controls)
         extras = QHBoxLayout()
         for label, callback in [('Refresh', self.refresh), ('Settings…', self.settings),
-                                 ('Set up Pi…', self.setup), ('USB music…', self.open_music)]:
+                                 ('Set up Pi…', self.setup), ('Music…', self.open_music)]:
             button = QPushButton(label)
             button.clicked.connect(callback)
             extras.addWidget(button)
@@ -226,7 +226,7 @@ class TrayApp(QWidget):
         self.on_action = self.menu.addAction('Enable pairing · 3 min', self.start_pairing)
         self.off_action = self.menu.addAction('Disable pairing', self.stop_pairing)
         self.menu.addSeparator()
-        self.menu.addAction('USB music…', self.open_music)
+        self.menu.addAction('Music…', self.open_music)
         self.menu.addAction('Open status', self.open_window)
         self.menu.addAction('Refresh now', self.refresh)
         self.menu.addAction('Settings…', self.settings)
