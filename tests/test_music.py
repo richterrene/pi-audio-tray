@@ -56,7 +56,7 @@ class MusicProtocol(unittest.TestCase):
         client.close.assert_called_once()
 
 
-class MusicVisibility(unittest.TestCase):
+class MusicWindowTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
@@ -71,6 +71,8 @@ class MusicVisibility(unittest.TestCase):
         self.window.deleteLater()
         self.parent.deleteLater()
 
+
+class MusicVisibility(MusicWindowTests):
     def test_hidden_window_does_not_request_status(self):
         with patch('music_ui.music_request') as request:
             self.window.refresh_status()
@@ -94,6 +96,130 @@ class MusicVisibility(unittest.TestCase):
         self.assertEqual(self.window.now.textFormat(), Qt.TextFormat.PlainText)
         self.window.operation_done((request, {'items': []}, status, {'host': 'old'}), None)
         self.assertEqual(self.window.library.count(), 1)
+
+
+class NonblockingRefresh(MusicWindowTests):
+    def show_window(self):
+        with patch.object(self.window, 'request'):
+            self.window.show()
+        self.window.timer.stop()
+
+    def hold_workers(self, jobs):
+        def thread(*, target, daemon):
+            return Mock(start=lambda: jobs.append(target))
+        return patch('music_ui.threading.Thread', side_effect=thread)
+
+    @staticmethod
+    def response(config, request):
+        if request['action'] == 'status':
+            return {'status': {'state': 'pause', 'volume': '30'}, 'current': {}}
+        if request['action'] in ('browse', 'queue'):
+            return {'items': [], 'more': False}
+        return {'ok': True}
+
+    def test_background_refresh_keeps_controls_enabled_and_delivers_pause_click(self):
+        self.show_window()
+        jobs = []
+        with self.hold_workers(jobs), patch('music_ui.music_request', side_effect=self.response) as remote:
+            self.window.refresh_status()
+            self.assertEqual(len(jobs), 1)
+            self.assertTrue(self.window.tabs.isEnabled())
+            self.assertTrue(self.window.volume.isEnabled())
+            self.assertTrue(all(button.isEnabled() for button in self.window.buttons))
+            self.window.buttons[2].click()  # Pause while status request is still in flight.
+            self.assertEqual(len(jobs), 1)  # Keep SSH work serial, without losing the click.
+            jobs[0]()
+            self.assertEqual(len(jobs), 2)
+            jobs[1]()
+            self.assertEqual([call.args[1]['action'] for call in remote.call_args_list][:3],
+                             ['status', 'pause', 'status'])
+
+    def test_slow_poll_does_not_accumulate_more_background_polls(self):
+        self.show_window()
+        jobs = []
+        with self.hold_workers(jobs):
+            for _ in range(5):
+                self.window.refresh_status()
+        self.assertEqual(len(jobs), 1)
+        self.assertEqual(self.window.pending_requests, [])
+
+    def test_background_reply_cannot_overwrite_a_pending_volume_edit(self):
+        self.show_window()
+        jobs = []
+        with self.hold_workers(jobs), patch('music_ui.music_request', side_effect=self.response):
+            self.window.refresh_status()
+            self.window.volume.setValue(80)
+            self.window.request({'action': 'volume', 'value': 80})
+            jobs[0]()
+            self.assertEqual(self.window.volume.value(), 80)
+            self.assertEqual(len(jobs), 2)
+
+    def test_only_latest_queued_navigation_is_sent(self):
+        self.show_window()
+        jobs = []
+        with self.hold_workers(jobs), patch('music_ui.music_request', side_effect=self.response) as remote:
+            self.window.refresh_status()
+            for path in ('Old folder', 'New folder'):
+                self.window.path = path
+                self.window.reload_page()
+            jobs[0]()
+            jobs[1]()
+            browsed = [call.args[1]['path'] for call in remote.call_args_list if call.args[1]['action'] == 'browse']
+            self.assertEqual(browsed, ['New folder'])
+
+    def test_queued_controls_are_not_sent_after_connection_generation_changes(self):
+        self.show_window()
+        self.parent.generation = 0
+        jobs = []
+        with self.hold_workers(jobs), patch('music_ui.music_request', side_effect=self.response) as remote:
+            self.window.refresh_status()
+            self.window.request({'action': 'pause'})
+            self.parent.generation = 1
+            jobs[0]()
+            self.assertEqual(len(jobs), 1)
+            self.assertEqual([call.args[1]['action'] for call in remote.call_args_list], ['status'])
+            self.assertEqual(self.window.now.text(), 'Player not checked yet')
+
+    def test_hiding_cancels_pending_requests_without_starting_more_ssh_work(self):
+        self.show_window()
+        jobs = []
+        with self.hold_workers(jobs), patch('music_ui.music_request', side_effect=self.response):
+            self.window.refresh_status()
+            self.window.request({'action': 'pause'})
+            self.window.hide()
+            jobs[0]()
+            self.assertEqual(len(jobs), 1)
+            self.assertEqual(self.window.pending_requests, [])
+
+    def test_old_folder_response_cannot_replace_the_new_view(self):
+        self.window.path = 'New folder'
+        request = {'action': 'browse', 'path': 'Old folder', 'offset': 0}
+        self.window.operation_done((request, {'items': [{'file': 'Old folder/a.mp3'}], 'more': False},
+                                    self.response(None, {'action': 'status'}), self.parent.config.copy()), None)
+        self.assertEqual(self.window.library.count(), 0)
+
+    def test_queue_updates_preserve_item_identity_selection_and_scroll(self):
+        self.show_window()
+        with patch.object(self.window, 'request'):
+            self.window.tabs.setCurrentIndex(1)
+        rows = [{'file': f'Album/{i}.mp3', 'Id': str(i), 'Title': f'Track {i}'} for i in range(90)]
+        request = {'action': 'queue', 'offset': 0}
+        status = self.response(None, {'action': 'status'})
+        def apply(items):
+            self.window.apply_result((request, {'items': items, 'more': False}, status, self.parent.config.copy()), None, background=True)
+        apply(rows)
+        self.app.processEvents()
+        selected = self.window.queue.item(50)
+        self.window.queue.setCurrentItem(selected)
+        self.window.queue.verticalScrollBar().setValue(300)
+        scroll = self.window.queue.verticalScrollBar().value()
+        apply(rows)
+        self.assertIs(self.window.queue.currentItem(), selected)
+        self.assertEqual(self.window.queue.verticalScrollBar().value(), scroll)
+        apply([{'file': 'Album/new.mp3', 'Id': '999', 'Title': 'New track'}] + rows)
+        self.assertIs(self.window.queue.currentItem(), selected)
+        self.assertEqual(self.window.queue.currentItem().data(Qt.ItemDataRole.UserRole)['Id'], '50')
+        self.assertEqual(self.window.queue.verticalScrollBar().value(), scroll)
 
 
 if __name__ == '__main__':

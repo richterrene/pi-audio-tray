@@ -4,7 +4,10 @@ Pi Audio Tray 0.5 adds an optional **USB music…** window. It browses folders, 
 tracks/albums to the queue, plays a selected track, and controls play/pause/stop,
 previous/next and the local player's software volume. Double-click a folder to
 browse or a track to add it and play it. Queue entries can also be double-clicked.
-Pages contain at most 100 entries. Use **Rescan USB** after changing the drive's
+Pages contain at most 100 entries. Playback status refreshes quietly every five
+seconds while the window is visible: controls stay enabled, and queue updates
+preserve selection and scrolling. Commands clicked during a refresh are queued
+instead of ignored. Use **Rescan USB** after changing the drive's
 contents on another computer. Closing the music window stops its detail polling;
 minimizing it suppresses requests. Existing background service-health checks keep
 their once-per-minute minimum interval. One request already in flight may finish.
