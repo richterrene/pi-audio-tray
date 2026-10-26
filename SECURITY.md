@@ -313,6 +313,9 @@ results, hidden polling and stable list selection/scrolling.
 
 ## UPnP network music
 
+The [dated UPnP review](docs/UPNP_REVIEW_2026-10-26.md) records validation,
+reviewed static findings and remaining trust boundaries.
+
 Version 0.6 adds opt-in SSDP discovery and ContentDirectory browsing **on the Pi**.
 No desktop listener or new Pi listener is opened, and no router port mapping is
 requested. Discovery is on demand, has a bounded search window/candidate count,
