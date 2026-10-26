@@ -6,6 +6,11 @@ or the older Raspotify / BlueALSA setup.
 Connect over SSH, monitor the receiver, and open or close Bluetooth pairing
 without typing commands. There are no cloud services or telemetry.
 
+The status window groups receiver services and system health into two cards, with
+vector symbols and reserved space for refresh messages. Long status text stays
+available in tooltips; switching between refreshing and updated keeps the controls
+and rows in place. Colors follow the desktop palette with teal action accents.
+
 **Status: experimental.** The combination below has been tested on real hardware.
 Other distributions and boards have not been validated. This project is not
 affiliated with Spotify or Raspberry Pi.
