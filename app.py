@@ -12,7 +12,7 @@ from PySide6.QtCore import QObject, QTimer, Qt, Signal, QEvent
 from PySide6.QtGui import QAction, QIcon, QPainter, QPixmap
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (QApplication, QDialog, QDialogButtonBox, QFileDialog,
-    QFormLayout, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QMenu, QMessageBox,
+    QFormLayout, QFrame, QGridLayout, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QMenu, QMessageBox,
     QPushButton, QSpinBox, QSystemTrayIcon, QVBoxLayout, QWidget)
 
 from core import (PairSession, UnknownHost, config_dir, disable_pairing,
@@ -20,6 +20,7 @@ from core import (PairSession, UnknownHost, config_dir, disable_pairing,
                   remove_soloist_key, update_soloist, trust_host, display_text, instance_lock_file, shutdown_pi)
 from music_ui import MusicWindow
 from version import VERSION
+from ui_style import STYLE, StableLabel, symbol
 from platform_support import lock_instance
 
 
@@ -159,56 +160,100 @@ class TrayApp(QWidget):
         self.generation = 0
         self.setWindowTitle('Pi Audio Tray · ' + VERSION)
         self.setWindowIcon(icon())
-        self.setMinimumWidth(450)
+        self.setMinimumWidth(780)
+        self.setStyleSheet(STYLE)
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(24, 24, 24, 24)
-        title = QLabel('Pi Audio Tray')
-        title.setStyleSheet('font-size: 24px; font-weight: 600;')
-        layout.addWidget(title)
-        subtitle = QLabel('Your audio receiver, at a glance')
-        subtitle.setStyleSheet('color: #8996a8; margin-bottom: 16px;')
-        layout.addWidget(subtitle)
+        layout.setContentsMargins(22, 22, 22, 22)
+        layout.setSpacing(14)
+        header = QHBoxLayout()
+        logo = QLabel()
+        logo_image = icon('#22c58b').pixmap(96, 96)
+        logo_image.setDevicePixelRatio(2)
+        logo.setPixmap(logo_image)
+        header.addWidget(logo)
+        heading = QVBoxLayout()
+        title = QLabel('Pi Audio')
+        title.setStyleSheet('font-size: 25px; font-weight: 600;')
+        heading.addWidget(title)
+        subtitle = QLabel('Receiver control & system health')
+        heading.addWidget(subtitle)
+        header.addLayout(heading)
+        header.addStretch()
+        version = QLabel('v' + VERSION)
+        header.addWidget(version)
+        layout.addLayout(header)
         self.rows = {}
-        form = QFormLayout()
-        form.setVerticalSpacing(14)
-        for key, label in [('pi', 'Raspberry Pi'), ('spotify', 'Spotify Connect'),
-                           ('bluetooth', 'Bluetooth'), ('audio', 'Bluetooth audio'),
-                           ('devices', 'Connected devices'), ('pairing', 'New pairing'),
-                           ('soloist', 'Soloist setup'), ('updates', 'Updates'),
-                           ('temperature', 'Temperature'), ('cpu', 'CPU usage'),
-                           ('load', 'Load · 1 / 5 / 15 min'), ('memory', 'Memory'),
-                           ('disk', 'Root disk'), ('uptime', 'Uptime')]:
-            value = QLabel('—')
-            value.setTextFormat(Qt.TextFormat.PlainText)
-            value.setWordWrap(True)
-            self.rows[key] = value
-            form.addRow(label, value)
-        layout.addLayout(form)
-        self.notice = QLabel('Configure your Pi to get started.')
-        self.notice.setTextFormat(Qt.TextFormat.PlainText)
-        self.notice.setWordWrap(True)
-        self.notice.setStyleSheet('color: #8996a8; margin: 16px 0;')
+        cards = QHBoxLayout()
+        cards.setSpacing(14)
+        groups = [
+            ('Receiver', 'receiver', [
+                ('pi', 'Raspberry Pi', 'receiver'), ('spotify', 'Spotify Connect', 'music'),
+                ('bluetooth', 'Bluetooth', 'bluetooth'), ('audio', 'Audio output', 'audio'),
+                ('devices', 'Devices', 'devices'), ('pairing', 'Pairing', 'pairing'),
+                ('soloist', 'Soloist key', 'key'), ('updates', 'Updates', 'refresh')]),
+            ('System', 'cpu', [
+                ('temperature', 'Temperature', 'temperature'), ('cpu', 'CPU usage', 'cpu'),
+                ('load', 'Load · 1 / 5 / 15', 'load'), ('memory', 'Memory', 'memory'),
+                ('disk', 'Root disk', 'disk'), ('uptime', 'Uptime', 'clock')])]
+        for heading_text, _heading_icon, fields in groups:
+            card = QFrame()
+            card.setObjectName('StatusCard')
+            section = QVBoxLayout(card)
+            section.setContentsMargins(16, 16, 16, 16)
+            section.setSpacing(10)
+            label = QLabel(heading_text)
+            label.setObjectName('SectionTitle')
+            section.addWidget(label)
+            grid = QGridLayout()
+            grid.setHorizontalSpacing(10)
+            grid.setVerticalSpacing(5)
+            grid.setColumnStretch(2, 1)
+            for index, (key, text, glyph) in enumerate(fields):
+                image = QLabel()
+                glyph_image = symbol(glyph, '#139b7d').pixmap(36, 36)
+                glyph_image.setDevicePixelRatio(2)
+                image.setPixmap(glyph_image)
+                image.setFixedWidth(20)
+                grid.addWidget(image, index, 0)
+                label = QLabel(text)
+                grid.addWidget(label, index, 1)
+                value = StableLabel('—')
+                self.rows[key] = value
+                grid.addWidget(value, index, 2)
+            section.addLayout(grid)
+            section.addStretch(1)
+            cards.addWidget(card, 1)
+        layout.addLayout(cards)
+        self.notice = StableLabel('Configure your Pi to get started.', lines=3, padding=24)
+        self.notice.setObjectName('Notice')
         self.notice.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         layout.addWidget(self.notice)
         controls = QHBoxLayout()
         self.pair_button = QPushButton('Enable pairing · 3 min')
+        self.pair_button.setObjectName('Primary')
+        self.pair_button.setIcon(symbol('bluetooth', '#ffffff'))
         self.pair_button.clicked.connect(self.start_pairing)
         self.off_button = QPushButton('Disable pairing')
+        self.off_button.setIcon(symbol('stop'))
         self.off_button.clicked.connect(self.stop_pairing)
         controls.addWidget(self.pair_button)
         controls.addWidget(self.off_button)
         layout.addLayout(controls)
         extras = QHBoxLayout()
-        for label, callback in [('Refresh', self.refresh), ('Settings…', self.settings),
-                                 ('Set up Pi…', self.setup), ('Music…', self.open_music)]:
+        for label, glyph, callback in [('Music…', 'music', self.open_music),
+                                       ('Refresh', 'refresh', self.refresh),
+                                       ('Settings…', 'settings', self.settings),
+                                       ('Set up Pi…', 'setup', self.setup)]:
             button = QPushButton(label)
+            button.setIcon(symbol(glyph))
             button.clicked.connect(callback)
             extras.addWidget(button)
         layout.addLayout(extras)
         soloist_controls = QHBoxLayout()
-        for label, callback in [('Soloist API key…', self.soloist_key),
-                                ('Update Soloist', self.update_soloist)]:
+        for label, glyph, callback in [('Soloist API key…', 'key', self.soloist_key),
+                                       ('Update Soloist', 'refresh', self.update_soloist)]:
             button = QPushButton(label)
+            button.setIcon(symbol(glyph))
             button.clicked.connect(callback)
             soloist_controls.addWidget(button)
         layout.addLayout(soloist_controls)
@@ -223,20 +268,20 @@ class TrayApp(QWidget):
             item.setEnabled(False)
             self.menu_rows[key] = item
         self.menu.addSeparator()
-        self.on_action = self.menu.addAction('Enable pairing · 3 min', self.start_pairing)
-        self.off_action = self.menu.addAction('Disable pairing', self.stop_pairing)
+        self.on_action = self.menu.addAction(symbol('bluetooth'), 'Enable pairing · 3 min', self.start_pairing)
+        self.off_action = self.menu.addAction(symbol('stop'), 'Disable pairing', self.stop_pairing)
         self.menu.addSeparator()
-        self.menu.addAction('Music…', self.open_music)
+        self.menu.addAction(symbol('music'), 'Music…', self.open_music)
         self.menu.addAction('Open status', self.open_window)
-        self.menu.addAction('Refresh now', self.refresh)
-        self.menu.addAction('Settings…', self.settings)
+        self.menu.addAction(symbol('refresh'), 'Refresh now', self.refresh)
+        self.menu.addAction(symbol('settings'), 'Settings…', self.settings)
         self.menu.addAction('Set up / update Pi helper…', self.setup)
         soloist_menu = self.menu.addMenu('Spotify Soloist')
         soloist_menu.addAction('Set / replace API key…', self.soloist_key)
         soloist_menu.addAction('Remove API key…', self.remove_key)
         soloist_menu.addAction('Check for updates now', self.update_soloist)
         self.menu.addSeparator()
-        self.shutdown_action = self.menu.addAction('Shut down Pi…', self.shutdown)
+        self.shutdown_action = self.menu.addAction(symbol('power'), 'Shut down Pi…', self.shutdown)
         self.menu.addSeparator()
         version_action = self.menu.addAction('Version ' + VERSION)
         version_action.setEnabled(False)
