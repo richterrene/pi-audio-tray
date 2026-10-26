@@ -15,7 +15,7 @@ class MusicEvents(QObject):
 class MusicWindow(QDialog):
     def __init__(self, parent):
         super().__init__(parent)
-        self.setWindowTitle('Pi Audio · USB music')
+        self.setWindowTitle('Pi Audio · Music')
         self.resize(780, 580)
         self.path, self.offset, self.more, self.busy = '', 0, False, False
         self.queue_offset = 0
@@ -79,6 +79,10 @@ class MusicWindow(QDialog):
         self.message.setTextFormat(Qt.TextFormat.PlainText)
         self.message.setWordWrap(True)
         layout.addWidget(self.message)
+        network = QPushButton('Network music…')
+        network.clicked.connect(self.open_network)
+        layout.addWidget(network)
+        self.network_window = None
         self.timer = QTimer(self)
         self.timer.setInterval(5000)
         self.timer.timeout.connect(self.refresh_status)
@@ -286,6 +290,14 @@ class MusicWindow(QDialog):
         except ValueError as exc:
             self.message.setText(display_text(exc))
 
+    def open_network(self):
+        from network_ui import NetworkWindow
+        if self.network_window is None:
+            self.network_window = NetworkWindow(self.parent())
+        self.network_window.show()
+        self.network_window.raise_()
+        self.network_window.activateWindow()
+
     def showEvent(self, event):
         super().showEvent(event)
         self.timer.start()
@@ -294,4 +306,6 @@ class MusicWindow(QDialog):
     def hideEvent(self, event):
         self.pending_requests.clear()
         self.timer.stop()
+        if self.network_window is not None:
+            self.network_window.hide()
         super().hideEvent(event)

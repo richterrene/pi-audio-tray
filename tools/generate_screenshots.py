@@ -18,6 +18,7 @@ from PySide6.QtGui import QPixmap
 from PySide6.QtCore import Qt
 from app import Settings, TrayApp
 from music_ui import MusicWindow
+from network_ui import NetworkWindow
 
 
 def capture(widget, path):
@@ -90,7 +91,22 @@ def main():
         app.processEvents()
         capture(music, output / 'local-music.png')
         music.hide()
-    print('Captured status, settings, tray menu, shutdown confirmation and local music with fictional data only.')
+    with patch.object(NetworkWindow, 'request'):
+        network = NetworkWindow(window)
+        network.show()
+        source = {'id': 'a' * 32, 'name': 'Home Music Server', 'address': '192.168.1.20', 'enabled': True}
+        network.operation_done(({'action': 'network_sources'}, window.config.copy(), window.generation,
+                                {'sources': [source]}), None)
+        network.server = source
+        network.history = [('0', 'Library'), ('albums', 'Albums'), ('first', 'First Album')]
+        network.operation_done(({'action': 'network_browse', 'server': source['id'], 'object': 'first', 'offset': 0},
+                                window.config.copy(), window.generation,
+                                {'items': [{'object': f'track-{i}', 'Title': title, 'Artist': 'Example Artist'}
+                                           for i, title in enumerate(('Morning', 'Home', 'Evening'))], 'more': False}), None)
+        app.processEvents()
+        capture(network, output / 'network-music.png')
+        network.hide()
+    print('Captured desktop and music windows with fictional data only.')
 
 
 if __name__ == '__main__':

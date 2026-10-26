@@ -293,6 +293,7 @@ WantedBy=multi-user.target
     if not helper.is_file():
         raise RuntimeError('Place reviewed pi_music.py beside this installer')
     run('install', '-o', 'root', '-g', 'root', '-m', '755', str(helper), '/usr/local/lib/pi-audio-tray/pi-music')
+    run('install', '-o', 'root', '-g', 'root', '-m', '644', str(Path(__file__).parent / 'pi_upnp.py'), '/usr/local/lib/pi-audio-tray/pi_upnp.py')
     run('loginctl', 'enable-linger', user.pw_name)
     env = dict(os.environ, XDG_RUNTIME_DIR=f'/run/user/{uid}', DBUS_SESSION_BUS_ADDRESS=f'unix:path=/run/user/{uid}/bus')
     def user_run(*command):

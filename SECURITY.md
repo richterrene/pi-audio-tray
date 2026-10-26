@@ -310,3 +310,42 @@ already running request can finish. No helper permissions, protocol operations,
 credentials, dependencies or Pi services change. The expanded 95-test suite
 covers interactive background refreshes, retained input, stale generation/page
 results, hidden polling and stable list selection/scrolling.
+
+## UPnP network music
+
+Version 0.6 adds opt-in SSDP discovery and ContentDirectory browsing **on the Pi**.
+No desktop listener or new Pi listener is opened, and no router port mapping is
+requested. Discovery is on demand, has a bounded search window/candidate count,
+and does not automatically enable servers. Only explicitly enabled, recently
+discovered sources may supply tracks. Private RFC1918 IPv4 addresses only;
+loopback, link-local/cloud metadata, multicast and public addresses are rejected.
+Discovery location, control and audio URLs must use the responding server's same
+numeric address. Hostname URLs, credentials, fragments, control characters and
+cross-host references are refused; XML HTTP requests ignore proxy settings and
+reject redirects. Response/XML size, page size, identifiers and socket waits are
+bounded. XML DTDs/entities are rejected, SOAP arguments are XML-escaped, and MPD
+arguments are quoted, never interpolated into a shell. UI text is plain/sanitized.
+
+Sources and discovered candidates are stored privately under the audio user's
+`~/.local/state/pi-audio-network/` (700; JSON 600, atomically replaced under a file
+lock). URLs/credentials cannot be supplied by desktop enqueue requests: the Pi
+resolves the selected object through its enabled server and accepts audio items
+only. Flat albums are bounded to 100 tracks; nested or oversized albums are
+rejected before queue changes. If an MPD metadata/add operation fails, rollback
+attempts to delete only newly added IDs, never clearing the existing queue; a
+connection loss can prevent complete rollback. Requests capture the selected SSH
+connection and generation; stale replies and unsent requests for old connections
+are discarded. Closing stops unsent work; already-dispatched actions may finish.
+
+UPnP is **unauthenticated**: a LAN peer can spoof discovery/UDNs, and media servers
+can log requests and supply malicious/misleading content. Only enable a server
+you trust. These controls do not make hostile LAN devices safe. HTTP audio may be
+unencrypted; the browser player's HTTPS protects phone control, not the Pi's
+media-server connection. After enqueue, MPD's own HTTP/decoder implementation
+handles stream requests and may follow redirects; its transport/decoder and the
+selected server are inside the trust boundary. Numeric-address pinning during
+browsing does not sandbox MPD's later HTTP requests. Removing a source does not
+revoke already queued or saved stream URLs. No automatic background discovery,
+network library indexing, share passwords, UPnP subscriptions or remote media-server
+control actions are implemented. Compatibility limits are documented in
+[Local and network music](docs/LOCAL_MUSIC.md#upnp--dlna-music-servers-06).

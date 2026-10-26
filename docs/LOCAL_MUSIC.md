@@ -1,6 +1,6 @@
-# Local USB music and phone control
+# USB and network music with phone control
 
-Pi Audio Tray 0.5 adds an optional **USB music…** window. It browses folders, adds
+Pi Audio Tray 0.5 adds an optional **Music…** window. It browses folders, adds
 tracks/albums to the queue, plays a selected track, and controls play/pause/stop,
 previous/next and the local player's software volume. Double-click a folder to
 browse or a track to add it and play it. Queue entries can also be double-clicked.
@@ -36,24 +36,24 @@ is not implemented. Local music volume is separate from Spotify Connect volume.
 - A local Wi-Fi/LAN connection is required for the phone. The supplied HTTPS
   listener permits private IPv4 networks and loopback; it has no public IPv6
   listener. Guest Wi-Fi/client isolation can prevent access. No router forwarding,
-  cloud tunnel, publicly reachable service or UPnP configuration is created.
+  cloud tunnel, publicly reachable service or router UPnP port mapping is created.
 
 ## Opt-in Pi setup
 
-Read `pi/install-music.py`, `pi/renew-music-tls.py` and `pi_music.py` before running
+Read `pi/install-music.py`, `pi/renew-music-tls.py`, `pi_music.py` and `pi_upnp.py` before running
 an administrator installer. Back up the Pi first. This setup uses dedicated
 `pi-audio-*` services and masks the distribution MPD, myMPD and nginx services so
 package installation does not start an unprotected default listener. Do not run
 it on a host already relying on those distribution services.
 
 Identify the intended USB partition with `lsblk -f`; do not select the SD boot
-partition. Copy all three reviewed files into one private staging directory on
+partition. Copy all four reviewed files into one private staging directory on
 the Pi, for example:
 
 ```sh
 # On the Pi, in your private staging directory:
 chmod 700 .
-# Place these files here: install-music.py, renew-music-tls.py, pi_music.py
+# Place these files here: install-music.py, renew-music-tls.py, pi_music.py, pi_upnp.py
 sudo /usr/bin/python3 -I ./install-music.py \
   --user YOUR_AUDIO_USER --uuid YOUR-UUID --hostname audio-pi.local
 ```
@@ -178,3 +178,49 @@ References: [MPD manual](https://mpd.readthedocs.io/en/stable/user.html),
 [myMPD upstream installation](https://jcorporation.github.io/myMPD/010-installation/prebuild-packages-debian.html),
 [myMPD security](https://jcorporation.github.io/myMPD/090-security.html), and
 [myMPD reverse proxy](https://jcorporation.github.io/myMPD/070-additional-topics/behind-a-reverse-proxy.html).
+
+## UPnP / DLNA music servers (0.6+)
+
+Open **Music… → Network music… → Discover servers**. Discovery runs **on the Pi**,
+so servers must be on its multicast-capable private IPv4 LAN. Select a server you
+trust, click **Enable / reconnect**, then double-click its enabled row. Browse its
+Music/Artist/Album folders; double-click a track to play, or select a track/album
+and **Add to queue**. An album must be a flat folder of at most 100 audio tracks;
+nested folders and larger selections are refused before changing the queue.
+Discovery and browsing run in workers; they do not disable the controls or run in
+the background while the windows are closed. Pending requests are discarded when
+closed or when the SSH connection settings change; an in-flight request may finish.
+
+**Remove source** forgets its enabled status without deleting server files or
+already queued tracks. Those queue entries may still play while the server is
+reachable. **Discover servers → Enable / reconnect** refreshes a server's saved
+address after an IP/port change. Saved sources identify servers by their UPnP UDN;
+this is a discovery identifier, **not cryptographic authentication**. A renamed or
+reconfigured server may appear as a new source. The serving computer/NAS must stay
+awake. No files are copied to the Pi, no network filesystem is mounted, and no
+share password is required or stored.
+
+The Pi's existing USB MPD database remains in use. MPD's separate UPnP database
+plugin cannot be combined with that configuration just by enabling discovery;
+this feature browses ContentDirectory services and adds their HTTP audio resources
+to the existing MPD queue instead. The **phone's myMPD player sees and controls
+these queued tracks**, including their supplied title/artist/album tags. Browsing
+and managing network sources is currently available **in the desktop app only**;
+network tracks are not indexed into the USB database or its global artist search.
+After a queue clear, add them again from Network music. Stream availability and
+seek/transcoding support depend on the server.
+
+Compatibility: SSDP MediaServer discovery and ContentDirectory Browse versions
+1–4, HTTP(S) audio resources from the same numeric private IPv4 address as the
+server; tested with Rygel ContentDirectory v3. Servers advertising hostname-only
+URLs, cross-host resources, redirected XML endpoints, authenticated content,
+IPv6-only sources or multicast-blocked guest networks are not supported. Source
+settings live in the audio user's private `~/.local/state/pi-audio-network/`
+directory (700, JSON file 600). Copying the reviewed updated `pi-music` bridge and
+its sibling `pi_upnp.py` into the root-owned helper directory is required on an
+existing installation; no MPD restart or additional sudo rule is needed.
+
+Only enable trusted home media servers: discovery, XML, metadata and streams are
+untrusted network input handled with bounds and protocol validation, but the
+selected server and MPD's HTTP decoder remain trusted for playback. See
+[Security and privacy](../SECURITY.md#upnp-network-music).

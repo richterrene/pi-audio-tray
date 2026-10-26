@@ -12,7 +12,7 @@ affiliated with Spotify or Raspberry Pi.
 
 ## Local music and phone playback control
 
-The optional **USB music…** window browses a Pi-attached library and controls its
+The optional **Music…** window browses a Pi-attached library and controls its
 MPD queue and volume. A mobile-friendly myMPD web player can share the same queue
 over authenticated HTTPS. This requires a separate opt-in Pi setup; see
 [requirements, installation, certificate trust and security](docs/LOCAL_MUSIC.md).
@@ -308,3 +308,13 @@ run `python build_macos.py` on the desired architecture. See the macOS notes.
 Run `python build_windows.py` on native Windows x64. It creates a portable ZIP,
 checks the executable architecture, and runs a frozen GUI/private-storage smoke
 test. See [Windows prerequisites and limits](docs/WINDOWS.md#building).
+
+### Network music (UPnP / DLNA)
+
+Use **Music… → Network music…** to discover and enable home media servers, browse
+albums, and add tracks to the same queue as USB music. Source browsing is on the
+desktop; queued tracks also appear in the phone web player. The server must stay
+awake. No music copy or Samba mount is needed. Requires the matching updated Pi
+music helper. See [compatibility and setup](docs/LOCAL_MUSIC.md#upnp--dlna-music-servers-06).
+
+![UPnP server and album browser using fictional data](assets/screenshots/network-music.png)
