@@ -224,3 +224,23 @@ Only enable trusted home media servers: discovery, XML, metadata and streams are
 untrusted network input handled with bounds and protocol validation, but the
 selected server and MPD's HTTP decoder remain trusted for playback. See
 [Security and privacy](../SECURITY.md#upnp-network-music).
+
+### A network track plays briefly and skips
+
+Check the media server as well as MPD. In a tested Ubuntu 26.04 setup with
+Rygel 45.0 / libsoup 3.6.6, a valid 200-second MP3 was advertised as about 8 MB,
+but ordinary HTTP GET responses returned only a variable prefix (64 KiB in one
+test). MPD then reached the end of the received stream and advanced the queue.
+An explicit full byte-range request returned the complete original file.
+Changing to Rygel's installed simple streaming engine did not fix that setup.
+This observation is specific to the tested combination, not a claim that every
+Rygel installation is affected.
+
+A temporary Ubuntu **ReadyMedia / MiniDLNA 1.3.3** server delivered the same file
+completely with a matching checksum. A separate MPD instance with a silent output
+also played beyond the failure point with the expected duration and no error.
+Using a music-only ReadyMedia server is one alternative if your Rygel installation
+has the same truncation. Installing/enabling another server is a separate action:
+it creates another LAN listener and exposes its configured music folder to local
+devices. This app does not install a desktop media server automatically. Share
+only the intended audio directory and use your OS package/update mechanism.
