@@ -90,3 +90,17 @@ The new-Pi guide documents prerequisites, trust, generated credentials,
 certificates, open ports, sudo permissions, process privacy, timezones,
 non-transactional failure/retry and manual recovery. This wizard does not perform
 SD imaging, network onboarding, legacy backend migration or filesystem formatting.
+
+## Follow-up: virtual image regression (0.7.1)
+
+The [local virtual lab](VIRTUAL_TESTS.md) subsequently ran official ARM64 and
+armhf Pi OS images on QEMU's Pi 3 model. It reproduced 0.7.0's mixed-bitness
+acceptance bug. The probe and administrator resume check now require ARM64
+userspace and a 64-bit Python interpreter. Both image expectations pass after
+that change, with 35 Pi-side tests per image (one dependency skip each). The
+host suite now has 142 tests, with the same 3 local platform/tool skips.
+
+The lab uses a test-only init, not normal systemd, and does not run the complete
+installer or physical audio/radio tests. Its security boundaries, skip reasons,
+excluded Pi 2 boot attempt and exact measured results are documented in the guide.
+This adds ARM image regression evidence without lifting the setup preview label.

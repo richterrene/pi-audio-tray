@@ -14,9 +14,11 @@ The check does not test audible playback, hardware capacity or reboot persistenc
 Bluetooth is mandatory in the base setup and needs an enabled controller; the
 configured profile receives audio from phones rather than transmitting to a
 Bluetooth speaker. A 32-bit userspace is unsupported even on 64-bit hardware.
-The 0.7.0 check examines kernel architecture, so a 64-bit kernel with 32-bit
-userspace can incorrectly pass. Verify `dpkg --print-architecture` returns
-`arm64` on the Pi; `uname -m` alone does not establish OS compatibility.
+Version 0.7.1 checks the package architecture and Python bitness as well as the
+kernel architecture. This fixes 0.7.0's incorrect acceptance of a 64-bit kernel
+with 32-bit userspace, reproduced in our [virtual image tests](VIRTUAL_TESTS.md).
+Verify `dpkg --print-architecture` returns `arm64` on the Pi; `uname -m` alone does
+not establish OS compatibility.
 
 ## Before starting
 

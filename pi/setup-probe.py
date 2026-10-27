@@ -6,6 +6,7 @@ from pathlib import Path
 import platform
 import pwd
 import subprocess
+import struct
 
 
 def inventory():
@@ -17,11 +18,17 @@ def inventory():
     model = Path('/proc/device-tree/model')
     model = model.read_text().rstrip('\0') if model.exists() else ''
     user = pwd.getpwuid(int(os.environ.get('SUDO_UID', os.getuid())))
+    architecture = subprocess.run(['/usr/bin/dpkg', '--print-architecture'],
+                                  capture_output=True, text=True, timeout=10)
+    userspace = architecture.stdout.strip() if architecture.returncode == 0 else ''
+    bits = struct.calcsize('P') * 8
     reasons = []
     if release.get('VERSION_ID') != '13' or release.get('ID') not in ('debian', 'raspbian'):
         reasons.append('Requires Debian / Raspberry Pi OS 13 Trixie')
     if platform.machine() != 'aarch64' or 'Raspberry Pi' not in model:
         reasons.append('Requires a 64-bit ARM Raspberry Pi')
+    if userspace != 'arm64' or bits != 64:
+        reasons.append('Requires 64-bit ARM64 userspace, not only a 64-bit kernel')
     if user.pw_uid < 1000 or not Path(user.pw_dir).is_dir():
         reasons.append('Connect as a normal user with a home directory, not root')
     conflicts = [str(p) for p in (Path('/usr/local/lib/pi-audio-tray'),
@@ -39,7 +46,7 @@ def inventory():
     devices = subprocess.run(['/usr/bin/lsblk', '-J', '-o', 'NAME,TYPE,FSTYPE,UUID,TRAN,MOUNTPOINTS'], capture_output=True, text=True, timeout=10)
     disks = json.loads(devices.stdout) if devices.returncode == 0 else {'blockdevices': []}
     return {'supported': not reasons, 'reasons': reasons, 'model': model,
-        'os': release.get('PRETTY_NAME', ''), 'architecture': platform.machine(),
+        'os': release.get('PRETTY_NAME', ''), 'architecture': platform.machine(), 'userspace_architecture': userspace, 'python_bits': bits,
         'user': user.pw_name, 'uid': user.pw_uid, 'hostname': platform.node(),
         'conflicts': conflicts, 'disks': disks}
 
