@@ -47,13 +47,14 @@ package installation does not start an unprotected default listener. Do not run
 it on a host already relying on those distribution services.
 
 Identify the intended USB partition with `lsblk -f`; do not select the SD boot
-partition. Copy all four reviewed files into one private staging directory on
+partition. Copy all seven reviewed files into one private staging directory on
 the Pi, for example:
 
 ```sh
 # On the Pi, in your private staging directory:
 chmod 700 .
 # Place these files here: install-music.py, renew-music-tls.py, pi_music.py, pi_upnp.py
+# Also: install-web-login.py, web_login.py, web_login_config.py
 sudo /usr/bin/python3 -I ./install-music.py \
   --user YOUR_AUDIO_USER --uuid YOUR-UUID --hostname audio-pi.local
 ```
@@ -73,11 +74,25 @@ Administrator setup stays a separate, explicit action.
 
 ## HTTPS and login
 
-Open `https://audio-pi.local:8443/` using your actual Pi hostname. The IP address at
+Open `http://audio-pi.local/` using your actual Pi hostname. Port **80 redirects
+to HTTPS on standard port 443**, so the final address is `https://audio-pi.local/`.
+Port 8443 remains an authenticated compatibility entry point for old bookmarks. The IP address at
 installation time is also in the certificate. If mDNS does not work on the phone,
 use that IP, preferably reserved in the router's DHCP configuration. The music
 URL can be overridden in the app's Settings; only HTTPS URLs without embedded
 credentials are accepted. The app opens it in your normal browser.
+
+A normal sign-in page replaces the browser HTTP Basic Auth prompt. **Remember this
+browser for 90 days** is checked by default; its secure cookie survives browser
+and Pi restarts. Without that option, the server limits the session to 12 hours
+and the cookie has no persistent Max-Age (browser session-restore features may
+retain it). Clearing cookies, expiry, signing out, or changing the password means
+signing in again. Cookies belong to the hostname: hostname/IP addresses and
+different browsers each need their own first login.
+
+Open `https://audio-pi.local/account` (or `/login` while signed in) to sign out this
+browser or all browsers. The password is unchanged when upgrading. No password or
+session token is stored in browser localStorage.
 
 A dedicated random **music** web password is generated; it is unrelated to the
 Pi SSH password and Soloist key. The initial login is stored in the audio user's
@@ -131,14 +146,15 @@ browser origins. A routine DHCP IP change does not affect the hostname URL.
   reading the read-only library; it is a trusted playback-control boundary.
 - myMPD HTTP binds only to `127.0.0.1:8080`. Local processes/accounts on the
   Pi can reach that backend without the nginx login; local Pi users remain
-  trusted for playback control. nginx exposes HTTPS 8443 and requires
+  trusted for playback control. nginx exposes HTTPS 443/8443 and requires
   login for UI, API, artwork and WebSockets. This is a full-access music account,
   not an administrator login. Do not share it with untrusted people.
 - The upstream myMPD PIN protects only some operations; it is **not** used as the
   login boundary. External script execution and its script API are disabled or
   denied. Browsers sending an Origin other than a configured HTTPS address are
   rejected, including WebSocket requests. Requests without Origin still require
-  authentication. Credentials are stripped before forwarding to myMPD.
+  authentication. Authorization and Cookie headers are stripped before forwarding
+  to myMPD. The auth service uses a private Unix socket, not a new TCP listener.
 - TLS permits 1.2/1.3. Root owns certificates, CA key, nginx configuration and
   password hash. There is no HTTP port 80 listener or automatic insecure fallback.
   nginx access logging is disabled; error logs may still contain client/network
@@ -244,3 +260,51 @@ has the same truncation. Installing/enabling another server is a separate action
 it creates another LAN listener and exposes its configured music folder to local
 devices. This app does not install a desktop media server automatically. Share
 only the intended audio directory and use your OS package/update mechanism.
+
+## Upgrade an existing web player to remembered browser login
+
+Copy the reviewed `pi/install-web-login.py`, `pi/web_login.py` and
+`pi/web_login_config.py` into one private staging directory on the Pi, then run:
+
+```sh
+sudo /usr/bin/python3 -I ./install-web-login.py --hostname audio-pi.local
+```
+
+Use your actual configured TLS hostname. Ports 80 and 443 must be free on first
+migration. No new package, password, CA or leaf certificate is needed on the
+supplied setup; Python and Apache's `htpasswd` verifier are already installed.
+The installer validates nginx configuration before reloading and attempts to
+restore the previous configuration on failure. MPD, Spotify and Bluetooth are
+not restarted. Old HTTPS 8443 links continue to work with cookie authentication.
+Set the tray app's Music HTTPS URL to `https://audio-pi.local/` if desired; older
+app binaries remain compatible through port 8443.
+
+The non-login `pi-audio-auth` account belongs to the web group only. It can read
+the root-owned password hash but cannot write it or access the audio user's home.
+Its systemd service uses `/run/pi-audio-login/auth.sock` (660, private parent 750)
+and private persistent state `/var/lib/pi-audio-login/` (700; SQLite file 600).
+Only SHA-256 digests of random 256-bit session tokens are stored, together with
+expiry and a fingerprint of the current password hash. Password verification
+passes plaintext through stdin to `htpasswd -vi`, never argv/environment/logs.
+There is no new plaintext password copy.
+
+myMPD's cache-first service worker is replaced with a network-only worker that
+removes only myMPD caches. Player responses are private/no-store, so a cached
+player page does not bypass or hide a fresh login. Offline player operation is
+unavailable; normal operation needs the Pi online anyway. `/login`, `/account`
+and `/logout` are reserved by the proxy; myMPD's separate optional PIN is not
+this full-player login. `/sw.js` is public static cleanup code with no library
+information or credentials. All UI/API/artwork/WebSocket handshakes require a
+session. Existing WebSocket connections are not reauthenticated frame by frame;
+remote tabs can receive notifications until they disconnect, even after a
+sign-out-all or expiry. New HTTP controls and new handshakes are denied. Close
+remote tabs if immediate removal of those existing connections is needed.
+
+The original nginx configuration is backed up as
+`/etc/pi-audio-tray/music/nginx.before-cookie-login.conf`. An administrator can
+restore it, remove `pi-audio-web.service.d/login.conf`, reload systemd/nginx, and
+disable `pi-audio-login.service` to return to the previous HTTP Basic Auth setup.
+Keep the password-hash group/read permissions intact. Do not remove the login
+service while nginx still requires its auth socket: access deliberately fails
+closed. Existing Pi local users can still contact loopback myMPD directly, as
+before; this boundary assumes trusted local users and administrators.
