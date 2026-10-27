@@ -75,6 +75,15 @@ Administrator setup stays a separate, explicit action.
 
 ## HTTPS and login
 
+This sign-in page belongs to the optional **web player on the Pi**, separate from
+the desktop tray UI. The screenshot renders its current HTML with an empty
+password field and no live session or receiver connection.
+To regenerate it, run `python tools/export_web_login_preview.py`, serve its output
+directory on loopback, and capture `login.html` in a browser. This is separate
+from `tools/generate_screenshots.py`, which captures the desktop widgets.
+
+<img src="../assets/screenshots/web-login.jpg" alt="Optional Pi web-player sign-in form with a 90-day remember-browser option" width="640">
+
 Open `http://audio-pi.local/` using your actual Pi hostname. Port **80 redirects
 to HTTPS on standard port 443**, so the final address is `https://audio-pi.local/`.
 Port 8443 remains an authenticated compatibility entry point for old bookmarks. The IP address at

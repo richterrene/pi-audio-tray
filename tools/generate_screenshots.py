@@ -38,7 +38,7 @@ def main():
     window = TrayApp(app)
     window.timer.stop()
     window.clock.stop()
-    window.config.update(host='audio-pi.local', username='audio', key_file='~/.ssh/id_ed25519')
+    window.config.update(host='audio-pi.local', username='audio', key_file='~/.ssh/id_ed25519', music_web_url='https://audio-pi.local/')
     window.done('poll', {
         'services': {'soloist': 'active', 'bluetooth': 'active', 'pipewire': 'active', 'wireplumber': 'active'},
         'adapter': {'Powered': True, 'Pairable': False, 'Discoverable': False},
@@ -87,9 +87,18 @@ def main():
             {'file': 'Example Artist/First Album/01 - Morning.mp3', 'Title': 'Morning', 'Artist': 'Example Artist'},
             {'file': 'Example Artist/First Album/02 - Home.mp3', 'Title': 'Home', 'Artist': 'Example Artist'},
             {'file': 'Example Artist/First Album/03 - Evening.mp3', 'Title': 'Evening', 'Artist': 'Example Artist'}], 'more': False},
-            {'status': {'state': 'pause', 'volume': '30'}, 'current': {'Title': 'Morning', 'Artist': 'Example Artist'}}, window.config.copy()), None)
+            {'status': {'state': 'pause', 'volume': '100'}, 'current': {'Title': 'Morning', 'Artist': 'Example Artist'}}, window.config.copy()), None)
         app.processEvents()
         capture(music, output / 'local-music.png')
+        music.tabs.setCurrentIndex(1)
+        music.operation_done(({'action': 'queue', 'offset': 0}, {'items': [
+            {'file': 'Example Artist/First Album/01 - Morning.mp3', 'Title': 'Morning', 'Artist': 'Example Artist', 'Id': '1'},
+            {'file': 'Example Artist/First Album/02 - Home.mp3', 'Title': 'Home', 'Artist': 'Example Artist', 'Id': '2'},
+            {'file': 'http://192.168.1.20:8201/MediaItems/3.flac', 'Title': 'Evening', 'Artist': 'Example Artist', 'Id': '3'}], 'more': False},
+            {'status': {'state': 'pause', 'volume': '100'}, 'current': {'Title': 'Morning', 'Artist': 'Example Artist'}}, window.config.copy()), None)
+        music.queue.setCurrentRow(1)
+        app.processEvents()
+        capture(music, output / 'music-queue.png')
         music.hide()
     with patch.object(NetworkWindow, 'request'):
         network = NetworkWindow(window)
