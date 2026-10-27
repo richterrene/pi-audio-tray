@@ -19,6 +19,7 @@ from PySide6.QtCore import Qt
 from app import Settings, TrayApp
 from music_ui import MusicWindow
 from network_ui import NetworkWindow
+from setup_ui import SetupDialog
 
 
 def capture(widget, path):
@@ -115,6 +116,16 @@ def main():
         app.processEvents()
         capture(network, output / 'network-music.png')
         network.hide()
+    setup = SetupDialog(window.config, window)
+    setup.inventory({'supported': True, 'reasons': [], 'model': 'Raspberry Pi 3 Model B+', 'os': 'Debian 13 (Trixie)', 'architecture': 'aarch64', 'user': 'audio', 'disks': {'blockdevices': [{'name': 'sda', 'tran': 'usb', 'children': [{'name': 'sda1', 'fstype': 'vfat', 'uuid': 'ABCD-1234', 'mountpoints': []}]}]}})
+    setup.install_button.setEnabled(setup.checked)
+    setup.music.setChecked(True)
+    setup.web.setChecked(True)
+    setup.cockpit.setChecked(True)
+    setup.show()
+    app.processEvents()
+    capture(setup, output / 'new-pi-setup.png')
+    setup.hide()
     print('Captured desktop and music windows with fictional data only.')
 
 

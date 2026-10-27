@@ -50,6 +50,7 @@ def main():
     parser.add_argument('--user', required=True)
     parser.add_argument('--uuid', required=True)
     parser.add_argument('--hostname', required=True)
+    parser.add_argument('--no-web', action='store_true', help='Install MPD/UPnP only, without a web listener')
     args = parser.parse_args()
     if os.geteuid() != 0:
         parser.error('Administrator authentication is required')
@@ -71,37 +72,42 @@ def main():
     home, uid, gid = Path(user.pw_dir), user.pw_uid, user.pw_gid
     if home.is_symlink() or any(c.isspace() or c in '"%' for c in str(home)):
         parser.error('Unsupported audio home path')
-    for unit in ('mpd.service', 'mpd.socket', 'mympd.service', 'nginx.service'):
+    distribution_units = ['mpd.service', 'mpd.socket'] + ([] if args.no_web else ['mympd.service', 'nginx.service'])
+    for unit in distribution_units:
         if subprocess.run(['systemctl', 'is-active', '--quiet', unit], check=False).returncode == 0:
             parser.error('Distribution music/web services already active; integrate manually instead')
     # Prevent distribution postinst scripts from exposing default listeners.
-    for unit in ('mpd.service', 'mpd.socket', 'mympd.service', 'nginx.service'):
+    for unit in distribution_units:
         run('systemctl', 'mask', '--now', unit)
     run('apt-get', 'update')
-    run('apt-get', 'install', '-y', '--no-install-recommends', 'mpd', 'mpc', 'nginx', 'apache2-utils', 'openssl', 'gnupg', 'ca-certificates')
-    with tempfile.TemporaryDirectory(prefix='pi-music-key-') as temp:
-        key = Path(temp) / 'key.asc'
-        key.write_bytes(urllib.request.urlopen(REPO + 'Release.key', timeout=30).read(65536))
-        info = subprocess.check_output(['gpg', '--batch', '--show-keys', '--with-colons', str(key)], text=True)
-        fingerprints = [line.split(':')[9] for line in info.splitlines() if line.startswith('fpr:')]
-        if not fingerprints or fingerprints[0] != FINGERPRINT:
-            raise ValueError('myMPD repository signing key fingerprint mismatch')
-        run('gpg', '--batch', '--yes', '--dearmor', '--output', '/usr/share/keyrings/pi-audio-mympd.gpg', str(key))
-    os.chmod('/usr/share/keyrings/pi-audio-mympd.gpg', 0o644)
-    write('/etc/apt/sources.list.d/pi-audio-mympd.list', f'deb [signed-by=/usr/share/keyrings/pi-audio-mympd.gpg] {REPO} ./\n')
-    write('/etc/apt/preferences.d/pi-audio-mympd', 'Package: mympd\nPin: origin "download.opensuse.org"\nPin-Priority: 500\n\nPackage: *\nPin: origin "download.opensuse.org"\nPin-Priority: -1\n')
-    run('apt-get', 'update')
-    run('apt-get', 'install', '-y', '--no-install-recommends', 'mympd')
-    write('/etc/apt/apt.conf.d/53pi-audio-mympd', 'Unattended-Upgrade::Origins-Pattern { "origin=obs://build.opensuse.org/home:jcorporation/Debian_13,codename=Debian_13"; };\n')
+    run('apt-get', 'install', '-y', '--no-install-recommends', 'mpd', 'mpc')
+    if not args.no_web:
+        run('apt-get', 'install', '-y', '--no-install-recommends', 'nginx', 'apache2-utils', 'openssl', 'gnupg', 'ca-certificates')
+    if not args.no_web:
+        with tempfile.TemporaryDirectory(prefix='pi-music-key-') as temp:
+            key = Path(temp) / 'key.asc'
+            key.write_bytes(urllib.request.urlopen(REPO + 'Release.key', timeout=30).read(65536))
+            info = subprocess.check_output(['gpg', '--batch', '--show-keys', '--with-colons', str(key)], text=True)
+            fingerprints = [line.split(':')[9] for line in info.splitlines() if line.startswith('fpr:')]
+            if not fingerprints or fingerprints[0] != FINGERPRINT:
+                raise ValueError('myMPD repository signing key fingerprint mismatch')
+            run('gpg', '--batch', '--yes', '--dearmor', '--output', '/usr/share/keyrings/pi-audio-mympd.gpg', str(key))
+        os.chmod('/usr/share/keyrings/pi-audio-mympd.gpg', 0o644)
+        write('/etc/apt/sources.list.d/pi-audio-mympd.list', f'deb [signed-by=/usr/share/keyrings/pi-audio-mympd.gpg] {REPO} ./\n')
+        write('/etc/apt/preferences.d/pi-audio-mympd', 'Package: mympd\nPin: origin "download.opensuse.org"\nPin-Priority: 500\n\nPackage: *\nPin: origin "download.opensuse.org"\nPin-Priority: -1\n')
+        run('apt-get', 'update')
+        run('apt-get', 'install', '-y', '--no-install-recommends', 'mympd')
+        write('/etc/apt/apt.conf.d/53pi-audio-mympd', 'Unattended-Upgrade::Origins-Pattern { "origin=obs://build.opensuse.org/home:jcorporation/Debian_13,codename=Debian_13"; };\n')
     try:
         music_gid = grp.getgrnam('pi-audio-music').gr_gid
     except KeyError:
         run('groupadd', '--system', 'pi-audio-music')
         music_gid = grp.getgrnam('pi-audio-music').gr_gid
-    try:
-        pwd.getpwnam('pi-audio-web')
-    except KeyError:
-        run('useradd', '--system', '--gid', 'pi-audio-music', '--home-dir', '/nonexistent', '--shell', '/usr/sbin/nologin', 'pi-audio-web')
+    if not args.no_web:
+        try:
+            pwd.getpwnam('pi-audio-web')
+        except KeyError:
+            run('useradd', '--system', '--gid', 'pi-audio-music', '--home-dir', '/nonexistent', '--shell', '/usr/sbin/nologin', 'pi-audio-web')
     mount = '/srv/pi-audio-music'
     if Path(mount).is_symlink():
         raise ValueError('Refusing a symlink music mount')
@@ -165,6 +171,17 @@ ProtectSystem=strict
 ReadWritePaths={state} /var/lib/pi-audio-playlists
 PrivateTmp=yes
 ''' + common + '[Install]\nWantedBy=multi-user.target\n')
+    if args.no_web:
+        for source, target, mode in [('pi_music.py', 'pi-music', '755'), ('pi_upnp.py', 'pi_upnp.py', '644')]:
+            run('install', '-o', 'root', '-g', 'root', '-m', mode, str(Path(__file__).parent / source), '/usr/local/lib/pi-audio-tray/' + target)
+        directory('/etc/systemd/system/pi-audio-mpd.service.d')
+        write('/etc/systemd/system/pi-audio-mpd.service.d/volume.conf', '[Service]\nExecStartPost=/usr/bin/mpc -h /run/pi-audio-mpd/socket volume 100\n')
+        run('systemctl', 'daemon-reload')
+        run('systemctl', 'enable', '--now', 'pi-audio-mpd.service')
+        env = dict(os.environ, XDG_RUNTIME_DIR=f'/run/user/{uid}')
+        run('runuser', '-u', user.pw_name, '--', 'mpc', '-h', '/run/pi-audio-mpd/socket', 'update', env=env)
+        print('MPD installed without a web listener. Playback remains stopped.')
+        return
     write('/etc/systemd/system/pi-audio-mympd.service', '''[Unit]
 Description=Pi Audio isolated web music controller
 After=pi-audio-mpd.service

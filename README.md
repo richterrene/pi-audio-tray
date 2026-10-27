@@ -40,7 +40,7 @@ source when switching.
 | Legacy backend | Raspotify / librespot with BlueALSA; Spotify can refuse audio keys even when the service is active |
 | Network | SSH access to the Pi; Bluetooth devices must be in radio range; Spotify discovery requires the local network |
 | SSH authentication | Existing private key or SSH agent; SSH password prompts are not supported |
-| Pi permissions | Read-only status uses normal SSH; setup and pairing require noninteractive sudo for the documented helper commands |
+| Pi permissions | Read-only status uses normal SSH; the fresh-Pi wizard accepts a one-time sudo password; runtime pairing uses exact sudo rules |
 | Spotify | Each Soloist user needs their own API key; Spotify requires Premium to create it |
 | Development | Python 3.12+, pinned dependencies in `requirements.txt`; AppImage builds additionally need squashfs-tools |
 
@@ -50,15 +50,14 @@ not established. Release packages are built and smoke-tested on Ubuntu 24.04;
 interactive desktop use has been tested on the Ubuntu version listed above. Bluetooth audio after migration should be tested
 on each deployment; service readiness alone does not prove audible playback.
 
-For a new receiver, follow [Pi setup](docs/PI_SETUP.md) before using the tray.
-The app's **Set up / update Pi helper** installs the status/pairing helper only;
-it does not install the complete audio stack. [Security model, permissions, incident recovery and audit checks](SECURITY.md)
+For a fresh receiver, use **Set up a new Pi…** over SSH. The [new-Pi wizard guide](docs/NEW_PI_SETUP.md) covers prerequisites, component choices and recovery. The wizard targets ARM64 Pi OS / Debian 13 and is a **preview pending a real blank-Pi installation test**. It refuses existing audio installations. **Update Pi helper…** remains available for existing receivers; [manual Pi setup](docs/PI_SETUP.md) covers upgrades. [Security model, permissions, incident recovery and audit checks](SECURITY.md)
 explain key handling and privileged operations. Existing installations should
 follow the [0.3 upgrade steps](docs/PI_SETUP.md#upgrading-an-existing-installation);
 updating the desktop package alone does not replace Pi-side maintenance scripts.
 
 ## Features
 
+- Fresh-Pi setup wizard with optional music/web services and Cockpit; [preview limits](docs/NEW_PI_SETUP.md).
 - Pi reachability, Soloist/Raspotify service state, Bluetooth power, audio services,
   connected device names, and pairing state.
 - Pi temperature, aggregate CPU usage, 1/5/15-minute load, memory, root-disk use,
@@ -105,11 +104,17 @@ device status indicates a connection, not proof of current audio playback.
 
 ## Screenshots
 
-These screenshots show the current desktop UI (0.6.1), rendered from the actual
+These screenshots show the current desktop UI (0.7.0), rendered from the actual
 Linux/Qt widgets with **fictional demo connection details and music metadata**. No real
 account, device address, SSH key, or Soloist API key is shown. macOS uses its
 native window and menu-bar presentation. Windows uses its system tray; see the
 platform notes for native validation limits.
+
+### New Pi setup (preview)
+
+<img src="assets/screenshots/new-pi-setup.png" alt="New Pi setup wizard with optional MPD, HTTPS player, system updates and Cockpit, using fictional connection data" width="680">
+
+See the [setup guide](docs/NEW_PI_SETUP.md) before provisioning a fresh receiver.
 
 ### Receiver status
 
@@ -197,13 +202,20 @@ its window. Initial builds are ad-hoc signed, **not Developer ID signed or
 notarized**. See [macOS setup and signing](docs/MACOS.md) before downloading.
 The Pi configuration and SSH permissions are the same as on Linux.
 
-Choose **Set up / update Pi helper** once. This installs `python3-dbus` and
-`python3-gi` from the Pi's apt repositories and a root-owned helper under
-`/usr/local/lib/pi-audio-tray/pi-helper`. The SSH account needs passwordless sudo
-for setup and pairing. No new sudo permissions are granted by this app.
-Raspberry Pi OS / Debian with BlueZ and one of the supported audio stacks already
-configured is required. This app does not silently migrate the underlying audio
-routing. The optional Pi-side service/configuration sources are in `pi/`.
+Choose **Set up a new Pi…** for a fresh, networked receiver. Check compatibility,
+select components, review the plan, and enter the Pi's sudo password in the masked
+field. Installation runs over verified SSH, with progress shown in the app.
+The base installs Soloist, PipeWire/WirePlumber Bluetooth audio, monitoring and
+daily Soloist updates. Optional components include MPD/USB/UPnP, the HTTPS web
+player, system updates with conditional reboots, process privacy, tray shutdown
+and loopback-only Cockpit. No SD card is flashed or storage formatted. You still
+need your own Soloist API key and must choose the correct audio output.
+See the [wizard guide](docs/NEW_PI_SETUP.md) for tested limits and credentials.
+
+**Update Pi helper…** retains the older helper-only installation path for already
+configured receivers. It requires existing administrative noninteractive sudo;
+the narrow runtime rules do not permit helper replacement. It does not migrate
+Raspotify/BlueALSA, reinstall the audio stack or grant additional sudo permissions.
 
 ## Spotify Soloist
 

@@ -64,8 +64,10 @@ access to the fixed Pi helper. Update checks start a fixed root-owned systemd
 service. Do not make helpers or their parent directories writable by ordinary
 users. Do not grant passwordless sudo to a script in a writable checkout.
 
-The app does not create sudo rules. If restricting a user after administrative
-setup, grant only the exact required commands in a sudoers file validated with
+The fresh-Pi wizard installs the exact pairing/update rules below and, only if
+selected, the shutdown rule. It validates them with `visudo` before installation.
+It does not remove or narrow any pre-existing sudo grants (including Pi OS defaults).
+For manual setup, grant only the exact required commands in a sudoers file validated with
 `visudo`. For example, substitute your real Pi username for `AUDIO_USER`:
 
 ```sudoers
@@ -91,8 +93,10 @@ network loss cannot prove it either. Check the Pi’s activity LED before unplug
 Reconnecting power is required to start this receiver again.
 
 Read-only monitoring and Soloist key storage use the normal SSH user's rights.
-The GUI helper installer needs broader administrative rights during setup and
-will fail under the minimal runtime rules above.
+The legacy GUI helper updater needs broader administrative rights and fails
+under the minimal runtime rules above. The fresh-Pi wizard instead accepts a
+one-time masked sudo password over verified SSH; it does not save that password
+or grant installation privileges permanently. See [setup security and recovery](docs/NEW_PI_SETUP.md#security-and-recovery) and the [setup review](docs/SETUP_REVIEW_2026-10-27.md).
 
 The narrow rules do not make an untrusted SSH account safe: it can repeatedly
 open pairing windows or trigger update checks, consume resources, and interrupt

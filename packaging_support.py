@@ -10,8 +10,9 @@ ROOT = Path(__file__).resolve().parent
 def prepare_source(work):
     source = work / 'src'
     source.mkdir()
-    for name in ('app.py', 'core.py', 'platform_support.py', 'music_ui.py', 'network_ui.py', 'ui_style.py', 'pi_music.py', 'pi_upnp.py', 'pi_helper.py', 'version.py', 'LICENSE', 'THIRD_PARTY.md'):
+    for name in ('app.py', 'core.py', 'platform_support.py', 'music_ui.py', 'network_ui.py', 'ui_style.py', 'pi_music.py', 'pi_upnp.py', 'pi_helper.py', 'version.py', 'setup_ui.py', 'setup_plan.py', 'provision.py', 'LICENSE', 'THIRD_PARTY.md'):
         shutil.copy2(ROOT / name, source / name)
+    shutil.copytree(ROOT / 'pi', source / 'pi', ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
     (source / 'assets').mkdir()
     shutil.copy2(ROOT / 'assets/pi-audio-tray.svg', source / 'assets/pi-audio-tray.svg')
     licenses = source / 'licenses'
