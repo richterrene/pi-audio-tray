@@ -1,11 +1,8 @@
-import contextlib
 import http.client
-import importlib.util
 import os
 from pathlib import Path
 import re
 import socket
-import subprocess
 import tempfile
 import threading
 import time
@@ -172,7 +169,9 @@ class LoginHTTP(unittest.TestCase):
     @unittest.skipUnless(Path('/usr/bin/htpasswd').exists(), 'Apache verifier is installed on the Pi/security CI')
     def test_real_apache_hash_verification_uses_stdin_and_preserves_hash_file(self):
         password = 'disposable-test-password-only'
-        hashed = subprocess.check_output(['/usr/bin/htpasswd', '-ni', '-5', '-r', '10000', 'music'], input=password + '\n', text=True)
+        # Public disposable fixture, not a real credential. Ubuntu 24.04's older
+        # verifier reads this format but lacks Debian 13's -5/-r generation flags.
+        hashed = 'music:$6$rounds=10000$x4Ymx4HwE0Z27Rji$URKjFaAlYED/IqQcX98OTeCXK/8ZrNhSt75Gocov5dcxIwingn.NVtQ4EcKFI.nZjisRMchZ5hMJFhVreZhnn1\n'
         self.store.password_file.write_text(hashed)
         csrf, jar = self.form()
         status, _, _ = self.request('/login', 'POST', {'username': 'music', 'password': password, 'csrf': csrf, 'remember': 'yes'}, jar)
