@@ -19,7 +19,8 @@ affiliated with Spotify or Raspberry Pi.
 
 The optional **Music…** window browses a Pi-attached library and controls its
 MPD queue and volume. A mobile-friendly myMPD web player can share the same queue
-over authenticated HTTPS. This requires a separate opt-in Pi setup; see
+over authenticated HTTPS, with a remembered browser login. HTTP port 80 can
+redirect to standard HTTPS, avoiding an explicit port in the URL. This requires a separate opt-in Pi setup; see
 [requirements, installation, certificate trust and security](docs/LOCAL_MUSIC.md).
 The supplied installer targets Debian/Raspberry Pi OS 13 with PipeWire and a
 FAT32 USB drive. Spotify/Bluetooth and local playback can mix; pause the previous

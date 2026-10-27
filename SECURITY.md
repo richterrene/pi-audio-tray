@@ -352,3 +352,48 @@ revoke already queued or saved stream URLs. No automatic background discovery,
 network library indexing, share passwords, UPnP subscriptions or remote media-server
 control actions are implemented. Compatibility limits are documented in
 [Local and network music](docs/LOCAL_MUSIC.md#upnp--dlna-music-servers-06).
+
+## Persistent browser login and standard web ports
+
+The [dated web-login review](docs/WEB_LOGIN_REVIEW_2026-10-27.md) records the
+implementation, validation and remaining boundaries.
+
+The optional web-login migration replaces HTTP Basic Auth with a form and a
+90-day remembered session (or a nonpersistent cookie with a 12-hour server
+limit). Cookies use the `__Host-` prefix, Secure, HttpOnly, SameSite=Lax and
+Path=/ without Domain. Tokens contain 256 random bits; SQLite stores only SHA-256
+hashes, expiry and the password-hash fingerprint. Changing the hash invalidates
+old sessions; logout deletes this/all stored sessions. Session count is bounded
+to 128. Private state survives service/Pi restarts. No credential/token appears
+in URLs, argv, localStorage or application access logs. The existing high-entropy
+password and SHA-512-crypt hash remain in use; verification uses the installed
+Apache verifier with password on stdin. A new session records the hash fingerprint
+from before verification so concurrent password rotation cannot bless an old
+password with the new credential fingerprint.
+
+nginx authenticates UI, API, artwork and WebSocket handshakes with auth_request;
+the verifier listens only on a group-restricted Unix socket and runs as a separate
+non-login account without audio-group membership, home access or capabilities.
+Password/config files remain root-owned. Browser password submissions require an
+allowlisted HTTPS Origin and a matching random, host-only secure form cookie and
+hidden field. State-changing myMPD requests retain the existing Origin check and
+Lax cookie boundary (cross-site POSTs do not carry it). nginx limits login routes, and the verifier limits failed
+attempts per address (ten/ten minutes), form size, request time, processes/threads
+and stored attempt entries. These are bounded home-network protections, not a
+complete hostile-LAN denial-of-service defense. No CORS allowance is added.
+
+Port 80 accepts navigation to allowlisted hostnames/IPs and redirects to HTTPS
+443; it does not serve a login form or accept POSTs. Private IPv4 access rules
+remain; no public IPv6 listener is added. HTTPS 8443 remains compatible. TLS and
+CA trust are unchanged. A one-day HSTS policy is used after a valid HTTPS visit;
+bookmark HTTPS for protection on first contact as an initial HTTP redirect can
+be interfered with by an active network attacker. Never forward these ports
+publicly. nginx strips Authorization and Cookie before forwarding to myMPD.
+
+The network-only worker removes myMPD caches, and player/login responses use
+no-store. Browser history/in-memory content is not a secure data eraser. Logout
+revokes future authenticated requests, not an existing upgraded WebSocket;
+notifications can continue until its connection closes. The optional myMPD PIN
+and trusted-local-user loopback bypass are separate, unchanged boundaries. Cookie
+theft by a compromised browser/OS or root remains outside this protection.
+See [deployment, expiry and rollback](docs/LOCAL_MUSIC.md#upgrade-an-existing-web-player-to-remembered-browser-login).

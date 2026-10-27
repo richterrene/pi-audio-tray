@@ -306,6 +306,7 @@ WantedBy=multi-user.target
     run('systemctl', 'enable', '--now', 'pi-audio-music-tls.timer')
     run('systemctl', 'enable', 'pi-audio-web.service')
     run('systemctl', 'restart', 'pi-audio-web.service')
+    run('/usr/bin/python3', '-I', str(Path(__file__).parent / 'install-web-login.py'), '--hostname', args.hostname)
     print('Music services installed. Playback remains stopped. HTTPS login and CA are in the audio user private config directory.')
 
 
