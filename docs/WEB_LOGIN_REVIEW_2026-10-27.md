@@ -59,3 +59,14 @@ against an active network attacker. No independent audit is claimed.
 
 See [Security and privacy](../SECURITY.md#persistent-browser-login-and-standard-web-ports)
 and [deployment/rollback](LOCAL_MUSIC.md#upgrade-an-existing-web-player-to-remembered-browser-login).
+
+## Browser form-policy correction
+
+The initial login page used Referrer-Policy: no-referrer. Browsers may then submit
+a same-origin HTML form with Origin: null, which the origin check correctly
+rejects. The policy is now same-origin, preserving the form's trusted origin;
+opaque/null origins remain rejected. A regression test covers both the response
+policy and rejection. A live in-memory test session survived the service restart
+used to apply the correction. Initial protocol probes supplied Origin explicitly,
+so they did not catch this browser-specific interaction; this limitation is
+recorded rather than presenting those probes as browser coverage.

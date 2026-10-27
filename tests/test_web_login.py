@@ -129,6 +129,15 @@ class LoginHTTP(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertIn('Sign out all browsers', body)
 
+    def test_form_policy_preserves_origin_and_opaque_origins_remain_rejected(self):
+        status, headers, _ = self.request('/login')
+        self.assertEqual(status, 200)
+        self.assertEqual(dict(headers)['Referrer-Policy'], 'same-origin')
+        csrf, jar = self.form()
+        with patch.object(login.subprocess, 'run') as verify:
+            self.assertEqual(self.request('/login', 'POST', {'csrf': csrf, 'password': 'test'}, jar, 'null')[0], 403)
+            verify.assert_not_called()
+
     def test_cross_origin_and_missing_or_mismatched_csrf_never_verify_password(self):
         csrf, jar = self.form()
         with patch.object(login.subprocess, 'run') as verify:

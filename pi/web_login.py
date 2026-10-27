@@ -135,7 +135,9 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header('Connection', 'close')
         self.send_header('X-Content-Type-Options', 'nosniff')
         self.send_header('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
-        self.send_header('Referrer-Policy', 'no-referrer')
+        # no-referrer can turn a browser's form POST Origin into "null", which
+        # our CSRF boundary correctly refuses. Preserve same-origin form origins.
+        self.send_header('Referrer-Policy', 'same-origin')
         for name, value in headers:
             self.send_header(name, value)
         self.end_headers()
