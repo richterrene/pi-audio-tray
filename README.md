@@ -20,7 +20,8 @@ affiliated with Spotify or Raspberry Pi.
 The optional **Music…** window browses a Pi-attached library and controls its
 MPD queue and volume. A mobile-friendly myMPD web player can share the same queue
 over authenticated HTTPS, with a remembered browser login. HTTP port 80 can
-redirect to standard HTTPS, avoiding an explicit port in the URL. This requires a separate opt-in Pi setup; see
+redirect to standard HTTPS, avoiding an explicit port in the URL. Enable it in the
+new-Pi wizard or follow the manual setup; see
 [requirements, installation, certificate trust and security](docs/LOCAL_MUSIC.md).
 The supplied installer targets Debian/Raspberry Pi OS 13 with PipeWire and a
 FAT32 USB drive. Spotify/Bluetooth and local playback can mix; pause the previous
@@ -50,10 +51,120 @@ not established. Release packages are built and smoke-tested on Ubuntu 24.04;
 interactive desktop use has been tested on the Ubuntu version listed above. Bluetooth audio after migration should be tested
 on each deployment; service readiness alone does not prove audible playback.
 
-For a fresh receiver, use **Set up a new Pi…** over SSH. The [new-Pi wizard guide](docs/NEW_PI_SETUP.md) covers prerequisites, component choices and recovery. The wizard targets ARM64 Pi OS / Debian 13 and is a **preview pending a real blank-Pi installation test**. It refuses existing audio installations. **Update Pi helper…** remains available for existing receivers; [manual Pi setup](docs/PI_SETUP.md) covers upgrades. [Security model, permissions, incident recovery and audit checks](SECURITY.md)
-explain key handling and privileged operations. Existing installations should
-follow the [0.3 upgrade steps](docs/PI_SETUP.md#upgrading-an-existing-installation);
-updating the desktop package alone does not replace Pi-side maintenance scripts.
+Existing receivers can use **Update Pi helper…** or the
+[manual upgrade instructions](docs/PI_SETUP.md#upgrading-an-existing-installation).
+Updating the desktop package alone does not replace Pi-side maintenance scripts.
+See the [security model and runtime permissions](SECURITY.md) before granting
+administrative access.
+
+### Which Raspberry Pis are supported?
+
+**This is not a promise of support for every Raspberry Pi.** The running receiver
+has been tested on a **Pi 3 Model B+, 1 GB RAM, 64-bit Debian/Raspberry Pi OS 13,
+built-in headphone output**. The new-Pi installer itself still needs a complete
+first-install test on spare hardware.
+
+| Board / configuration | Current status |
+| --- | --- |
+| Pi 3 Model B+ with the tested configuration above | Existing receiver/audio deployment tested; fresh-install wizard remains preview |
+| Other ARM64 Pis, including Pi 4 / 5 and keyboard / Compute Module variants | Candidates with the required OS, audio hardware and Bluetooth adapter; no model-wide validation or guarantee |
+| Zero 2 W | 64-bit CPU, but only 512 MB RAM; the full web/Cockpit/update stack has not been validated on it |
+| Any Pi running a 32-bit userspace (`armhf`) | Unsupported by this ARM64 installer/updater, even on a 64-bit-capable board; see the mixed-kernel caveat below |
+| Pi 1 and original Zero / Zero W / Zero WH | 32-bit hardware; outside this installer's scope |
+| Pi 2 | Revision-dependent hardware; no compatibility claim without validating the revision, OS and peripherals |
+| Other Linux distributions, older/newer Debian versions, or non-Pi ARM boards | Outside the fresh-install wizard's current Debian/Pi OS 13 ARM64 target |
+
+The architecture limit belongs to **this installer/updater**. Upstream
+[Soloist also offers ARMv7 support](https://github.com/spotify/soloist#requirements);
+that does not make our ARM64 setup work on 32-bit systems. Zero-family CPU and
+memory specifications are in Raspberry Pi's [model documentation](https://www.raspberrypi.com/documentation/computers/zero.html).
+
+Hardware and deployment caveats:
+
+- **A 64-bit kernel is not enough.** Raspberry Pi OS can combine a 64-bit kernel
+  with 32-bit userspace. The 0.7.0 preview checks the reported kernel architecture,
+  so that mixed configuration can pass its check despite being unsupported.
+  Choose the actual **64-bit OS image** and verify `dpkg --print-architecture`
+  returns **`arm64`** on the Pi before installation; `uname -m` alone is insufficient.
+  Raspberry Pi documents this distinction in its [kernel guide](https://www.raspberrypi.com/documentation/computers/linux_kernel.html).
+- **Audio output varies.** Pi 5 has no analogue headphone output; use suitable
+  HDMI/USB audio or a configured DAC/HAT. The wizard selects an existing PipeWire
+  sink; it does not configure HAT drivers, device-tree overlays or HDMI/EDID quirks.
+  See Raspberry Pi's [audio options](https://pip-assets.raspberrypi.com/categories/1259-audio-camera-and-display/documents/RP-008124-WP/Choosing-an-Audio-option).
+- **Bluetooth needs a working controller.** Boards/modules without an enabled
+  radio need a compatible adapter before setup. The base setup always configures
+  Bluetooth; it does not offer a Bluetooth-free install. Its profile receives
+  audio **from a phone into the Pi**; Bluetooth-speaker output is not configured.
+- **Resources and power need checking.** 1 GB RAM is the tested configuration,
+  not a measured minimum. Available storage, large MPD libraries, package updates,
+  USB power needs and cooling depend on the board and selected components.
+- **Discovery and HTTPS depend on the network/client.** Guest isolation, VLANs,
+  multicast filtering, firewalls, VPNs or missing `.local` resolution can prevent
+  discovery/access. Trust the generated CA on each browser/phone separately.
+- **The check is not a hardware certification.** It checks OS, architecture,
+  account and conflicting setup, and lists USB devices. It does not prove radio,
+  DAC, memory capacity, thermal stability or audible playback. Test Spotify,
+  Bluetooth, MPD and reboot persistence on each new deployment.
+
+## Set up a new Pi (0.7.0 preview)
+
+The wizard is available in the **[0.7.0 preview release](https://github.com/richterrene/pi-audio-tray/releases/tag/v0.7.0)**
+for Linux, Windows and both Mac architectures. GitHub's latest stable release
+may be older and lack the wizard. **A complete installation on a spare blank Pi
+has not yet been tested.** Automated installer fixtures and native desktop
+build/smoke checks pass; they do not establish working audio on every board.
+
+1. Flash **Raspberry Pi OS Lite / Debian 13 Trixie, 64-bit ARM64**. Configure
+   networking, a normal administrator account and SSH public-key access, then
+   boot the Pi. Flashing the card and initial network setup happen outside the app.
+2. In tray **Settings**, enter the Pi host, SSH username and private-key filename
+   or use your SSH agent. Verify the Pi's SSH fingerprint independently when
+   prompted. SSH login passwords are unsupported; the later **sudo password**
+   prompt is separate. The Pi needs internet access to install packages.
+3. Choose **Set up a new Pi… → Check Pi**, select components, and enter the Pi
+   DNS name used for its web certificate. Review Spotify's Soloist terms and
+   confirm the download choice.
+4. Enter the Pi user's sudo password in the masked field, choose **Review and
+   install…**, and confirm the plan. The password is sent over verified SSH and
+   is not saved. Keep the connection and app open until installation completes.
+5. Finish with **Refresh audio outputs → Use output** and **Set Soloist API key…**.
+   Supply your own key from Spotify; no personal keys or existing Pi credentials
+   are bundled. Lower your amplifier before the first playback test: MPD and
+   Soloist player defaults are 100%, while hardware/master volume stays unchanged.
+
+The base installs **Soloist, PipeWire/WirePlumber, BlueZ Bluetooth receiving,
+Avahi and monitoring/pairing helpers**. Audio starts at boot without an SSH
+session; Bluetooth pairing/discovery starts disabled. Soloist updates are
+enabled daily even if system updates are deselected.
+
+| Component | Default | What it configures |
+| --- | --- | --- |
+| System updates | On | Trixie package updates around 03:00 and a conditional 05:30 reboot, in the **Pi's local timezone**; maintenance timers are armed after setup verifies |
+| Process privacy | On | Persistent `hidepid=2` to hide other accounts' process details, including Soloist key arguments; root and the audio account retain access |
+| Tray shutdown | On | Exact sudo permission for graceful Pi poweroff |
+| MPD / USB / UPnP | Off | Read-only USB library, shared playback queue and desktop UPnP browsing; MPD uses a private Unix socket |
+| HTTPS phone player | Off | Requires MPD; remembered cookie login on HTTPS 443/8443, HTTP 80 redirect, a local CA and automatic certificate renewal |
+| Cockpit management | Off | Loopback-only `127.0.0.1:9090`; connect through an SSH tunnel, not a public management port |
+
+MPD setup currently needs a **FAT32 USB filesystem containing a `Music/`
+directory**. Other filesystems and UPnP-only/MPD-without-USB setup are not offered
+by this first wizard. No storage is formatted. Existing receiver installations
+and custom audio configurations are refused; Raspotify/BlueALSA migration is manual.
+
+The web player gets a **new random password** for username `music`. Retrieve
+`~/.config/pi-audio-tray/music-web-login.txt` and the public `music-ca.crt` over
+verified SSH/SFTP, then follow the [certificate trust instructions](docs/LOCAL_MUSIC.md#https-and-login)
+on each computer or phone. CA import is not automatic; never copy its private key.
+Cockpit uses the Pi account credentials and needs an SSH tunnel; the tray does
+not yet manage that tunnel or create a Cockpit password.
+
+Installation is **not transactional**: completed changes remain after a failure.
+An incomplete run can be retried with the identical plan after an administrator
+checks the root-private log/state; completed installations cannot be overwritten.
+The wizard validates narrow runtime sudo rules but does not remove any broader
+sudo privileges already granted by the OS. See the
+[complete setup and recovery guide](docs/NEW_PI_SETUP.md) and
+[setup security review](docs/SETUP_REVIEW_2026-10-27.md).
 
 ## Features
 
@@ -114,7 +225,8 @@ platform notes for native validation limits.
 
 <img src="assets/screenshots/new-pi-setup.png" alt="New Pi setup wizard with optional MPD, HTTPS player, system updates and Cockpit, using fictional connection data" width="680">
 
-See the [setup guide](docs/NEW_PI_SETUP.md) before provisioning a fresh receiver.
+This demo selects the optional components; their actual defaults are listed
+above. See the [setup guide](docs/NEW_PI_SETUP.md) before provisioning a fresh receiver.
 
 ### Receiver status
 
@@ -167,11 +279,13 @@ closes only the tray application; **Shut down Pi…** powers off the receiver.
 
 ### Linux
 
-Download the x86_64 AppImage, make it executable, and launch it:
+For the setup wizard, download the x86_64 AppImage from the
+[0.7.0 preview release](https://github.com/richterrene/pi-audio-tray/releases/tag/v0.7.0),
+make it executable, and launch it:
 
 ```sh
-chmod +x PiAudioTray-0.4.0-x86_64.AppImage
-./PiAudioTray-0.4.0-x86_64.AppImage --show
+chmod +x PiAudioTray-0.7.0-x86_64.AppImage
+./PiAudioTray-0.7.0-x86_64.AppImage --show
 ```
 
 Ubuntu's AppIndicator extension must be enabled for the tray icon. When no tray
@@ -188,7 +302,8 @@ Unknown host keys require explicit fingerprint approval; changed keys are reject
 
 ### Windows
 
-Download and fully extract `PiAudioTray-0.4.0-Windows-x86_64.zip`, then run
+Download and fully extract `PiAudioTray-0.7.0-Windows-x86_64.zip` from the
+[preview release](https://github.com/richterrene/pi-audio-tray/releases/tag/v0.7.0), then run
 **Pi Audio Tray.exe** inside the extracted folder. Keep `_internal` beside it.
 No Python installation is needed. The build is unsigned; see [Windows setup and
 security](docs/WINDOWS.md). Receiver configuration and shutdown/pairing permissions
@@ -196,21 +311,15 @@ are the same as on Linux/macOS.
 
 ### macOS
 
-Download the ZIP matching your Mac's architecture, extract it, and drag **Pi Audio
+Download the ZIP matching your Mac's architecture from the
+[preview release](https://github.com/richterrene/pi-audio-tray/releases/tag/v0.7.0),
+extract it, and drag **Pi Audio
 Tray.app** into Applications. The app lives in the menu bar; **Open status** shows
 its window. Initial builds are ad-hoc signed, **not Developer ID signed or
 notarized**. See [macOS setup and signing](docs/MACOS.md) before downloading.
 The Pi configuration and SSH permissions are the same as on Linux.
 
-Choose **Set up a new Pi…** for a fresh, networked receiver. Check compatibility,
-select components, review the plan, and enter the Pi's sudo password in the masked
-field. Installation runs over verified SSH, with progress shown in the app.
-The base installs Soloist, PipeWire/WirePlumber Bluetooth audio, monitoring and
-daily Soloist updates. Optional components include MPD/USB/UPnP, the HTTPS web
-player, system updates with conditional reboots, process privacy, tray shutdown
-and loopback-only Cockpit. No SD card is flashed or storage formatted. You still
-need your own Soloist API key and must choose the correct audio output.
-See the [wizard guide](docs/NEW_PI_SETUP.md) for tested limits and credentials.
+### Existing receivers
 
 **Update Pi helper…** retains the older helper-only installation path for already
 configured receivers. It requires existing administrative noninteractive sudo;
