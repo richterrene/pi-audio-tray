@@ -10,6 +10,10 @@ import sys
 import unittest
 from unittest.mock import Mock, patch
 from urllib.parse import urlencode
+import socketserver
+if not hasattr(socketserver, 'UnixStreamServer'):
+    raise unittest.SkipTest('Pi web service requires Unix sockets; exercised on Linux/macOS CI')
+
 from pi import web_login as login
 from pi import web_login_config as config
 

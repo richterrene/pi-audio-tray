@@ -49,6 +49,18 @@ internal engineering review, not an independent security certification.
   pauses monitoring and prevents close while its task runs. This cannot prevent
   forced termination, power loss or network interruption.
 
+## Static analysis triage
+
+The first CI dependency audit reports **zero known advisories**. Bandit flags the
+remote `/tmp` path and the local `NamedTemporaryFile(dir='/tmp')` as medium B108:
+the former uses an unpredictable 128-bit name, exclusive SFTP mkdir and mode
+700; the latter is exclusively created with mode 600, then handed only to the
+trusted audio account and removed. Neither reuses a predictable world-writable
+file. B110 is deliberate best-effort cleanup after SSH loss. Subprocess B404/B603
+findings refer to fixed argument arrays, bounded user/UUID/ID values and no shell;
+the administrator PATH is fixed, and inventory commands use absolute paths.
+No `shell=True` or unvalidated command construction is introduced.
+
 ## Validation and known limits
 
 137 automated tests pass locally (3 established platform/tool-dependent skips).
@@ -66,7 +78,9 @@ exceeded the old SSH output cap; filtering it on the Pi fixes that failure.
 No spare blank Pi was provisioned. Actual first-boot installation, physical
 Bluetooth/Spotify/MPD playback, power-cycle persistence, and hardware-specific
 routing remain required before promoting the wizard out of preview. The existing
-working receiver was not re-provisioned. Native macOS/Windows package builds are
+working receiver was not re-provisioned. Windows CI now explicitly skips the Pi-only Unix-socket web-service module
+before import (Windows lacks `socketserver.UnixStreamServer`); Linux/macOS still
+exercise it. Native macOS/Windows package builds are
 separate from an interactive first-install test on those platforms.
 
 The new-Pi guide documents prerequisites, trust, generated credentials,

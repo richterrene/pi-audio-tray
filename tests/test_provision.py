@@ -155,8 +155,8 @@ class InstallerStages(unittest.TestCase):
                     path.parent.mkdir(parents=True, exist_ok=True)
                     path.write_text(text)
             def check_output(args, **kwargs):
-                if args[0] == 'blkid': return 'vfat\n'
-                if args[0] == 'lsblk': return 'usb\n' if 'TRAN' in args else '/media/MUSIC\n'
+                if args[0] == '/usr/sbin/blkid': return 'vfat\n'
+                if args[0] == '/usr/bin/lsblk': return 'usb\n' if 'TRAN' in args else '/media/MUSIC\n'
                 raise AssertionError(args)
             original_read = Path.read_text
             def read_text(path, *args, **kwargs):

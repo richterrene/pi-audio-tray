@@ -31,12 +31,12 @@ def inventory():
         Path(user.pw_dir) / '.config/systemd/user/soloist.service') if p.exists() or p.is_symlink()]
     # Installed competitors are intentionally not migrated automatically.
     for package in ('raspotify', 'bluez-alsa-utils', 'mpd', 'mympd', 'nginx', 'cockpit-ws'):
-        check = subprocess.run(['dpkg-query', '-W', '-f=${Status}', package], capture_output=True, text=True, timeout=10)
+        check = subprocess.run(['/usr/bin/dpkg-query', '-W', '-f=${Status}', package], capture_output=True, text=True, timeout=10)
         if check.returncode == 0 and check.stdout == 'install ok installed':
             conflicts.append(package)
     if conflicts:
         reasons.append('Existing receiver or web services found; use manual setup / upgrades')
-    devices = subprocess.run(['lsblk', '-J', '-o', 'NAME,TYPE,FSTYPE,UUID,TRAN,MOUNTPOINTS'], capture_output=True, text=True, timeout=10)
+    devices = subprocess.run(['/usr/bin/lsblk', '-J', '-o', 'NAME,TYPE,FSTYPE,UUID,TRAN,MOUNTPOINTS'], capture_output=True, text=True, timeout=10)
     disks = json.loads(devices.stdout) if devices.returncode == 0 else {'blockdevices': []}
     return {'supported': not reasons, 'reasons': reasons, 'model': model,
         'os': release.get('PRETTY_NAME', ''), 'architecture': platform.machine(),

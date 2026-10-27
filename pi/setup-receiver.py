@@ -116,10 +116,10 @@ def main():
                     listener.bind(('127.0.0.1', port))
         if plan['music']:
             device = Path('/dev/disk/by-uuid') / plan['usb_uuid']
-            if not device.exists() or subprocess.check_output(['blkid', '-s', 'TYPE', '-o', 'value', str(device)], text=True).strip() != 'vfat':
+            if not device.exists() or subprocess.check_output(['/usr/sbin/blkid', '-s', 'TYPE', '-o', 'value', str(device)], text=True).strip() != 'vfat':
                 raise ValueError('Selected FAT32 USB drive is absent')
-            transports = subprocess.check_output(['lsblk', '-s', '-n', '-o', 'TRAN', str(device)], text=True).split()
-            mounts = subprocess.check_output(['lsblk', '-n', '-o', 'MOUNTPOINTS', str(device)], text=True).split()
+            transports = subprocess.check_output(['/usr/bin/lsblk', '-s', '-n', '-o', 'TRAN', str(device)], text=True).split()
+            mounts = subprocess.check_output(['/usr/bin/lsblk', '-n', '-o', 'MOUNTPOINTS', str(device)], text=True).split()
             if 'usb' not in transports or any(p == '/' or p.startswith('/boot') for p in mounts):
                 raise ValueError('Select a separate USB music drive, not boot or root storage')
         state = state or {'identity': identity, 'done': [], 'complete': False}
