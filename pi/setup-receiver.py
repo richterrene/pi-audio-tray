@@ -188,8 +188,7 @@ def main():
                 for name, dest in [('52pi-audio-upgrades', '/etc/apt/apt.conf.d/52pi-audio-upgrades'), ('needrestart.conf', '/etc/needrestart/conf.d/pi-audio.conf'), ('apt-daily-timer.conf', '/etc/systemd/system/apt-daily.timer.d/pi-audio.conf'), ('apt-upgrade-timer.conf', '/etc/systemd/system/apt-daily-upgrade.timer.d/pi-audio.conf'), ('reboot-if-needed.py', '/usr/local/lib/pi-audio-tray/reboot-if-needed'), ('pi-audio-reboot.service', '/etc/systemd/system/pi-audio-reboot.service'), ('pi-audio-reboot.timer', '/etc/systemd/system/pi-audio-reboot.timer')]:
                     install(name, dest, 0o755 if name.endswith('.py') else 0o644)
                 run('systemctl', 'daemon-reload')
-                run('systemctl', 'enable', '--now', 'apt-daily.timer', 'apt-daily-upgrade.timer', 'pi-audio-reboot.timer')
-                run('systemctl', 'restart', 'apt-daily.timer', 'apt-daily-upgrade.timer')
+
             stage('system updates and conditional 05:30 reboot', updates)
         if plan['music']:
             stage('MPD and selected music services', lambda: run('/usr/bin/python3', '-I', str(SOURCE / 'install-music.py'), '--user', account.pw_name, '--uuid', plan['usb_uuid'], '--hostname', plan['hostname'], *([] if plan['web'] else ['--no-web'])))
@@ -231,6 +230,10 @@ def main():
             run('systemctl', 'is-active', '--quiet', 'pi-audio-mpd.service')
         if plan['web']:
             run('systemctl', 'is-active', '--quiet', 'pi-audio-web.service', 'pi-audio-login.service', 'pi-audio-mympd.service')
+        # Arm automatic maintenance only after every selected component verifies.
+        if plan['updates']:
+            run('systemctl', 'enable', '--now', 'apt-daily.timer', 'apt-daily-upgrade.timer', 'pi-audio-reboot.timer')
+            run('systemctl', 'restart', 'apt-daily.timer', 'apt-daily-upgrade.timer')
         state['complete'] = True
         write(state_file, json.dumps(state), 0o600)
         emit('complete', 'Installed. Set your Soloist API key in Settings, then choose an audio output below.')

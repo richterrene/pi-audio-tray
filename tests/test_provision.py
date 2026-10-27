@@ -184,6 +184,9 @@ class InstallerStages(unittest.TestCase):
         self.assertIn('pairable off', files['/etc/systemd/system/pi-audio-bluetooth-privacy.service'][0])
         self.assertFalse(any('install-music.py' in ' '.join(c) for c in commands))
         self.assertFalse(any('cockpit-ws' in c for c in commands))
+        reboot_enable = next(i for i,c in enumerate(commands) if c[:3] == ('systemctl', 'enable', '--now') and 'pi-audio-reboot.timer' in c)
+        verify = next(i for i,c in enumerate(commands) if c[:3] == ('systemctl', 'is-active', '--quiet'))
+        self.assertGreater(reboot_enable, verify)
 
     def test_all_components_and_cockpit_listener(self):
         files, commands = self.exercise({**plan(), 'music': True, 'web': True,

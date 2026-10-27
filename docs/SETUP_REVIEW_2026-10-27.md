@@ -25,6 +25,9 @@ internal engineering review, not an independent security certification.
   Interrupted stages may rerun; completed installations cannot be overwritten.
   Installation is not transactional. Timeouts/disconnects require administrator
   inspection before retry; packages and mounts are never silently rolled back.
+- Scheduled system maintenance/reboot timers are armed only after selected
+  components pass service verification, so initial setup cannot schedule its
+  own reboot partway through package installation.
 - Installed runtime sudo grants are exact commands, validated with `visudo`.
   No installation permission is granted. Pre-existing sudo rules remain intact.
 - Bluetooth startup disables pairing/discovery; user-approved temporary pairing
