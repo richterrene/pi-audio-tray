@@ -40,8 +40,9 @@ is not implemented. Local music volume is separate from Spotify Connect volume.
 
 ## Opt-in Pi setup
 
-Read `pi/install-music.py`, `pi/renew-music-tls.py`, `pi_music.py` and `pi_upnp.py` before running
-an administrator installer. Back up the Pi first. This setup uses dedicated
+Read `pi/install-music.py`, `pi/renew-music-tls.py`, `pi_music.py`, `pi_upnp.py`,
+`pi/install-web-login.py`, `pi/web_login.py` and `pi/web_login_config.py` before
+running an administrator installer. Back up the Pi first. This setup uses dedicated
 `pi-audio-*` services and masks the distribution MPD, myMPD and nginx services so
 package installation does not start an unprotected default listener. Do not run
 it on a host already relying on those distribution services.
@@ -308,3 +309,32 @@ Keep the password-hash group/read permissions intact. Do not remove the login
 service while nginx still requires its auth socket: access deliberately fails
 closed. Existing Pi local users can still contact loopback myMPD directly, as
 before; this boundary assumes trusted local users and administrators.
+
+### Trust the CA on an Ubuntu desktop
+
+Import the **CA certificate** (`music-ca.crt`), not the server certificate or any
+private key. Verify its fingerprint against the Pi over your trusted SSH
+connection first. Trusting the CA lets automatically renewed server certificates
+remain valid. For system-wide Ubuntu clients:
+
+```sh
+sudo install -m 644 /path/to/music-ca.crt /usr/local/share/ca-certificates/pi-audio-local-ca.crt
+sudo update-ca-certificates
+```
+
+Chrome/Chromium-based browsers on Linux also use the NSS shared database. With
+`libnss3-tools` installed, import into the database your browser actually uses:
+
+```sh
+certutil -A -d "sql:$HOME/.pki/nssdb" -n "Pi Audio local CA" -t "C,," -i /path/to/music-ca.crt
+```
+
+Recent Chromium versions default to `~/.local/share/pki/nssdb` when the legacy
+`~/.pki/nssdb` does not already exist; use the appropriate existing path. Fully
+restart the browser afterward. Browser profiles/sandboxed packages may have
+separate stores; Firefox can import under Settings → Privacy & Security →
+Certificates → View Certificates → Authorities. This does not automatically
+change trust on phones or other computers.
+
+References: [Ubuntu certificate management](https://manpages.ubuntu.com/manpages/stonking/man8/update-ca-certificates.8.html),
+[Chromium Linux certificate management](https://chromium.googlesource.com/chromium/src/+/main/docs/linux/cert_management.md).
