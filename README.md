@@ -26,8 +26,6 @@ The supplied installer targets Debian/Raspberry Pi OS 13 with PipeWire and a
 FAT32 USB drive. Spotify/Bluetooth and local playback can mix; pause the previous
 source when switching.
 
-![Local music window with fictional demo tracks](assets/screenshots/local-music.png)
-
 ## Compatibility and requirements
 
 | Component | Tested / required |
@@ -107,18 +105,31 @@ device status indicates a connection, not proof of current audio playback.
 
 ## Screenshots
 
-The Linux/Qt interface below uses **fictional demo connection details**. No real
+These screenshots show the current desktop UI (0.6.1), rendered from the actual
+Linux/Qt widgets with **fictional demo connection details and music metadata**. No real
 account, device address, SSH key, or Soloist API key is shown. macOS uses its
 native window and menu-bar presentation. Windows uses its system tray; see the
 platform notes for native validation limits.
 
 ### Receiver status
 
-<img src="assets/screenshots/status.png" alt="Receiver status window showing Soloist, Bluetooth, pairing and automatic updates" width="560">
+<img src="assets/screenshots/status.png" alt="Receiver status window showing Soloist, Bluetooth, pairing and automatic updates" width="780">
 
 ### Connection and Soloist key settings
 
 <img src="assets/screenshots/settings.png" alt="Connection settings and buttons for securely setting or removing the Soloist API key" width="590">
+
+### Music library
+
+<img src="assets/screenshots/local-music.png" alt="Desktop music library with demo tracks, playback controls and the Network music button" width="780">
+
+### Shared playback queue
+
+<img src="assets/screenshots/music-queue.png" alt="Desktop queue showing fictional USB and network tracks in the same player" width="780">
+
+### UPnP network music
+
+<img src="assets/screenshots/network-music.png" alt="Desktop UPnP browser with a fictional enabled server and demo album tracks" width="760">
 
 ### Tray menu
 
@@ -130,7 +141,9 @@ platform notes for native validation limits.
 
 Regenerate these screenshots from the actual widgets using
 `python tools/generate_screenshots.py`; the script uses a temporary config
-directory and does not connect to a receiver.
+directory and does not connect to a receiver. The separate browser sign-in page
+belongs to the optional Pi web player; its screenshot is in the
+[web-player documentation](docs/LOCAL_MUSIC.md#https-and-login).
 
 ## Shutting down the receiver
 
@@ -322,5 +335,3 @@ albums, and add tracks to the same queue as USB music. Source browsing is on the
 desktop; queued tracks also appear in the phone web player. The server must stay
 awake. No music copy or Samba mount is needed. Requires the matching updated Pi
 music helper. See [compatibility and setup](docs/LOCAL_MUSIC.md#upnp--dlna-music-servers-06).
-
-![UPnP server and album browser using fictional data](assets/screenshots/network-music.png)
