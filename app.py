@@ -275,7 +275,8 @@ class TrayApp(QWidget):
         self.menu.addAction('Open status', self.open_window)
         self.menu.addAction(symbol('refresh'), 'Refresh now', self.refresh)
         self.menu.addAction(symbol('settings'), 'Settings…', self.settings)
-        self.menu.addAction('Set up / update Pi helper…', self.setup)
+        self.menu.addAction('Set up a new Pi…', self.setup)
+        self.menu.addAction('Update Pi helper…', self.update_helper)
         soloist_menu = self.menu.addMenu('Spotify Soloist')
         soloist_menu.addAction('Set / replace API key…', self.soloist_key)
         soloist_menu.addAction('Remove API key…', self.remove_key)
@@ -334,6 +335,9 @@ class TrayApp(QWidget):
     def update_polling(self, refresh=False):
         if not hasattr(self, 'timer'):
             return
+        if 'provision' in self.busy:
+            self.timer.stop()
+            return
         seconds = self.config['poll_seconds'] if self.details_needed() else max(60, self.config['poll_seconds'])
         interval = seconds * 1000
         if not self.timer.isActive():
@@ -365,6 +369,8 @@ class TrayApp(QWidget):
             self.update_polling(refresh=True)
 
     def refresh(self, force_details=False):
+        if 'provision' in self.busy:
+            return
         if force_details:
             self.details_requested = True
         self.update_polling()
@@ -551,6 +557,29 @@ class TrayApp(QWidget):
             self.refresh()
 
     def setup(self):
+        if not self.config['host'] or not self.config['username']:
+            self.settings()
+            return
+        if self.session or self.busy - {'poll'} or self.power_state:
+            plain_information(self, 'Pi operation active', 'Finish the current Pi operation before setup.')
+            return
+        from setup_ui import SetupDialog
+        self.busy.add('provision')
+        if self.music_window is not None:
+            self.music_window.hide()
+        self.timer.stop()
+        dialog = SetupDialog(self.config, self)
+        try:
+            dialog.exec()
+            if dialog.installed_plan and dialog.installed_plan['web']:
+                self.config['music_web_url'] = 'https://' + dialog.installed_plan['hostname'] + '/'
+                save_config(self.config)
+        finally:
+            self.busy.discard('provision')
+            self.update_polling()
+            self.refresh()
+
+    def update_helper(self):
         if not self.config['host']:
             self.settings()
             return
@@ -725,6 +754,14 @@ def main():
     if '--self-test' in sys.argv:
         from PySide6.QtCore import qVersion
         assert not icon().isNull()
+        import provision
+        from setup_ui import SetupDialog
+        for name in provision.PI_FILES:
+            assert (provision.ROOT / 'pi' / name).is_file(), name
+        for name in provision.TOP_FILES:
+            assert (provision.ROOT / name).is_file(), name
+        setup_check = SetupDialog({'host': '', 'username': ''})
+        setup_check.deleteLater()
         previous = os.environ.get('XDG_CONFIG_HOME')
         try:
             with tempfile.TemporaryDirectory(prefix='pi-audio-self-test-') as folder:

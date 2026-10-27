@@ -1,5 +1,8 @@
 # Setting up a receiver
 
+For a fresh ARM64 Pi, the desktop now provides a [guided remote setup](NEW_PI_SETUP.md).
+The manual instructions below remain useful for upgrades and custom installations.
+
 These instructions target **64-bit Raspberry Pi OS / Debian 13 Trixie** on an
 ARM64 Pi. They are intended for an administrator on a trusted home network.
 Commands run on the Pi as its normal SSH user, from a copy of this repository.
@@ -171,8 +174,8 @@ persisting it. Add `hidepid=2` to the existing `proc` entry’s options in `/etc
 (or add a proc entry if absent); keep only one entry for `/proc`. Back up fstab
 first. Revert the live change with `sudo mount -o remount,hidepid=0 /proc` and
 remove that option from fstab if monitoring tools are affected. This does not hide
-the key from root or the audio account. It is an administrator opt-in; the tray app
-does not change mount policy.
+the key from root or the audio account. It is an administrator opt-in; the fresh-Pi wizard offers it as a reviewed
+component choice, while ordinary monitoring never changes mount policy.
 
 
 ## Optional tray shutdown

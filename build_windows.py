@@ -58,7 +58,7 @@ def main():
         create_icon(source, icon)
         subprocess.run([sys.executable, '-m', 'PyInstaller', '--noconfirm', '--clean',
             '--name', 'Pi Audio Tray', '--onedir', '--windowed', '--icon', str(icon),
-            '--add-data', 'pi_helper.py:.', '--add-data', 'pi_music.py:.', '--add-data', 'pi_upnp.py:.', '--add-data', 'LICENSE:.',
+            '--add-data', 'pi:pi', '--add-data', 'setup_plan.py:.', '--add-data', 'pi_helper.py:.', '--add-data', 'pi_music.py:.', '--add-data', 'pi_upnp.py:.', '--add-data', 'LICENSE:.',
             '--add-data', 'THIRD_PARTY.md:.', '--add-data', 'licenses:licenses',
             '--add-data', 'assets/pi-audio-tray.svg:assets',
             '--distpath', str(work / 'frozen'), '--workpath', str(work / 'pyinstaller'),
