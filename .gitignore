@@ -17,3 +17,6 @@ soloist-user
 *.pfx
 *.mobileprovision
 *.provisionprofile
+
+# Optional local virtual-Pi disk cache (default is outside the repository).
+.virtual-lab/

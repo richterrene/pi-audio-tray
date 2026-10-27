@@ -93,6 +93,24 @@ class PlanTests(unittest.TestCase):
         self.assertIn('Requires Debian / Raspberry Pi OS 13 Trixie', data['reasons'])
         self.assertTrue(data['conflicts'])
 
+    @unittest.skipUnless(sys.platform == 'linux', 'Linux receiver inventory')
+    def test_64bit_kernel_with_32bit_userspace_is_rejected(self):
+        probe = load('probe_userspace', ROOT / 'pi/setup-probe.py')
+        def read(path):
+            return 'ID=debian\nVERSION_ID="13"\n' if str(path) == '/etc/os-release' else 'Raspberry Pi 3 Model B\0'
+        def run(args, **kwargs):
+            if args[0] == '/usr/bin/dpkg':
+                return types.SimpleNamespace(returncode=0, stdout='armhf\n')
+            return types.SimpleNamespace(returncode=1, stdout='')
+        with patch.object(probe.Path, 'read_text', read), patch.object(probe.Path, 'is_dir', return_value=True), patch.object(probe.platform, 'machine', return_value='aarch64'), patch.object(probe.subprocess, 'run', side_effect=run), patch.object(probe.pwd, 'getpwuid', return_value=types.SimpleNamespace(pw_uid=1000, pw_name='audio', pw_dir='/home/audio')), patch.object(probe.struct, 'calcsize', return_value=4):
+            # Mark only the device-tree model as present, not existing receiver files.
+            with patch.object(probe.Path, 'exists', lambda path: str(path) == '/proc/device-tree/model'):
+                result = probe.inventory()
+        self.assertFalse(result['supported'])
+        self.assertEqual(result['userspace_architecture'], 'armhf')
+        self.assertEqual(result['python_bits'], 32)
+        self.assertEqual(result['reasons'], ['Requires 64-bit ARM64 userspace, not only a 64-bit kernel'])
+
 
 class TransportTests(unittest.TestCase):
     def test_sudo_password_only_goes_over_stdin_and_cleanup_is_exact(self):
@@ -141,7 +159,7 @@ class InstallerStages(unittest.TestCase):
             installer.SOURCE, installer.STATE = source, state
             original_module = installer.module
             facts = {'supported': True, 'reasons': [], 'architecture': 'aarch64',
-                     'model': 'Raspberry Pi 3 Model B Plus'}
+                     'model': 'Raspberry Pi 3 Model B Plus', 'userspace_architecture': 'arm64', 'python_bits': 64}
             account = types.SimpleNamespace(pw_uid=os.getuid(), pw_gid=os.getgid(),
                         pw_name='audio', pw_dir=str(base / 'home'))
             def directory(path, mode=None):

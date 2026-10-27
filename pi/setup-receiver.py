@@ -105,7 +105,7 @@ def main():
         if not state and not probe['supported']:
             raise ValueError('; '.join(probe['reasons']))
         # Never bypass OS/architecture/account checks when resuming.
-        if probe['architecture'] != 'aarch64' or 'Raspberry Pi' not in probe['model'] or not Path('/etc/os-release').read_text().count('VERSION_ID="13"'):
+        if probe['userspace_architecture'] != 'arm64' or probe['python_bits'] != 64 or probe['architecture'] != 'aarch64' or 'Raspberry Pi' not in probe['model'] or not Path('/etc/os-release').read_text().count('VERSION_ID="13"'):
             raise ValueError('Unsupported receiver')
         home = Path(account.pw_dir)
         if home.is_symlink() or any(c.isspace() or c in '"%\\' for c in str(home)):

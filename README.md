@@ -82,10 +82,10 @@ memory specifications are in Raspberry Pi's [model documentation](https://www.ra
 Hardware and deployment caveats:
 
 - **A 64-bit kernel is not enough.** Raspberry Pi OS can combine a 64-bit kernel
-  with 32-bit userspace. The 0.7.0 preview checks the reported kernel architecture,
-  so that mixed configuration can pass its check despite being unsupported.
-  Choose the actual **64-bit OS image** and verify `dpkg --print-architecture`
-  returns **`arm64`** on the Pi before installation; `uname -m` alone is insufficient.
+  with 32-bit userspace. Version **0.7.1 checks the package architecture and Python
+  bitness too**, rejecting that unsupported combination. Our virtual image tests
+  reproduced and fixed the incorrect acceptance in 0.7.0. Choose the actual
+  **64-bit OS image**; `dpkg --print-architecture` must return **`arm64`**.
   Raspberry Pi documents this distinction in its [kernel guide](https://www.raspberrypi.com/documentation/computers/linux_kernel.html).
 - **Audio output varies.** Pi 5 has no analogue headphone output; use suitable
   HDMI/USB audio or a configured DAC/HAT. The wizard selects an existing PipeWire
@@ -106,9 +106,9 @@ Hardware and deployment caveats:
   DAC, memory capacity, thermal stability or audible playback. Test Spotify,
   Bluetooth, MPD and reboot persistence on each new deployment.
 
-## Set up a new Pi (0.7.0 preview)
+## Set up a new Pi (0.7.1 preview)
 
-The wizard is available in the **[0.7.0 preview release](https://github.com/richterrene/pi-audio-tray/releases/tag/v0.7.0)**
+The wizard is available in the **[0.7.1 preview release](https://github.com/richterrene/pi-audio-tray/releases/tag/v0.7.1)**
 for Linux, Windows and both Mac architectures. GitHub's latest stable release
 may be older and lack the wizard. **A complete installation on a spare blank Pi
 has not yet been tested.** Automated installer fixtures and native desktop
@@ -215,7 +215,7 @@ device status indicates a connection, not proof of current audio playback.
 
 ## Screenshots
 
-These screenshots show the current desktop UI (0.7.0), rendered from the actual
+These screenshots show the current desktop UI (0.7.1), rendered from the actual
 Linux/Qt widgets with **fictional demo connection details and music metadata**. No real
 account, device address, SSH key, or Soloist API key is shown. macOS uses its
 native window and menu-bar presentation. Windows uses its system tray; see the
@@ -280,12 +280,12 @@ closes only the tray application; **Shut down Pi…** powers off the receiver.
 ### Linux
 
 For the setup wizard, download the x86_64 AppImage from the
-[0.7.0 preview release](https://github.com/richterrene/pi-audio-tray/releases/tag/v0.7.0),
+[0.7.1 preview release](https://github.com/richterrene/pi-audio-tray/releases/tag/v0.7.1),
 make it executable, and launch it:
 
 ```sh
-chmod +x PiAudioTray-0.7.0-x86_64.AppImage
-./PiAudioTray-0.7.0-x86_64.AppImage --show
+chmod +x PiAudioTray-0.7.1-x86_64.AppImage
+./PiAudioTray-0.7.1-x86_64.AppImage --show
 ```
 
 Ubuntu's AppIndicator extension must be enabled for the tray icon. When no tray
@@ -302,8 +302,8 @@ Unknown host keys require explicit fingerprint approval; changed keys are reject
 
 ### Windows
 
-Download and fully extract `PiAudioTray-0.7.0-Windows-x86_64.zip` from the
-[preview release](https://github.com/richterrene/pi-audio-tray/releases/tag/v0.7.0), then run
+Download and fully extract `PiAudioTray-0.7.1-Windows-x86_64.zip` from the
+[preview release](https://github.com/richterrene/pi-audio-tray/releases/tag/v0.7.1), then run
 **Pi Audio Tray.exe** inside the extracted folder. Keep `_internal` beside it.
 No Python installation is needed. The build is unsigned; see [Windows setup and
 security](docs/WINDOWS.md). Receiver configuration and shutdown/pairing permissions
@@ -312,7 +312,7 @@ are the same as on Linux/macOS.
 ### macOS
 
 Download the ZIP matching your Mac's architecture from the
-[preview release](https://github.com/richterrene/pi-audio-tray/releases/tag/v0.7.0),
+[preview release](https://github.com/richterrene/pi-audio-tray/releases/tag/v0.7.1),
 extract it, and drag **Pi Audio
 Tray.app** into Applications. The app lives in the menu bar; **Open status** shows
 its window. Initial builds are ad-hoc signed, **not Developer ID signed or
@@ -456,3 +456,22 @@ albums, and add tracks to the same queue as USB music. Source browsing is on the
 desktop; queued tracks also appear in the phone web player. The server must stay
 awake. No music copy or Samba mount is needed. Requires the matching updated Pi
 music helper. See [compatibility and setup](docs/LOCAL_MUSIC.md#upnp--dlna-music-servers-06).
+
+## Virtual Pi image tests
+
+An optional [local QEMU lab](docs/VIRTUAL_TESTS.md) boots checksum-pinned official
+Pi OS Lite images in disposable disks, without physical hardware. It runs the
+normal-user setup probe and 35 Pi-side regression tests per image, including real
+Unix-socket web-login tests. The matrix covers ARM64 and mixed 64-bit-kernel /
+32-bit-userspace configurations; the latter must be rejected.
+
+```sh
+python3 tools/virtual/run.py --build
+```
+
+This requires Linux, existing Docker access and roughly 15–20 GB of cache space.
+The runner uses no privileged containers, host devices, network or real Pi
+credentials. **It does not run the full installer, normal systemd boot, Spotify
+authentication or physical audio/Bluetooth tests.** These checks improve software
+coverage; they do not certify every Pi model or replace a blank-Pi installation
+test. See the guide for the measured results and emulator limitations.
