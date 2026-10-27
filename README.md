@@ -69,7 +69,7 @@ first-install test on spare hardware.
 | Pi 3 Model B+ with the tested configuration above | Existing receiver/audio deployment tested; fresh-install wizard remains preview |
 | Other ARM64 Pis, including Pi 4 / 5 and keyboard / Compute Module variants | Candidates with the required OS, audio hardware and Bluetooth adapter; no model-wide validation or guarantee |
 | Zero 2 W | 64-bit CPU, but only 512 MB RAM; the full web/Cockpit/update stack has not been validated on it |
-| Any Pi running a 32-bit OS (`armhf` / `armv7l` / `armv6l`) | Rejected by this wizard and its ARM64-only updater, even if the board can run a 64-bit OS |
+| Any Pi running a 32-bit userspace (`armhf`) | Unsupported by this ARM64 installer/updater, even on a 64-bit-capable board; see the mixed-kernel caveat below |
 | Pi 1 and original Zero / Zero W / Zero WH | 32-bit hardware; outside this installer's scope |
 | Pi 2 | Revision-dependent hardware; no compatibility claim without validating the revision, OS and peripherals |
 | Other Linux distributions, older/newer Debian versions, or non-Pi ARM boards | Outside the fresh-install wizard's current Debian/Pi OS 13 ARM64 target |
@@ -81,6 +81,12 @@ memory specifications are in Raspberry Pi's [model documentation](https://www.ra
 
 Hardware and deployment caveats:
 
+- **A 64-bit kernel is not enough.** Raspberry Pi OS can combine a 64-bit kernel
+  with 32-bit userspace. The 0.7.0 preview checks the reported kernel architecture,
+  so that mixed configuration can pass its check despite being unsupported.
+  Choose the actual **64-bit OS image** and verify `dpkg --print-architecture`
+  returns **`arm64`** on the Pi before installation; `uname -m` alone is insufficient.
+  Raspberry Pi documents this distinction in its [kernel guide](https://www.raspberrypi.com/documentation/computers/linux_kernel.html).
 - **Audio output varies.** Pi 5 has no analogue headphone output; use suitable
   HDMI/USB audio or a configured DAC/HAT. The wizard selects an existing PipeWire
   sink; it does not configure HAT drivers, device-tree overlays or HDMI/EDID quirks.
