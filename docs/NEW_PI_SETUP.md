@@ -6,6 +6,15 @@ This is a preview: transport, installer stages and GUI safeguards are covered by
 automated fixtures, but a complete installation on a spare blank Pi has not yet
 been performed. Do not use it to migrate a working receiver.
 
+This is **not a universal Raspberry Pi installer**. The current audio deployment
+was tested on a Pi 3 Model B+ with 1 GB RAM and its headphone output. Other ARM64
+boards, low-memory models and DACs need individual validation. See the README's
+[board compatibility and hardware caveats](../README.md#which-raspberry-pis-are-supported).
+The check does not test audible playback, hardware capacity or reboot persistence.
+Bluetooth is mandatory in the base setup and needs an enabled controller; the
+configured profile receives audio from phones rather than transmitting to a
+Bluetooth speaker. A 64-bit-capable board running a 32-bit OS is still rejected.
+
 ## Before starting
 
 1. Flash **Raspberry Pi OS Lite 64-bit / Debian 13 Trixie** with Raspberry Pi
