@@ -50,7 +50,10 @@ blocked. A policy-status formatting collision found this way has a regression.
 The pinned sources compile in Debian 13 as an unprivileged user. The local timing
 harness checks the ABI derived from the actual pinned C header and client
 isolation; the upstream stale ABI assertion is not counted as a passing test.
-Native ARM64 source-build CI and desktop CI provide separate build evidence.
+The native ARM64 source-build and timing harness passed in CI. Desktop CI
+provides separate package evidence. Cross-platform CI also exposed fixture
+isolation and early-HTTP-rejection races; the tests now avoid host sudo paths
+and still assert the actual HTTP rejection after a client broken pipe.
 Read-only checks on the existing Pi confirm inventory, update listing and master
 output parsing; no receiver upgrade or playback change was performed by these
 checks. This does not validate a complete physical fresh installation or every

@@ -197,6 +197,8 @@ class InstallerStages(unittest.TestCase):
             def is_file(path):
                 if str(path) == '/etc/pi-audio-tray/soloist-user' or (previous_permissions and str(path) == '/etc/sudoers.d/pi-audio-tray'):
                     return True
+                if str(path).startswith(('/etc/', '/usr/')):
+                    return False
                 return original_is_file(path)
             def info(path, **kwargs):
                 if str(path) == '/etc/pi-audio-tray/soloist-user' or (previous_permissions and str(path) == '/etc/sudoers.d/pi-audio-tray'):
