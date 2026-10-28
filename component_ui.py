@@ -121,10 +121,10 @@ class ComponentsDialog(QDialog):
         task.progress.connect(self.append)
         task.result.connect(callback)
         task.failed.connect(self.failure)
-        task.finished.connect(self.finished)
+        task.finished.connect(self.finished_task)
         task.start()
 
-    def finished(self):
+    def finished_task(self):
         task, self.worker = self.worker, None
         task.deleteLater()
         self.controls()

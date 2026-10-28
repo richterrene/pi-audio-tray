@@ -42,7 +42,7 @@ class MaintenanceDialog(QDialog):
         worker.result.connect(callback)
         worker.progress.connect(self.progress)
         worker.failed.connect(self.failure)
-        worker.finished.connect(self.finished)
+        worker.finished.connect(self.finished_task)
         worker.start()
 
     def progress(self, value):
@@ -51,7 +51,7 @@ class MaintenanceDialog(QDialog):
     def failure(self, exc):
         self.progress(str(exc))
 
-    def finished(self):
+    def finished_task(self):
         worker, self.worker = self.worker, None
         worker.deleteLater()
         self.controls()
@@ -169,8 +169,8 @@ class UpdatesDialog(MaintenanceDialog):
         def completed(_): self.recheck = True
         self.start(lambda progress: updates.operate(self.config, operation, progress), completed)
 
-    def finished(self):
-        super().finished()
+    def finished_task(self):
+        super().finished_task()
         if self.recheck:
             self.recheck = False
             self.refresh()
@@ -257,8 +257,8 @@ class VolumeDialog(MaintenanceDialog):
         value = self.pending.pop(action)
         self.start(lambda _: volume.request(self.config, value), self.show_status)
 
-    def finished(self):
-        super().finished()
+    def finished_task(self):
+        super().finished_task()
         if self.pending: self.flush()
         elif self.close_after: super().reject()
 
