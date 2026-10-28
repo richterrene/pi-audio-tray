@@ -21,6 +21,7 @@ from music_ui import MusicWindow
 from network_ui import NetworkWindow
 from setup_ui import SetupDialog
 from audio_ui import AudioDialog
+from dsp_ui import DspDialog
 from component_ui import ComponentsDialog
 from maintenance_ui import PolicyDialog, UpdatesDialog, VolumeDialog
 import components
@@ -166,6 +167,17 @@ def main():
     app.processEvents()
     capture(audio, output / 'audio-integrations.png')
     audio.hide()
+    equalizer = DspDialog(window.config, window)
+    equalizer.show_status({'protocol': 1, 'installed': True, 'supported': True,
+        'state': 'active', 'settings': {'enabled': True, 'target': 'alsa_output.example.stereo',
+        'gains': [2, 1, 0, -1, -1, -1, -2, -2, -2, -2], 'preamp': 0},
+        'configuration_error': False, 'outputs': [{'name': 'alsa_output.example.stereo',
+        'description': 'Headphones · Built-in Audio', 'default': True}],
+        'target_available': True, 'active': True, 'processing': True, 'headroom_db': 3})
+    equalizer.controls()
+    equalizer.show()
+    capture(equalizer, output / 'equalizer.png')
+    equalizer.hide()
     inventory = ComponentsDialog(window.config, window)
     inventory.show_inventory({'protocol': 1, 'managed': True, 'supported': True,
         'rows': [{'id': name, 'action': components.MAPPING[name], 'installed': True,

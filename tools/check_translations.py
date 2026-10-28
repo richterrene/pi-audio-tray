@@ -13,7 +13,7 @@ import i18n
 def sources():
     result = {'active', 'inactive', 'failed', 'unknown', 'play', 'pause', 'stop',
               'Save', 'Cancel', 'Yes', 'No', 'OK'}
-    for filename in ('app.py', 'music_ui.py', 'network_ui.py', 'setup_ui.py', 'profile_ui.py', 'ui_style.py', 'audio_ui.py', 'component_ui.py', 'maintenance_ui.py'):
+    for filename in ('app.py', 'music_ui.py', 'network_ui.py', 'setup_ui.py', 'profile_ui.py', 'ui_style.py', 'audio_ui.py', 'component_ui.py', 'maintenance_ui.py', 'dsp_ui.py'):
         for node in ast.walk(ast.parse((ROOT / filename).read_text(encoding='utf-8'))):
             if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == 'tr' and node.args:
                 first = node.args[0]

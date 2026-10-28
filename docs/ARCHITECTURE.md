@@ -18,6 +18,7 @@ optional HTTPS player keep running independently of the desktop app.
 | Master volume | `volume.py`, `pi/volume-control.py` | Normal-user PipeWire sink identity validation, coalesced writes and a 100% ceiling |
 | Receiver status/pairing | `pi_helper.py` | Allowlisted health/stat requests and bounded pairing window |
 | Receiver music | `pi_music.py`, `pi_upnp.py` | MPD Unix socket; validated media paths and opt-in pinned LAN sources |
+| Equalizer | `dsp.py`, `dsp_ui.py`, `dsp_config.py`, `pi_dsp.py` | Fixed builtin PipeWire smart filter; explicit normal-user Apply/Bypass, independent per-Pi preferences |
 | Optional audio integrations | `audio.py`, `audio_ui.py`, `pi_audio.py` | On-demand bounded SSH protocol; normal-user AirPlay configuration and fixed unit controls |
 | Receiver services/installers | `pi/` | Root-owned deployment, updates, conditional reboot, TLS/cookie login |
 | Packaging | `packaging_support.py`, `build_*.py` | Neutral staging, pinned runtime verification, native build/smoke tests |

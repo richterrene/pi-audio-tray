@@ -28,7 +28,7 @@ This is an event-driven application policy, not sample-perfect hardware switchin
 there can be a brief handover delay. Failed mute controls are reported as degraded;
 do not treat an active service alone as proof of exclusivity. The initial release
 still needs physical cross-source testing, particularly with Bluetooth/AirPlay
-senders. DSP and synchronized multiroom are separate planned features.
+senders. The optional [equalizer](EQUALIZER.md) processes the selected physical stereo output independently of source arbitration. Synchronized multiroom remains planned.
 
 Only per-stream soft mutes are managed; normal user mute and hardware/master
 volume are not changed by the policy. WirePlumber can remember ordinary mute

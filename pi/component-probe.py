@@ -70,7 +70,7 @@ def inventory():
                        'apt-daily-upgrade.timer', 'pi-audio-reboot.timer', 'pi-audio-mpd.service',
                        'pi-audio-mympd.service', 'pi-audio-web.service', 'pi-audio-login.service',
                        'pi-audio-music-tls.timer', 'cockpit.socket', 'pi-audio-nqptp.service'])
-    user = services(['pipewire.service', 'wireplumber.service', 'soloist.service', 'pi-audio-airplay.service'], user=True)
+    user = services(['pipewire.service', 'wireplumber.service', 'soloist.service', 'pi-audio-airplay.service', 'pi-audio-dsp.service'], user=True)
     rows = []
     def row(identifier, required=(), files=(), units=(), user_units=(), action=None, owned=None, extra='', artifacts=()):
         installed = all(name in packages for name in required) if required else all_present(artifacts or files)
@@ -108,6 +108,7 @@ def inventory():
     if airplay_binary and not rows[-1]['configured']:
         rows[-1]['managed'] = False
         rows[-1]['details'] += '; existing unowned binary requires manual integration'
+    row('dsp', files=(base + 'pi-dsp', base + 'dsp_config.py', '/usr/local/lib/systemd/user/pi-audio-dsp.service'), user_units=('pi-audio-dsp.service',), action='dsp', extra='Optional; bypass is the default. Use Equalizer / DSP for settings and installation')
     fstab = Path('/etc/fstab').read_text()
     match = re.search(r'^UUID=([A-Fa-f0-9]{4}-[A-Fa-f0-9]{4})\s+/srv/pi-audio-music\s+', fstab, re.MULTILINE)
     hostname = ''

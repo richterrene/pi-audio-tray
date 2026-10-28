@@ -1,5 +1,37 @@
 # Security and privacy
 
+## 0.9.0 fixed stereo equalizer
+
+See [operation and recovery](docs/EQUALIZER.md) and the [0.9.0 review record](docs/security/REVIEW_0_9.md). The optional EQ add-on uses the
+existing verified SSH transport. One administrator installation copies a fixed
+manifest into root-owned helper/unit paths; it grants no additional runtime sudo
+rules. The installer requires the managed audio account, Debian/Pi OS 13 ARM64,
+and the supported PipeWire/WirePlumber components. It refuses an unowned existing
+installation, uses the shared setup lock, snapshots its reviewed bundle into a
+root-private directory, and logs failures under `/var/lib/pi-audio-dsp` (0700,
+log 0600). Repair bypasses EQ, retaining private preferences and other players.
+
+Runtime controls run as the audio user. Exact-schema bounded JSON on SSH stdin
+selects a discovered physical stereo output, ten integer gains (−6…+6 dB), a
+preamp (−12…0 dB), and enable/bypass. No uploaded filter graph, plugin path,
+command, environment or network listener is accepted. Root-owned code generates
+a fixed builtin filter graph. Private settings/configuration are written with
+0600 permissions in a 0700 directory, without following symbolic links; a
+per-user lock serializes changes. Failure restores prior files/service state
+where possible. Bypass stops the filter even with invalid preferences or absent
+hardware; WirePlumber handles direct routing. Persistent hardware gain and the
+default output are not changed.
+
+The filter is an unprivileged process in the existing audio session, not an
+isolation boundary against the same account or root. Conservative automatic
+attenuation compensates the sum of positive gains; a final sample clamp is a
+safeguard, not a loudspeaker limiter or a calibrated loudness guarantee. Apply
+reconnects the filter and can briefly interrupt audio. No new cloud dependency,
+port or executable download is introduced. No independent security audit is
+claimed. Desktop regression tests cover rejected inputs, private files, rollback,
+fixed deployment and real Qt worker cleanup; opt-in null-output graph tests cover
+stereo response, routing recovery and filter counters on the reference Pi.
+
 ## 0.8.0 maintenance, audio and volume boundaries
 
 The new on-demand [component inventory/repair](docs/PI_COMPONENTS.md) separates
@@ -68,7 +100,7 @@ The password is playback access control, not general host/network isolation.
 No firewall rule or router mapping is created. Control uses allowlisted user-unit
 actions over SSH; metadata/MQTT configuration is not exposed by the app. AirPlay
 uses the existing audio output and can mix with other sources. There is no source
-arbitration, DSP, multiroom security guarantee or AirPlay 2 claim in this stage.
+arbitration or multiroom guarantee. Later optional source-policy, EQ and AirPlay 2 boundaries are documented separately.
 See [scope, diagnostics and pending hardware tests](docs/AUDIO_ROADMAP.md).
 
 The initial AirPlay review (2026-10-28) passed 208 local regression tests with

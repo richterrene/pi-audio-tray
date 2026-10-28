@@ -112,9 +112,9 @@ Hardware and deployment caveats:
   DAC, memory capacity, thermal stability or audible playback. Test Spotify,
   Bluetooth, MPD and reboot persistence on each new deployment.
 
-## Set up a new Pi (0.8.0 preview)
+## Set up a new Pi (0.9.0 preview)
 
-The wizard is available in the **[0.8.0 preview release](https://github.com/richterrene/pi-audio-tray/releases/tag/v0.8.0)**
+The wizard is available in the **[0.9.0 preview release](https://github.com/richterrene/pi-audio-tray/releases/tag/v0.9.0)**
 for Linux, Windows and both Mac architectures. GitHub's latest stable release
 may be older and lack the wizard. **A complete installation on a spare blank Pi
 has not yet been tested.** Automated installer fixtures and native desktop
@@ -174,7 +174,11 @@ sudo privileges already granted by the OS. See the
 
 ## Features
 
-The **0.8.0 preview** adds:
+The **0.9.0 preview** adds per-Pi **Equalizer / DSP…** controls under Maintenance:
+10 fixed EQ bands, presets, explicit Apply and Bypass, and automatic headroom.
+It uses the existing PipeWire/WirePlumber stack; see [setup and limitations](docs/EQUALIZER.md).
+
+Recent maintenance features also include:
 
 - **Master volume…** in the tray: combined PipeWire output volume and mute,
   limited to 100%, with stale-device checks. Individual player volumes stay separate.
@@ -184,7 +188,7 @@ The **0.8.0 preview** adds:
 - **Audio integrations…**: choose classic AirPlay (Debian package) or AirPlay 2
   (checksum-pinned Shairport Sync 5.6.2 + NQPTP 1.2.9, compiled without root).
   Separate private settings are preserved when switching variants; receiving is
-  left disabled after installation. Physical Apple-device validation remains pending.
+  left disabled after installation. AirPlay 2 password authentication and continuous audio have been tested on the reference Pi with an Apple sender.
 - **Playback source policy…**: keep mixing enabled (default), or opt into
   latest-started-source priority. Spotify/MPD/BlueZ pause controls are used where
   available; other streams are muted. Some senders keep advancing while muted.
@@ -196,7 +200,7 @@ The **0.8.0 preview** adds:
 Existing Pis need a **core receiver repair** to deploy source-policy controls;
 master volume and read-only component/update checks need no new Pi helper.
 AirPlay 2 uses the versions reviewed in the app; APT does not update that source
-build. DSP and Snapcast multiroom remain [planned work](docs/AUDIO_ROADMAP.md).
+build. Basic stereo EQ is available as an optional add-on; advanced room correction and Snapcast multiroom remain [planned work](docs/AUDIO_ROADMAP.md).
 
 - Fresh-Pi setup wizard with optional music/web services and Cockpit; [preview limits](docs/NEW_PI_SETUP.md).
 - Pi reachability, Soloist/Raspotify service state, Bluetooth power, audio services,
@@ -289,7 +293,7 @@ local executable paths only, with no SSH credentials or Pi settings.
 
 ## Screenshots
 
-These screenshots show the current desktop UI (0.8.0), rendered from the actual
+These screenshots show the current desktop UI (0.9.0), rendered from the actual
 Linux/Qt widgets with **fictional demo connection details and music metadata**. No real
 account, device address, SSH key, or Soloist API key is shown. macOS uses its
 native window and menu-bar presentation. Windows uses its system tray; see the
@@ -342,6 +346,8 @@ above. See the [setup guide](docs/NEW_PI_SETUP.md) before provisioning a fresh r
 
 <img src="assets/screenshots/pi-components.png" alt="Per-Pi component status and selective installation or repair" width="850">
 
+<img src="assets/screenshots/equalizer.png" alt="Per-Pi ten-band equalizer, presets, headroom and explicit bypass; fictional demonstration data" width="650">
+
 <img src="assets/screenshots/master-volume.png" alt="Master output volume and mute controls" width="500">
 
 <img src="assets/screenshots/source-policy.png" alt="Optional exclusive audio source policy and its behavior" width="610">
@@ -372,12 +378,12 @@ closes only the tray application; **Shut down Pi…** powers off the receiver.
 ### Linux
 
 For the setup wizard, download the x86_64 AppImage from the
-[0.8.0 preview release](https://github.com/richterrene/pi-audio-tray/releases/tag/v0.8.0),
+[0.9.0 preview release](https://github.com/richterrene/pi-audio-tray/releases/tag/v0.9.0),
 make it executable, and launch it:
 
 ```sh
-chmod +x PiAudioTray-0.8.3-x86_64.AppImage
-./PiAudioTray-0.8.3-x86_64.AppImage --show
+chmod +x PiAudioTray-0.9.0-x86_64.AppImage
+./PiAudioTray-0.9.0-x86_64.AppImage --show
 ```
 
 Ubuntu's AppIndicator extension must be enabled for the tray icon. When no tray
@@ -394,8 +400,8 @@ Unknown host keys require explicit fingerprint approval; changed keys are reject
 
 ### Windows
 
-Download and fully extract `PiAudioTray-0.8.3-Windows-x86_64.zip` from the
-[preview release](https://github.com/richterrene/pi-audio-tray/releases/tag/v0.8.0), then run
+Download and fully extract `PiAudioTray-0.9.0-Windows-x86_64.zip` from the
+[preview release](https://github.com/richterrene/pi-audio-tray/releases/tag/v0.9.0), then run
 **Pi Audio Tray.exe** inside the extracted folder. Keep `_internal` beside it.
 No Python installation is needed. The build is unsigned; see [Windows setup and
 security](docs/WINDOWS.md). Receiver configuration and shutdown/pairing permissions
@@ -404,7 +410,7 @@ are the same as on Linux/macOS.
 ### macOS
 
 Download the ZIP matching your Mac's architecture from the
-[preview release](https://github.com/richterrene/pi-audio-tray/releases/tag/v0.8.0),
+[preview release](https://github.com/richterrene/pi-audio-tray/releases/tag/v0.9.0),
 extract it, and drag **Pi Audio
 Tray.app** into Applications. The app lives in the menu bar; **Open status** shows
 its window. Initial builds are ad-hoc signed, **not Developer ID signed or

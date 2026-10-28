@@ -123,3 +123,13 @@ Receiver audio source builds have a separate native ARM64 workflow. Changes to
 its pinned sources, root deployment or timing service need that build/harness in
 addition to desktop tests. Source-policy fixtures are not a substitute for
 physical cross-source playback tests; document those limits in release notes.
+
+The optional equalizer has a pure graph/configuration module (`dsp_config.py`),
+normal-user receiver helper (`pi_dsp.py`), fixed administrator installer, and a
+separate Qt dialog. Keep bounds/schema changes synchronized across transport,
+receiver, catalogs and tests. `tests/test_dsp.py` covers rejected data, private
+files, rollback and installer boundaries. `tests/test_dialog_workers.py` exercises
+real QThreads: never shadow Qt's `QDialog.finished(int)` signal with a cleanup
+method. See [isolated live graph tests](docs/EQUALIZER.md#reproducing-the-isolated-graph-test)
+for explicit opt-in Pi validation; regular tests must not connect to a receiver
+or play audio.

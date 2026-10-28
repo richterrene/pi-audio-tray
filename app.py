@@ -329,6 +329,7 @@ class TrayApp(QWidget):
         maintenance.addAction(tr('Playback source policy…'), lambda: self.receiver_dialog('policy'))
         maintenance.addAction(tr('System updates…'), lambda: self.receiver_dialog('updates'))
         maintenance.addAction(tr('Audio integrations…'), self.audio_integrations)
+        maintenance.addAction(tr('Equalizer / DSP…'), lambda: self.receiver_dialog('dsp'))
         maintenance.addAction(tr('Update Pi helper…'), self.update_helper)
         soloist_menu = maintenance.submenu('Spotify Soloist')
         soloist_menu.addAction(tr('Set / replace API key…'), self.soloist_key)
@@ -745,12 +746,13 @@ class TrayApp(QWidget):
             return
         from audio_ui import AudioDialog
         from component_ui import ComponentsDialog
+        from dsp_ui import DspDialog
         from maintenance_ui import PolicyDialog, UpdatesDialog, VolumeDialog
         self.busy.add('provision')
         if self.music_window is not None:
             self.music_window.hide()
         self.timer.stop()
-        dialog = {'audio': AudioDialog, 'components': ComponentsDialog, 'policy': PolicyDialog, 'updates': UpdatesDialog, 'volume': VolumeDialog}[kind](self.config, self)
+        dialog = {'audio': AudioDialog, 'components': ComponentsDialog, 'policy': PolicyDialog, 'updates': UpdatesDialog, 'volume': VolumeDialog, 'dsp': DspDialog}[kind](self.config, self)
         try:
             QTimer.singleShot(0, dialog.check if kind == 'components' else dialog.refresh)
             dialog.exec()
@@ -967,7 +969,13 @@ def main():
         component_check = ComponentsDialog({'host': '', 'username': ''})
         component_check.deleteLater()
         from maintenance_ui import PolicyDialog, UpdatesDialog, VolumeDialog
-        for cls in (PolicyDialog, UpdatesDialog, VolumeDialog):
+        import dsp
+        from dsp_ui import DspDialog
+        for name in dsp.PI_FILES:
+            assert (provision.ROOT / 'pi' / name).is_file(), name
+        for name in dsp.TOP_FILES:
+            assert (provision.ROOT / name).is_file(), name
+        for cls in (PolicyDialog, UpdatesDialog, VolumeDialog, DspDialog):
             check = cls({'host': '', 'username': ''})
             check.deleteLater()
         previous = os.environ.get('XDG_CONFIG_HOME')

@@ -17,7 +17,7 @@ def labels():
             'helpers': tr('Monitoring and pairing helpers'), 'music': 'MPD / USB / UPnP',
             'web': tr('HTTPS web player'), 'updates': tr('Automatic updates'),
             'cockpit': 'Cockpit', 'privacy': tr('Process privacy (hidepid=2)'),
-            'shutdown': tr('Tray shutdown permission'), 'airplay': 'AirPlay'}
+            'shutdown': tr('Tray shutdown permission'), 'airplay': 'AirPlay', 'dsp': tr('Equalizer / DSP')}
 
 
 class ComponentsDialog(QDialog):
@@ -63,6 +63,7 @@ class ComponentsDialog(QDialog):
         self.audio_button = QPushButton(tr('Audio integrations…'))
         self.policy_button = QPushButton(tr('Playback source policy…'))
         self.updates_button = QPushButton(tr('System updates…'))
+        self.dsp_button = QPushButton(tr('Equalizer / DSP…'))
         self.close_button = QPushButton(tr('Close'))
         for button in (self.check_button, self.repair_button, self.audio_button, self.close_button):
             row.addWidget(button)
@@ -70,10 +71,12 @@ class ComponentsDialog(QDialog):
         more = QHBoxLayout()
         more.addWidget(self.policy_button)
         more.addWidget(self.updates_button)
+        more.addWidget(self.dsp_button)
         layout.addLayout(more)
         self.check_button.clicked.connect(self.check)
         self.repair_button.clicked.connect(self.repair)
         self.audio_button.clicked.connect(self.audio)
+        self.dsp_button.clicked.connect(lambda: self.maintenance('dsp'))
         self.policy_button.clicked.connect(lambda: self.maintenance('policy'))
         self.updates_button.clicked.connect(lambda: self.maintenance('updates'))
         self.close_button.clicked.connect(self.reject)
@@ -104,7 +107,7 @@ class ComponentsDialog(QDialog):
         if not hasattr(self, 'repair_button'):
             return
         idle = self.worker is None
-        for widget in (self.check_button, self.close_button, self.audio_button, self.policy_button, self.updates_button, self.table, self.password, self.hostname, self.usb):
+        for widget in (self.check_button, self.close_button, self.audio_button, self.policy_button, self.updates_button, self.dsp_button, self.table, self.password, self.hostname, self.usb):
             widget.setEnabled(idle)
         allowed = self.snapshot and self.snapshot['managed'] and self.snapshot['supported']
         self.repair_button.setEnabled(bool(idle and allowed and self.selected()))
@@ -159,7 +162,7 @@ class ComponentsDialog(QDialog):
         for index, facts in enumerate(value['rows']):
             choice = QTableWidgetItem()
             choice.setCheckState(Qt.CheckState.Unchecked)
-            if not value['managed'] or not value['supported'] or not facts['managed'] or facts['action'] == 'audio':
+            if not value['managed'] or not value['supported'] or not facts['managed'] or facts['action'] in ('audio', 'dsp'):
                 choice.setFlags(choice.flags() & ~Qt.ItemFlag.ItemIsEnabled)
             self.table.setItem(index, 0, choice)
             values = [names[facts['id']], *[tr('yes') if facts[key] is True else tr('no') if facts[key] is False else tr('unknown') for key in ('installed', 'configured', 'running')]]
@@ -230,7 +233,8 @@ class ComponentsDialog(QDialog):
     def maintenance(self, kind):
         from maintenance_ui import PolicyDialog, UpdatesDialog
         from PySide6.QtCore import QTimer
-        dialog = (PolicyDialog if kind == 'policy' else UpdatesDialog)(self.config, self)
+        from dsp_ui import DspDialog
+        dialog = {'policy': PolicyDialog, 'updates': UpdatesDialog, 'dsp': DspDialog}[kind](self.config, self)
         QTimer.singleShot(0, dialog.refresh)
         dialog.exec()
         dialog.deleteLater()
