@@ -1,70 +1,82 @@
-# Audio feature parity: scope, dependencies and acceptance
+# Audio expansion: current scope and remaining parity work
 
-This is a staged development target, not a claim of moOde/Volumio compatibility
-or feature parity. The first implementation adds classic AirPlay; AirPlay 2,
-system-wide DSP and synchronized multiroom remain planned. Streaming-service
-licensing and third-party commercial features cannot be reproduced merely by
-adding a UI.
+The 0.8.0 preview adds classic AirPlay and an AirPlay 2 installation option.
+It does not claim moOde/Volumio compatibility or full feature parity. System-wide
+DSP and synchronized Snapcast multiroom remain planned.
 
 ## 1. AirPlay receiver
 
-The app's **Maintenance → Audio integrations…** installs Debian's Shairport Sync
-as an optional add-on to an existing supported Pi Audio receiver. Set a receiver
-name and a separate AirPlay password, save, then enable. The password is requested
-by Apple clients when connecting. Disable stops the listener and its boot startup.
-Closing the desktop app leaves an enabled receiver running.
+Use **Maintenance → Audio integrations…** on an existing supported Pi Audio
+receiver. Choose classic AirPlay or AirPlay 2, enter the Pi sudo password and
+review installation. Then set the receiver name and a separate AirPlay password,
+save, and enable. Disable stops receiving and boot startup; in AirPlay 2 mode it
+also disables the dedicated timing service. Closing the tray leaves enabled
+receiving running. Master output selection/volume stays separate.
 
-Debian 13 currently supplies Shairport Sync 4.3.7 with classic AirPlay and the
-PulseAudio backend. The integration uses that backend through the audio account's
-existing PipeWire server. It does not claim AirPlay 2, video, photo or HomeKit
-support. Shairport Sync's supported protocols depend on its compile-time options;
-package version alone does not establish AirPlay 2 capability.
+Classic mode uses Debian 13's Shairport Sync package through PipeWire's PulseAudio
+compatibility server. The competing distribution system service is masked before
+installation. Unrelated existing installations are refused.
 
-Installation requires Debian/Pi OS 13 ARM64, the existing Pi Audio audio-account
-marker and an active user PipeWire service. The fresh-Pi wizard must run first on
-a blank receiver. Existing unrelated Shairport installations are refused rather
-than overwritten. The distro's system Shairport service is masked before package
-installation so that package scripts cannot start a competing ALSA receiver.
-The new user unit is initially disabled. Package updates use normal APT policy.
+AirPlay 2 downloads **Shairport Sync 5.6.2** and **NQPTP 1.2.9** from fixed official
+GitHub release URLs, verifying pinned SHA-256 hashes before extraction. It installs
+build dependencies with APT, then compiles as a dedicated unprivileged, nologin
+build account at reduced priority. Upstream configure/make/install recipes and
+compiled binaries are never executed as root on the Pi. Only verified regular
+ARM64 executables and license text are copied into root-owned versioned paths.
+The build needs at least 1 GiB free space and can take several minutes.
 
-Installation uses the app's reviewed SSH/sudo setup transport. No new runtime
-sudo permission is granted. Names/passwords are configured separately as the
-normal audio account; passwords are not passed in command arguments or retained
-in desktop settings. Receiver settings are in
-`~/.config/pi-audio-tray/airplay.conf` (directory 0700/file 0600).
+AirPlay 2 uses native PipeWire and explicitly selects the AirPlay 2 service type;
+there is no silent fallback to classic mode if timing fails. It shares the normal
+audio account and default output with existing players. Shairport 5.6.2 supports
+password authentication in this mode; actual Apple-client authentication/playback
+still needs physical testing. This is audio receiving, not screen/video mirroring.
 
-The add-on follows the current default PipeWire output. Existing Soloist, MPD and
-Bluetooth services are not restarted. Sources can mix: automatic exclusive-source
-selection is not implemented. Stop other sources before testing AirPlay. Changing
-AirPlay settings while active restarts only its receiver after confirmation.
-Initial installation does not change master volume or start music.
+NQPTP uses its own DynamicUser system service, with only CAP_NET_BIND_SERVICE,
+for UDP timing ports 319/320 and a localhost UDP control port 9000. The installer
+checks conflicts and refuses unrelated NQPTP installations. Shared-memory timing
+requires a shared /dev/shm; it must not be hidden behind PrivateDevices/PrivateIPC.
+The audio account receives exactly two sudo commands to enable/disable this fixed
+root-owned service with --now. No general systemctl privilege is added.
 
-AirPlay discovery/receiving opens LAN services through Shairport/Avahi. A password
-limits playback access; it is not a substitute for isolating an untrusted network.
-No firewall rule, router mapping or internet access configuration is added.
-There is no automatic port-conflict takeover. A service failure is visible in the
-dialog; inspect `journalctl --user -u pi-audio-airplay` on the Pi. Root installation
-diagnostics are in `/var/lib/pi-audio-airplay/install.log`. A partial install may
-be retried with the same audio account; no automatic package rollback is promised.
+Existing owned variants can be repaired or switched. Compilation/package checks
+happen before stopping the old receiver. The final switch stops receiving and
+leaves it disabled until the user enables it. Separate 0600 settings files
+`airplay.conf` and `airplay2.conf` preserve each variant's name/password. Media,
+Soloist credentials, Bluetooth bonds and other audio configuration are not removed.
+Old source binaries/packages and the narrow timing permission remain; there is no
+uninstaller. Installation is not a transaction or automatic rollback mechanism.
 
-Verification required before calling the feature hardware-validated:
+Source builds are **not updated by APT**. A newer tray app can carry reviewed new
+versions/checksums; rerun its installer to apply them. There is no unreviewed
+latest-branch compiler or unattended source updater. Classic package updates use
+APT; Soloist's build-expiry updater is separate.
 
-- Real iPhone/iPad audio, password rejection and successful authentication.
-- Reboot startup, disable persistence, output selection and receiver disappearance.
-- Regression playback with Soloist, MPD and Bluetooth; no unintended volume jump.
-- Package installation/retry on a clean receiver, and collision refusal.
+Settings travel as bounded JSON over SSH stdin as the normal account. They are
+not put in command arguments or desktop storage. Root-private installation logs
+are `/var/lib/pi-audio-airplay/install.log`. Read user receiver failures with
+`journalctl --user -u pi-audio-airplay`; timing failures are in the system journal
+for `pi-audio-nqptp`. No firewall or router mappings are added. A playback password
+is not a general network security boundary. NQPTP's upstream shared-memory/control
+interface also assumes trusted local users and is not multi-tenant isolation.
 
-### AirPlay 2 follow-up
+### Build/test evidence and remaining validation
 
-AirPlay 2 is possible in upstream [Shairport Sync](https://github.com/mikebrady/shairport-sync).
-It needs a compatible build and [NQPTP](https://github.com/mikebrady/nqptp)
-for network timing. The Debian package inspected on the development receiver
-does not include it. Use a pinned, reproducible build/package with an explicit
-update policy, rather than compiling an unpinned branch on users' receivers.
-Keep timing-service privileges separate from the unprivileged audio process.
-Review authentication/pairing separately: classic AirPlay's password mechanism
-must not be assumed to apply identically to AirPlay 2. Validate Apple multiroom
-behavior, sender compatibility and output latency with physical receivers.
+A Debian 13 x86_64 container compiled both pinned releases as an unprivileged
+user. Their shared-memory ABI is 11. An actual two-client timing-isolation test
+passes using sizes/offsets compiled from that header. Upstream's bundled 1.2.9
+Python test still hard-codes ABI 10/72 bytes; its unmodified run fails that ABI
+assertion. Our integration harness uses the real ABI-11 layout (88 bytes, offsets
+8/48) rather than waiving the compatibility check. The source builder also rejects
+mismatched ABI versions before compiling.
+
+The AirPlay source workflow builds on native ARM64 Debian 13 and exercises the
+same timing harness. See its actual run result before claiming native validation.
+None of these checks proves audible playback, Apple password prompts, physical
+multiroom synchronization or reboot startup on every Pi/DAC. Those hardware tests
+remain required. Do not start playback on a user's amplifier as an unattended test.
+
+Upstream: [Shairport Sync](https://github.com/mikebrady/shairport-sync),
+[NQPTP](https://github.com/mikebrady/nqptp).
 
 ## 2. Shared routing and DSP
 

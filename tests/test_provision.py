@@ -143,7 +143,7 @@ class TransportTests(unittest.TestCase):
 
 @unittest.skipUnless(sys.platform == 'linux', 'Linux administrator installer fixtures')
 class InstallerStages(unittest.TestCase):
-    def exercise(self, selected):
+    def exercise(self, selected, *, previous_permissions='', pending_fresh=False, owner='audio', broken_web=False, external_cockpit=False):
         import shutil
         installer = load('receiver_stages', ROOT / 'pi/setup-receiver.py')
         with tempfile.TemporaryDirectory() as folder:
@@ -156,6 +156,11 @@ class InstallerStages(unittest.TestCase):
                 shutil.copyfile(ROOT / name, source / name)
             state = base / 'state'
             outputs, commands = {}, []
+            self.last_commands = commands
+            maintenance = isinstance(selected, dict) and selected.get('operation') == 'maintain'
+            if pending_fresh:
+                state.mkdir()
+                (state / 'state.json').write_text(json.dumps({'complete': False}))
             installer.SOURCE, installer.STATE = source, state
             original_module = installer.module
             facts = {'supported': True, 'reasons': [], 'architecture': 'aarch64',
@@ -180,15 +185,38 @@ class InstallerStages(unittest.TestCase):
             def read_text(path, *args, **kwargs):
                 if str(path) == '/etc/os-release': return 'ID=debian\nVERSION_ID="13"\n'
                 if str(path) == '/etc/fstab': return '# fixture\nproc /proc proc defaults 0 0\n'
+                if str(path) == '/etc/pi-audio-tray/soloist-user': return owner + '\n'
+                if str(path) == '/etc/sudoers.d/pi-audio-tray': return previous_permissions
                 return original_read(path, *args, **kwargs)
             original_exists = Path.exists
             def exists(path):
                 if str(path).startswith('/dev/disk/by-uuid/'): return True
+                if str(path) == '/etc/systemd/system/pi-audio-web.service' and broken_web: return True
                 return original_exists(path)
-            with patch.object(installer.os, 'geteuid', return_value=0), patch.dict(os.environ, {'SUDO_UID': str(os.getuid())}), patch.object(installer.pwd, 'getpwuid', return_value=account), patch.object(installer, 'safe_dir', side_effect=directory), patch.object(installer, 'write', side_effect=write), patch.object(installer, 'run', side_effect=lambda *a, **kw: commands.append(a)), patch.object(installer, 'emit'), patch.object(installer.socket, 'socket'), patch.object(installer, 'module', side_effect=lambda name: types.SimpleNamespace(inventory=lambda: facts) if name == 'setup-probe' else original_module(name)), patch.object(installer.sys, 'argv', ['setup-receiver.py', json.dumps(selected)]), patch.object(installer.subprocess, 'check_output', side_effect=check_output), patch.object(Path, 'read_text', read_text), patch.object(Path, 'exists', exists):
-                installer.main()
-            installer.LOG.close()
-            self.assertTrue(json.loads((state / 'state.json').read_text())['complete'])
+            original_stat, original_copy, original_is_file = Path.stat, shutil.copyfile, Path.is_file
+            def is_file(path):
+                if str(path) == '/etc/pi-audio-tray/soloist-user' or (previous_permissions and str(path) == '/etc/sudoers.d/pi-audio-tray'):
+                    return True
+                if str(path).startswith(('/etc/', '/usr/')):
+                    return False
+                return original_is_file(path)
+            def info(path, **kwargs):
+                if str(path) == '/etc/pi-audio-tray/soloist-user' or (previous_permissions and str(path) == '/etc/sudoers.d/pi-audio-tray'):
+                    return types.SimpleNamespace(st_uid=0, st_mode=0o100644)
+                return original_stat(path, **kwargs)
+            def copy(source, destination, **kwargs):
+                if Path(source).is_relative_to(base):
+                    return original_copy(source, destination, **kwargs)
+                Path(destination).write_text('fixture configuration backup')
+            def process(args, **kwargs):
+                installed = external_cockpit and args[0] == '/usr/bin/dpkg-query'
+                return types.SimpleNamespace(returncode=0 if installed else 1, stdout='install ok installed' if installed else '')
+            with patch.object(installer.os, 'geteuid', return_value=0), patch.dict(os.environ, {'SUDO_UID': str(os.getuid())}), patch.object(installer.pwd, 'getpwuid', return_value=account), patch.object(installer, 'safe_dir', side_effect=directory), patch.object(installer, 'write', side_effect=write), patch.object(installer, 'run', side_effect=lambda *a, **kw: commands.append(a)), patch.object(installer, 'emit'), patch.object(installer.socket, 'socket'), patch.object(installer, 'module', side_effect=lambda name: types.SimpleNamespace(inventory=lambda: facts) if name == 'setup-probe' else original_module(name)), patch.object(installer.sys, 'argv', ['setup-receiver.py', json.dumps(selected)]), patch.object(installer.subprocess, 'check_output', side_effect=check_output), patch.object(installer.subprocess, 'run', side_effect=process), patch.object(Path, 'read_text', read_text), patch.object(Path, 'exists', exists), patch.object(Path, 'stat', info), patch.object(Path, 'is_file', is_file), patch.object(Path, 'glob', return_value=iter(())), patch.object(shutil, 'copyfile', side_effect=copy):
+                try:
+                    installer.main()
+                finally:
+                    installer.LOG.close()
+            self.assertTrue(json.loads((state / ('maintenance.json' if maintenance else 'state.json')).read_text())['complete'])
             return outputs, commands
 
     def test_base_setup_stages_and_narrow_permissions(self):

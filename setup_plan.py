@@ -2,6 +2,22 @@
 import re
 
 FIELDS = {'music', 'web', 'updates', 'cockpit', 'shutdown', 'privacy', 'usb_uuid', 'hostname'}
+COMPONENTS = {'receiver', 'music', 'web', 'updates', 'cockpit', 'shutdown', 'privacy'}
+
+
+def validate_maintenance(value):
+    if not isinstance(value, dict) or set(value) != {'operation', 'components', 'options'} or value['operation'] != 'maintain':
+        raise ValueError('Invalid maintenance request')
+    selected = value['components']
+    if not isinstance(selected, list) or not selected or any(not isinstance(x, str) or x not in COMPONENTS for x in selected) or len(set(selected)) != len(selected):
+        raise ValueError('Select supported components to install or repair')
+    options = validate_plan(value['options'])
+    # Checkboxes express actions, not desired absence. Dependencies are explicit.
+    for key in ('music', 'web', 'updates', 'cockpit', 'shutdown', 'privacy'):
+        expected = key in selected or (key == 'music' and 'web' in selected)
+        if options[key] != expected:
+            raise ValueError('Component choices and options differ')
+    return {'operation': 'maintain', 'components': sorted(selected), 'options': options}
 
 
 def validate_plan(value):

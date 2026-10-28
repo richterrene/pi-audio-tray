@@ -98,7 +98,12 @@ class LoginHTTP(unittest.TestCase):
         body = None if fields is None else urlencode(fields)
         if body is not None:
             headers['Content-Type'] = 'application/x-www-form-urlencoded'
-        connection.request(method, path, body, headers)
+        try:
+            connection.request(method, path, body, headers)
+        except BrokenPipeError:
+            # The service may reject Origin and close before the client sends
+            # its body. Read and assert the actual HTTP response in that race.
+            pass
         response = connection.getresponse()
         data = response.read().decode()
         result = (response.status, response.getheaders(), data)

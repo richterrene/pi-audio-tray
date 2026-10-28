@@ -21,6 +21,9 @@ from music_ui import MusicWindow
 from network_ui import NetworkWindow
 from setup_ui import SetupDialog
 from audio_ui import AudioDialog
+from component_ui import ComponentsDialog
+from maintenance_ui import PolicyDialog, UpdatesDialog, VolumeDialog
+import components
 from profile_ui import ProfilesDialog
 import profiles
 from i18n import set_language
@@ -156,12 +159,39 @@ def main():
     audio = AudioDialog(window.config, window)
     audio.show_status({'protocol': 1, 'installed': True, 'configured': True, 'name': 'Pi Audio',
                        'state': 'active', 'enabled': True, 'pipewire': 'active',
-                       'version': '4.3.7-OpenSSL-Avahi-ALSA-pa'})
+                       'version': '5.6.2-OpenSSL-Avahi-pipewire-AirPlay2',
+                       'mode': 'airplay2', 'timing': 'active'})
     audio.controls()
     audio.show()
     app.processEvents()
     capture(audio, output / 'audio-integrations.png')
     audio.hide()
+    inventory = ComponentsDialog(window.config, window)
+    inventory.show_inventory({'protocol': 1, 'managed': True, 'supported': True,
+        'rows': [{'id': name, 'action': components.MAPPING[name], 'installed': True,
+                  'configured': True, 'running': name != 'airplay', 'managed': True,
+                  'details': 'Demonstration component status'} for name in components.IDS],
+        'hostname': 'audio-pi.local', 'usb_uuid': 'ABCD-1234',
+        'model': 'Raspberry Pi 3 Model B+', 'architecture': 'arm64', 'os': 'Debian 13',
+        'disks': {'blockdevices': []}})
+    inventory.controls()
+    inventory.show()
+    capture(inventory, output / 'pi-components.png')
+    inventory.hide()
+    for dialog, value, filename in (
+        (VolumeDialog(window.config, window), {'id': 42, 'serial': 123, 'cookie': 7,
+            'volume': 70, 'muted': False, 'amplified': False,
+            'name': 'Headphones · Built-in Audio'}, 'master-volume.png'),
+        (PolicyDialog(window.config, window), {'installed': True, 'exclusive': False,
+            'state': 'inactive', 'source': '', 'degraded': False}, 'source-policy.png'),
+        (UpdatesDialog(window.config, window), {'packages': [], 'total': 0,
+            'checked_at': 1793102400, 'truncated': False, 'reboot_required': False,
+            'control_installed': True, 'policy_configured': True}, 'system-updates.png')):
+        dialog.show_status(value)
+        dialog.controls()
+        dialog.show()
+        capture(dialog, output / filename)
+        dialog.hide()
     print('Captured desktop and music windows with fictional data only.')
 
 

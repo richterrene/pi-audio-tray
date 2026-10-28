@@ -1,7 +1,7 @@
 """Explicit, on-demand AirPlay management; no hidden polling or playback takeover."""
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (QDialog, QFormLayout, QHBoxLayout, QLabel,
-                              QLineEdit, QPushButton, QVBoxLayout)
+                              QLineEdit, QPushButton, QVBoxLayout, QComboBox)
 
 import audio
 from core import display_text
@@ -20,7 +20,7 @@ class AudioDialog(QDialog):
         self.setWindowTitle(tr('Audio integrations'))
         self.resize(610, 430)
         layout = QVBoxLayout(self)
-        intro = QLabel(tr('Classic AirPlay (audio only). A password is required. Other audio sources may play at the same time.'))
+        intro = QLabel(tr('AirPlay audio receiver. A separate password is required. Other audio sources may play at the same time.'))
         intro.setWordWrap(True)
         layout.addWidget(intro)
         self.status_label = QLabel(tr('Not connected'))
@@ -28,6 +28,12 @@ class AudioDialog(QDialog):
         self.status_label.setWordWrap(True)
         layout.addWidget(self.status_label)
         form = QFormLayout()
+        self.mode = QComboBox()
+        self.mode.addItem(tr('Classic AirPlay (Debian package)'), 'classic')
+        self.mode.addItem(tr('AirPlay 2 (pinned source build + NQPTP)'), 'airplay2')
+        self.mode.setItemData(1, tr('AirPlay 2 updates use versions reviewed in a newer tray app. Reinstall to apply them; APT does not update this source build.'), Qt.ItemDataRole.ToolTipRole)
+        form.addRow(tr('Installation choice'), self.mode)
+        self.mode.currentIndexChanged.connect(self.controls)
         self.name = QLineEdit('Pi Audio')
         self.name.setMaxLength(50)
         self.password = QLineEdit()
@@ -52,7 +58,7 @@ class AudioDialog(QDialog):
             for button in controls:
                 row.addWidget(button)
             layout.addLayout(row)
-        note = QLabel(tr('AirPlay 2, DSP and synchronized multiroom are not available yet.'))
+        note = QLabel(tr('AirPlay 2 compilation can take several minutes. DSP and Snapcast multiroom are not available yet.'))
         note.setWordWrap(True)
         layout.addWidget(note)
         self.install_button.clicked.connect(self.install)
@@ -66,11 +72,12 @@ class AudioDialog(QDialog):
     def controls(self):
         idle = self.worker is None
         installed = bool(self.snapshot and self.snapshot['installed'])
-        for control in (self.name, self.password, self.admin, self.install_button,
+        matches = installed and self.snapshot.get('mode', 'classic') == self.mode.currentData()
+        for control in (self.mode, self.name, self.password, self.admin, self.install_button,
                         self.refresh_button, self.close_button):
             control.setEnabled(idle)
-        self.save_button.setEnabled(idle and installed)
-        self.enable_button.setEnabled(idle and installed and self.snapshot['configured'])
+        self.save_button.setEnabled(idle and matches)
+        self.enable_button.setEnabled(idle and matches and self.snapshot['configured'])
         self.disable_button.setEnabled(idle and installed)
 
     def start(self, action, callback):
@@ -91,7 +98,7 @@ class AudioDialog(QDialog):
     def failure(self, exc):
         self.refresh_after = False
         self.snapshot = None
-        self.message(tr('Audio operation failed. If the helper is not installed, use Install AirPlay. Check the Pi service journal for details.'))
+        self.message(tr('Audio operation failed. If the helper is not installed, use Install AirPlay. Check the Pi service journal for details.') + '\n' + str(exc))
 
     def finished(self):
         worker, self.worker = self.worker, None
@@ -105,7 +112,12 @@ class AudioDialog(QDialog):
         self.start(lambda _: audio.request(self.config, 'status'), self.show_status)
 
     def show_status(self, value):
+        first = self.snapshot is None
         self.snapshot = value
+        if first:
+            self.mode.blockSignals(True)
+            self.mode.setCurrentIndex(self.mode.findData(value.get('mode', 'classic')))
+            self.mode.blockSignals(False)
         if value['name'] and not self.name.isModified():
             self.name.setText(value['name'])
         if not value['installed']:
@@ -113,17 +125,19 @@ class AudioDialog(QDialog):
             return
         self.message(tr('AirPlay: {state} · Start at boot: {enabled}',
                         state=tr(value['state']), enabled=tr('yes') if value['enabled'] else tr('no')) +
-                     '\n' + display_text(value['version']))
+                     '\n' + display_text(value['version']) +
+                     ('\n' + tr('AirPlay 2 timing: {state}', state=tr(value.get('timing', 'unknown'))) if value.get('mode') == 'airplay2' else ''))
 
     def install(self):
-        if not self.confirm(tr('Install AirPlay…'), tr('Install the optional AirPlay package on this Pi? It stays disabled until configured and enabled. Existing Shairport installations are refused.')):
+        mode = self.mode.currentData()
+        if not self.confirm(tr('Install AirPlay…'), self.mode.currentText() + '\n\n' + tr('Install or repair this AirPlay variant? Receiving is left disabled. Existing settings are preserved separately for each variant. Unrelated installations are refused.')):
             self.admin.clear()
             return
         password = self.admin.text()
         self.admin.clear()
         def completed(_):
             self.refresh_after = True
-        self.start(lambda progress: audio.install(self.config, password, progress), completed)
+        self.start(lambda progress: audio.install(self.config, password, progress, mode), completed)
 
     def save(self):
         settings = {'name': self.name.text().strip(), 'password': self.password.text()}

@@ -1,0 +1,39 @@
+name: AirPlay 2 source build
+on:
+  pull_request:
+    paths:
+      - 'pi/airplay*'
+      - 'pi/install-airplay.py'
+      - 'pi/pi-audio-nqptp.service'
+      - 'tools/check_airplay_build.py'
+      - '.github/workflows/airplay-builds.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  airplay-arm64:
+    runs-on: ubuntu-24.04-arm
+    container: debian:trixie-slim
+    timeout-minutes: 25
+    steps:
+      - name: Prepare container
+        run: apt-get update && apt-get install -y --no-remove --no-install-recommends git ca-certificates python3
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Install build dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends python3 ca-certificates
+          python3 - <<'PY'
+          import importlib.util, subprocess
+          spec = importlib.util.spec_from_file_location('build', 'pi/airplay-build.py')
+          build = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(build)
+          subprocess.run(['apt-get', 'install', '-y', '--no-remove', '--no-install-recommends', *build.PACKAGES], check=True)
+          PY
+      - name: Compile as unprivileged user and verify actual timing ABI
+        run: |
+          useradd --create-home builder
+          runuser -u builder -- python3 -I "$GITHUB_WORKSPACE/pi/airplay-build.py" /home/builder
+          python3 tools/check_airplay_build.py /home/builder

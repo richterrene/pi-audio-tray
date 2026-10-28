@@ -1,6 +1,7 @@
 #!/usr/bin/python3 -I
 """Read a bounded private key file; keep the optional control server disabled."""
 import os
+import json
 from pathlib import Path
 import stat
 import sys
@@ -50,9 +51,28 @@ def main():
     except (OSError, ValueError) as exc:
         print('Soloist configuration unavailable: ' + str(exc), file=sys.stderr)
         return 78
+    try:
+        policy_file = Path.home() / '.config/pi-audio-tray/source-policy.json'
+        exclusive = False
+        if policy_file.exists():
+            fd = os.open(policy_file, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+            with os.fdopen(fd, 'rb') as stream:
+                info = os.fstat(stream.fileno())
+                if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or info.st_mode & 0o077 or info.st_size > 256:
+                    raise ValueError('Invalid source policy')
+                policy = json.loads(stream.read(257))
+            if not isinstance(policy, dict) or set(policy) != {'exclusive'} or type(policy['exclusive']) is not bool:
+                raise ValueError('Invalid source policy')
+            exclusive = policy['exclusive']
+    except (OSError, ValueError):
+        print('Soloist source policy is invalid', file=sys.stderr)
+        return 78
     # Upstream only supports a key argument. See SECURITY.md for the remaining
     # local process-list exposure; never log this argv or enable --ws by default.
-    os.execv('/usr/local/bin/soloist', ['soloist', '-n', name, '-k', key, '-i', '40', '-z', '100'])
+    argv = ['soloist', '-n', name, '-k', key, '-i', '100', '-z', '100']
+    if exclusive:
+        argv.extend(['--ws', '127.0.0.1:0'])
+    os.execv('/usr/local/bin/soloist', argv)
 
 
 if __name__ == '__main__':

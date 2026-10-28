@@ -12,6 +12,10 @@ optional HTTPS player keep running independently of the desktop app.
 | Presentation and language | `ui_style.py`, `i18n.py`, `translations/` | Fixed-size status, bounded menus, data-only translations and flags |
 | Local/network music UI | `music_ui.py`, `network_ui.py` | Serialized requests, read coalescing, explicit command delivery |
 | Fresh Pi wizard | `setup_ui.py`, `setup_plan.py`, `provision.py` | Read-only probe, explicit plan, masked sudo input, fixed staged file manifest |
+| Component maintenance | `components.py`, `component_ui.py`, `pi/component-probe.py` | Read-only inventory and additive, reviewed repair plans for the selected account |
+| Source policy | `maintenance_ui.py`, `pi_policy.py` | Opt-in per-user arbitration, event-driven source state and owned-mute recovery |
+| System updates | `updates.py`, `pi/system-updates.py` | Cached inventory and two fixed privileged operations under the existing update policy |
+| Master volume | `volume.py`, `pi/volume-control.py` | Normal-user PipeWire sink identity validation, coalesced writes and a 100% ceiling |
 | Receiver status/pairing | `pi_helper.py` | Allowlisted health/stat requests and bounded pairing window |
 | Receiver music | `pi_music.py`, `pi_upnp.py` | MPD Unix socket; validated media paths and opt-in pinned LAN sources |
 | Optional audio integrations | `audio.py`, `audio_ui.py`, `pi_audio.py` | On-demand bounded SSH protocol; normal-user AirPlay configuration and fixed unit controls |

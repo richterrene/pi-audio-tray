@@ -118,3 +118,8 @@ their own PRs after the checks pass. Obtain a second review for privileged
 installer/auth changes when another reviewer is available. This guide does not
 grant repository access. Discussions and a formal multi-maintainer/release policy
 can be added when needed; they are not prerequisites for a focused first PR.
+
+Receiver audio source builds have a separate native ARM64 workflow. Changes to
+its pinned sources, root deployment or timing service need that build/harness in
+addition to desktop tests. Source-policy fixtures are not a substitute for
+physical cross-source playback tests; document those limits in release notes.

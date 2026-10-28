@@ -40,7 +40,7 @@ class SetupDialog(QDialog):
         layout = QVBoxLayout(self)
         intro = QLabel(tr('Start with Raspberry Pi OS Lite / Debian 13 (64-bit), networking and SSH key access enabled.\n'
                        'This installs services on the selected Pi. It does not flash an SD card.\n'
-                       'Existing receiver installations require manual upgrades.'))
+                       'Use Check / repair Pi components for an existing managed receiver.'))
         intro.setWordWrap(True)
         layout.addWidget(intro)
         self.target = QLabel(display_text(config['username'] + '@' + config['host']))
@@ -90,6 +90,9 @@ class SetupDialog(QDialog):
             row.addWidget(button)
         layout.addLayout(row)
         self.check.clicked.connect(self.preflight)
+        self.components_button = QPushButton(tr('Check / repair existing Pi components…'))
+        layout.addWidget(self.components_button)
+        self.components_button.clicked.connect(self.components)
         self.install_button.clicked.connect(self.install)
         self.close_button.clicked.connect(self.reject)
         audio = QHBoxLayout()
@@ -121,7 +124,7 @@ class SetupDialog(QDialog):
     def start(self, action, callback):
         if self.worker:
             return
-        for button in (self.check, self.install_button, self.close_button, self.output_refresh, self.output_select, self.key_button):
+        for button in (self.check, self.install_button, self.close_button, self.output_refresh, self.output_select, self.key_button, self.components_button):
             button.setEnabled(False)
         self.set_options(False)
         worker = Task(action, self)
@@ -143,6 +146,7 @@ class SetupDialog(QDialog):
         self.worker = None
         worker.deleteLater()
         self.close_button.setEnabled(True)
+        self.components_button.setEnabled(True)
         self.check.setEnabled(self.installed_plan is None)
         self.install_button.setEnabled(self.checked and self.installed_plan is None)
         self.set_options(self.installed_plan is None)
@@ -230,6 +234,18 @@ class SetupDialog(QDialog):
         if accepted and key.strip():
             self.start(lambda _: store_soloist_key(self.config, key.strip()),
                        lambda _: self.append(tr('Soloist key saved privately on the Pi; service started. Select Pi Audio in Spotify.')))
+
+    def components(self):
+        if self.worker:
+            return
+        from component_ui import ComponentsDialog
+        from PySide6.QtCore import QTimer
+        dialog = ComponentsDialog(self.config, self)
+        QTimer.singleShot(0, dialog.check)
+        dialog.exec()
+        dialog.deleteLater()
+        self.checked = False  # Any component changes invalidate a prior fresh-install probe.
+        self.install_button.setEnabled(False)
 
     def show_outputs(self, outputs):
         self.outputs.clear()
