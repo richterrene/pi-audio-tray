@@ -1,5 +1,36 @@
 # Security and privacy
 
+## Optional classic AirPlay integration
+
+The AirPlay add-on uses the existing verified SSH transport. Administrator setup
+installs a distro package, a root-owned fixed-action helper and a user service;
+it grants no new runtime sudo rules. The package's system service is masked before
+installation. Existing unrelated Shairport installations are refused; owned partial
+installations may be retried. Installation leaves the new receiver disabled.
+
+AirPlay settings require a restricted receiver name and an 8–128 character ASCII
+password. Passwords travel only as bounded JSON on SSH stdin, never argv, progress
+events or desktop configuration files. The normal audio account atomically writes
+its configuration with mode 0600 under a 0700 directory; root does not follow user
+home paths to place settings. Root and the audio account can read the password.
+Memory/swap and same-user compromise remain outside this protection.
+
+Enabling the receiver exposes Shairport/Avahi services on its LAN interfaces.
+The password is playback access control, not general host/network isolation.
+No firewall rule or router mapping is created. Control uses allowlisted user-unit
+actions over SSH; metadata/MQTT configuration is not exposed by the app. AirPlay
+uses the existing audio output and can mix with other sources. There is no source
+arbitration, DSP, multiroom security guarantee or AirPlay 2 claim in this stage.
+See [scope, diagnostics and pending hardware tests](docs/AUDIO_ROADMAP.md).
+
+The initial AirPlay review (2026-10-28) passed 208 local regression tests with
+three existing skips. CI's dependency audit found no known advisories. Static
+analysis reported five low-severity findings in the new receiver code: two
+subprocess imports (B404) and three subprocess calls (B603). These execute fixed
+programs/allowlisted service actions as argument arrays, without a shell. No
+medium/high findings were reported in the new audio modules. This is source/test
+evidence, not an independent audit or physical playback certification.
+
 This is experimental software for a trusted home-network receiver. The desktop
 app and Pi helper have not undergone an independent security audit.
 

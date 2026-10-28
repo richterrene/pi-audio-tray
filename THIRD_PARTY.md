@@ -14,3 +14,8 @@ Qt shared libraries remain separate files in the AppImage. To inspect or replace
 them for debugging modifications, use `--appimage-extract` and run `squashfs-root/AppRun`.
 The source and pinned versions for building the application are in this repository.
 No endorsement by Raspberry Pi, Spotify, or Bandcamp is implied.
+
+The optional AirPlay installer obtains Shairport Sync from the receiver's Debian
+APT repository. Its binary is not bundled in desktop releases. Package licensing,
+copyright notices and source availability are supplied by that repository; see
+[Shairport Sync upstream](https://github.com/mikebrady/shairport-sync).

@@ -14,6 +14,7 @@ optional HTTPS player keep running independently of the desktop app.
 | Fresh Pi wizard | `setup_ui.py`, `setup_plan.py`, `provision.py` | Read-only probe, explicit plan, masked sudo input, fixed staged file manifest |
 | Receiver status/pairing | `pi_helper.py` | Allowlisted health/stat requests and bounded pairing window |
 | Receiver music | `pi_music.py`, `pi_upnp.py` | MPD Unix socket; validated media paths and opt-in pinned LAN sources |
+| Optional audio integrations | `audio.py`, `audio_ui.py`, `pi_audio.py` | On-demand bounded SSH protocol; normal-user AirPlay configuration and fixed unit controls |
 | Receiver services/installers | `pi/` | Root-owned deployment, updates, conditional reboot, TLS/cookie login |
 | Packaging | `packaging_support.py`, `build_*.py` | Neutral staging, pinned runtime verification, native build/smoke tests |
 | Evidence | `tests/`, `docs/*REVIEW*`, `docs/testing/` | Regression checks and explicit validation limits |

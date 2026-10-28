@@ -168,6 +168,13 @@ sudo privileges already granted by the OS. See the
 
 ## Features
 
+The next source revision adds optional **classic AirPlay** under
+**Maintenance → Audio integrations…**: install on an existing supported receiver,
+set an AirPlay name/password, then enable. It uses the existing PipeWire output
+and can be disabled independently. It is not in the 0.7.4 packages and awaits physical Apple-device
+validation. AirPlay 2, system-wide DSP and synchronized multiroom are planned,
+not available features; see the [audio roadmap and setup/security details](docs/AUDIO_ROADMAP.md).
+
 - Fresh-Pi setup wizard with optional music/web services and Cockpit; [preview limits](docs/NEW_PI_SETUP.md).
 - Pi reachability, Soloist/Raspotify service state, Bluetooth power, audio services,
   connected device names, and pairing state.
@@ -301,6 +308,10 @@ above. See the [setup guide](docs/NEW_PI_SETUP.md) before provisioning a fresh r
 ### Tray menu
 
 <img src="assets/screenshots/tray-menu.png" alt="Compact tray menu with service status, grouped maintenance and separate Shut down Pi and Quit actions" width="480">
+
+### Optional audio integrations
+
+<img src="assets/screenshots/audio-integrations.png" alt="Classic AirPlay settings with separate password fields and explicit install, enable and disable controls; fictional demonstration data" width="610">
 
 ### Shutdown confirmation
 
