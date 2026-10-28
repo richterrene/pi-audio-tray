@@ -353,6 +353,7 @@ class TrayApp(QWidget):
                               tr('Wait for the current Pi operation before starting another.'))
             return
         self.busy.add(kind)
+        self.enable_controls()
         generation = self.generation
         def worker():
             try:
@@ -544,6 +545,7 @@ class TrayApp(QWidget):
     def failed(self, kind, error):
         self.busy.discard(kind)
         self.notice.set_state('error')
+        self.enable_controls()
         if isinstance(error, UnknownHost):
             # Never silently trust an unknown server or a changed key.
             self.timer.stop()
@@ -606,14 +608,14 @@ class TrayApp(QWidget):
             if self.music_window is not None:
                 self.music_window.hide()
             self.config = config
-            if config.get('language', 'en') != language_before:
-                plain_information(self, tr('Language saved'), tr('Restart Pi Audio Tray to apply the selected language.'))
             self.power_state = None
             self.generation += 1
             self.busy.clear()
             self.render_offline(tr('Connecting…'))
             self.update_polling()
             self.refresh()
+            if config.get('language', 'en') != language_before:
+                plain_information(self, tr('Language saved'), tr('Restart Pi Audio Tray to apply the selected language.'))
 
     def reload_profiles(self):
         from PySide6.QtCore import QSignalBlocker

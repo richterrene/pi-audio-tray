@@ -60,7 +60,9 @@ def catalogs():
 
 
 def available_languages():
-    return [(code, data['name'], data['country']) for code, data in catalogs().items()]
+    data = catalogs()
+    data.setdefault('en', {'name': 'English', 'country': 'GB'})
+    return [(code, item['name'], item['country']) for code, item in sorted(data.items())]
 
 
 def set_language(code):

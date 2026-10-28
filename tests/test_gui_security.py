@@ -162,6 +162,23 @@ class PairingDialogs(unittest.TestCase):
             self.window.settings()
         register.assert_not_called()
 
+    def test_language_notification_cannot_accept_a_stale_connection_result(self):
+        self.window.session = None
+        self.window.busy = {'poll'}
+        old_generation = self.window.generation
+        dialog = Mock()
+        dialog.exec.return_value = QDialog.DialogCode.Accepted
+        dialog.values.return_value = {**self.window.config, 'host': 'new-pi.example', 'username': 'audio', 'language': 'de'}
+        dialog.autostart.isEnabled.return_value = False
+        def notification(*args):
+            self.assertGreater(self.window.generation, old_generation)
+            with patch.object(self.window, 'done') as done:
+                self.window.job_done('poll', (old_generation, {'stale': True}))
+            done.assert_not_called()
+        with patch('app.Settings', return_value=dialog), patch('app.save_config'), \
+             patch('app.plain_information', side_effect=notification), patch.object(self.window, 'refresh'):
+            self.window.settings()
+
     def test_pairing_cannot_start_during_helper_installation(self):
         self.window.session = None
         self.window.busy.add('setup')

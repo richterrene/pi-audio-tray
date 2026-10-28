@@ -42,6 +42,7 @@ class TranslationCatalogs(unittest.TestCase):
             (Path(folder) / 'xx.json').write_text('not valid json')
             self.assertEqual(i18n.catalogs(), {})
             self.assertEqual(i18n.set_language('xx'), 'en')
+            self.assertIn(('en', 'English', 'GB'), i18n.available_languages())
 
     def test_language_selector_and_standard_buttons_in_each_language(self):
         from PySide6.QtWidgets import QApplication, QDialogButtonBox, QLabel
