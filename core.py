@@ -24,6 +24,12 @@ DEFAULTS = {'host': '', 'username': '', 'port': 22, 'key_file': '',
             'host_key_alias': '', 'poll_seconds': 10, 'music_web_url': '', 'language': 'en'}
 MAX_OUTPUT = 128 * 1024
 MAX_PAIR_LINE = 8192
+CONNECTION_FIELDS = ('host', 'port', 'username', 'key_file', 'host_key_alias')
+
+
+def connection_key(config):
+    """SSH identity only: presentation preferences do not change the receiver."""
+    return tuple(config.get(key, DEFAULTS[key]) for key in CONNECTION_FIELDS)
 
 
 def display_text(value, limit=1024):

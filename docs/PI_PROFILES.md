@@ -1,6 +1,6 @@
 # Multiple Pi connections
 
-Choose **Manage Pis…** in the status window or tray menu. Add a name for each Pi,
+Choose **Manage Pis…** in the status window or tray **Switch Pi** submenu. Add a name for each Pi,
 choose **Use selected Pi**, then enter that Pi's SSH settings. The **Active Pi**
 selector and tray **Switch Pi** submenu switch among saved connections. The app
 monitors and controls one Pi at a time; it does not mix queues or provide a fleet
@@ -9,7 +9,8 @@ dashboard. Rename profiles to recognizable names such as Living room and Study.
 Each profile stores its own hostname/IP, SSH port, username, key filename,
 known-host alias, refresh interval and optional HTTPS music URL. It does not copy
 SSH private-key contents, passwords, Soloist keys or web-player credentials.
-Language and login autostart are preferences for the desktop account, not per-Pi
+Language, refresh-interval and web-URL edits do not reset music views or cancel
+accepted controls for the same SSH connection. Language and login autostart are preferences for the desktop account, not per-Pi
 settings. Receiver compatibility requirements are the same for every profile.
 
 The existing connection is automatically presented as **My Pi** on upgrade.
@@ -27,7 +28,7 @@ pending shutdown. Once the shutdown has disconnected the Pi, another profile can
 be selected. The previous Pi keeps playing: switching does not pause music,
 stop services, shut down a Pi, or disable trusted Bluetooth connections.
 
-Existing music windows are hidden and old pending commands/results are
+On a receiver/SSH identity change, existing music windows are hidden and old pending commands/results are
 invalidated by a connection generation counter. A command already sent to the
 previous Pi can finish there. New operations use the selected profile. Every
 new hostname or known-host alias still requires verified SSH host-key approval;

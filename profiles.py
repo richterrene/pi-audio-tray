@@ -73,6 +73,10 @@ def current_config():
 def save_current_config(config):
     config = core.validate_config(config)
     data = load()
+    if not (core.config_dir() / 'profiles.json').exists():
+        # Establish the old authoritative state before touching its legacy
+        # export. A failed first migration must not select an unsaved receiver.
+        save(data)
     data['language'] = config['language']
     for row in data['profiles']:
         if row['id'] == data['active']:

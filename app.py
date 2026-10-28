@@ -13,15 +13,15 @@ from PySide6.QtCore import QObject, QTimer, Qt, Signal, QEvent
 from PySide6.QtGui import QAction, QIcon, QPainter, QPixmap
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (QApplication, QDialog, QFileDialog,
-    QCheckBox, QComboBox, QFormLayout, QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QMenu,
+    QCheckBox, QComboBox, QFormLayout, QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QSpinBox, QSystemTrayIcon, QVBoxLayout, QWidget)
 
 from core import (PairSession, UnknownHost, config_dir, disable_pairing,
                   install_helper, load_config, poll, save_config, store_soloist_key,
-                  remove_soloist_key, update_soloist, trust_host, display_text, instance_lock_file, shutdown_pi)
+                  remove_soloist_key, update_soloist, trust_host, display_text, instance_lock_file, shutdown_pi, connection_key)
 from music_ui import MusicWindow
 from version import VERSION
-from ui_style import STYLE, StableLabel, StatusIndicator, symbol, flag_icon
+from ui_style import STYLE, StableLabel, StatusIndicator, ScreenMenu, plain_tooltip, symbol, flag_icon
 from ui_style import LocalizedButtonBox as QDialogButtonBox, LocalizedMessageBox as QMessageBox, get_text
 from platform_support import lock_instance, autostart_enabled, set_autostart
 import profiles
@@ -303,37 +303,36 @@ class TrayApp(QWidget):
         footer.addWidget(self.notice)
         layout.addLayout(footer)
 
-        self.menu = QMenu()
-        self.menu.setTitle('Pi Audio Tray')
+        self.menu = ScreenMenu('Pi Audio Tray')
         self.menu.aboutToShow.connect(lambda: self.set_menu_open(True))
         self.menu.aboutToHide.connect(lambda: self.set_menu_open(False))
-        self.profile_menu = self.menu.addMenu(tr('Switch Pi'))
-        self.menu.addAction(tr('Manage Pis…'), self.manage_profiles)
-        self.reload_profiles()
+        self.menu.addAction(tr('Open status'), self.open_window)
+        self.menu.addAction(symbol('music'), tr('Music…'), self.open_music)
+        self.menu.addSeparator()
         self.menu_rows = {}
-        for key in self.rows:
+        for key in ('pi', 'spotify', 'bluetooth', 'pairing'):
             item = self.menu.addAction('—')
-            item.setEnabled(False)
+            item.triggered.connect(self.open_window)
             self.menu_rows[key] = item
         self.menu.addSeparator()
-        self.on_action = self.menu.addAction(symbol('bluetooth'), tr('Enable pairing · 3 min'), self.start_pairing)
-        self.off_action = self.menu.addAction(symbol('stop'), tr('Disable pairing'), self.stop_pairing)
-        self.menu.addSeparator()
-        self.menu.addAction(symbol('music'), tr('Music…'), self.open_music)
-        self.menu.addAction(tr('Open status'), self.open_window)
-        self.menu.addAction(symbol('refresh'), tr('Refresh now'), self.refresh)
+        pairing_menu = self.menu.submenu(tr('Pairing'), symbol('bluetooth'))
+        self.on_action = pairing_menu.addAction(tr('Enable pairing · 3 min'), self.start_pairing)
+        self.off_action = pairing_menu.addAction(tr('Disable pairing'), self.stop_pairing)
+        self.profile_menu = self.menu.submenu(tr('Switch Pi'))
+        self.reload_profiles()
         self.menu.addAction(symbol('settings'), tr('Settings…'), self.settings)
-        self.menu.addAction(tr('Set up a new Pi…'), self.setup)
-        self.menu.addAction(tr('Update Pi helper…'), self.update_helper)
-        soloist_menu = self.menu.addMenu('Spotify Soloist')
+        maintenance = self.menu.submenu(tr('Maintenance'), symbol('setup'))
+        maintenance.addAction(tr('Refresh now'), self.refresh)
+        maintenance.addAction(tr('Set up a new Pi…'), self.setup)
+        maintenance.addAction(tr('Update Pi helper…'), self.update_helper)
+        soloist_menu = maintenance.submenu('Spotify Soloist')
         soloist_menu.addAction(tr('Set / replace API key…'), self.soloist_key)
         soloist_menu.addAction(tr('Remove API key…'), self.remove_key)
         soloist_menu.addAction(tr('Check for updates now'), self.update_soloist)
-        self.menu.addSeparator()
+        version_action = maintenance.addAction(tr('Version ') + VERSION)
+        version_action.setEnabled(False)
         self.shutdown_action = self.menu.addAction(symbol('power'), tr('Shut down Pi…'), self.shutdown)
         self.menu.addSeparator()
-        version_action = self.menu.addAction(tr('Version ') + VERSION)
-        version_action.setEnabled(False)
         self.menu.addAction(tr('Quit'), self.quit)
         self.tray = QSystemTrayIcon(icon(), self)
         self.tray.setContextMenu(self.menu)
@@ -379,7 +378,7 @@ class TrayApp(QWidget):
             self.failed(kind, error)
 
     def details_needed(self):
-        return self.menu.isVisible() or (self.isVisible() and not self.isMinimized())
+        return self.isVisible() and not self.isMinimized()
 
     def update_polling(self, refresh=False):
         if not hasattr(self, 'timer'):
@@ -400,7 +399,7 @@ class TrayApp(QWidget):
         # Native exported menus may emit aboutToShow without aboutToHide, and
         # their QMenu stays invisible. Never latch continuous polling from it.
         if opened:
-            self.refresh(force_details=True)
+            self.refresh()
         self.update_polling()
         QTimer.singleShot(0, self.update_polling)
 
@@ -436,7 +435,10 @@ class TrayApp(QWidget):
                   'soloist': 'Soloist', 'updates': tr('Updates'), 'temperature': tr('Temperature'),
                   'cpu': 'CPU', 'load': tr('Load'), 'memory': tr('Memory'), 'disk': tr('Disk'), 'uptime': tr('Uptime')}
         self.rows[key].setText(value)
-        self.menu_rows[key].setText(labels[key] + ': ' + value)
+        action = self.menu_rows.get(key)
+        if action is not None:
+            action.setText(labels[key] + ': ' + value)
+            action.setToolTip(plain_tooltip(tr('Open status') + '\n' + value))
 
     def render_offline(self, message):
         self.notice.set_state('error' if self.config['host'] else 'unknown')
@@ -482,6 +484,11 @@ class TrayApp(QWidget):
             self.tray.setIcon(icon('#55d9ad' if healthy else '#e8b75f'))
             self.tray.setToolTip(tr('Pi Audio Tray · ') + (tr('services running') if healthy else tr('check services')))
             self.row('pi', tr('Online · ') + self.config['host'])
+            backend_state = tr(services.get(backend, 'unknown'))
+            self.row('spotify', backend_state + ' · ' + backend.title())
+            self.row('bluetooth', tr('Powered on') if adapter.get('Powered') else tr('Powered off / unavailable'))
+            self.row('pairing', tr('Enabled') if adapter.get('Pairable') else tr('Disabled'))
+            self.update_countdown()
             if not data.get('_detailed', True):
                 if data.get('soloist', {}).get('update_failed'):
                     self.tray.setIcon(icon('#e8b75f'))
@@ -489,15 +496,13 @@ class TrayApp(QWidget):
                 if self.power_state:
                     self.notice.setText(tr('Shutdown requested. Waiting for the Pi to disconnect. Reconnect power to start it again.'))
                 else:
-                    self.notice.setText(tr('Background health checked ') + time.strftime('%H:%M:%S') + tr(' · Open the window or tray menu for details.'))
+                    self.notice.setText(tr('Background health checked ') + time.strftime('%H:%M:%S') + tr(' · Open the status window for system statistics.'))
                 self.enable_controls()
-                # The window/menu may have opened while the light poll was pending.
+                # The status window may have opened while the light poll was pending.
                 if self.details_requested or self.details_needed():
                     self.refresh()
                 return
             self.details_requested = False
-            self.row('spotify', tr(services.get(backend, 'unknown')) + ' · ' + backend.title())
-            self.row('bluetooth', tr('Powered on') if adapter.get('Powered') else tr('Powered off / unavailable'))
             self.row('audio', tr('Ready') if all(services.get(s) == 'active' for s in audio_services) else tr('Service stopped'))
             soloist = data.get('soloist', {})
             if backend == 'soloist':
@@ -513,7 +518,6 @@ class TrayApp(QWidget):
             else:
                 self.row('updates', tr('Automatic checks enabled') if soloist.get('automatic_updates') else tr('Not fully configured'))
             self.row('devices', ', '.join(d['name'] for d in data['devices']) or tr('None'))
-            self.row('pairing', tr('Enabled') if adapter.get('Pairable') else tr('Disabled'))
             stats = data.get('stats', {})
             temperature, cpu = stats.get('temperature_c'), stats.get('cpu_percent')
             self.row('temperature', f'{temperature:.1f} °C' if temperature is not None else tr('Unavailable'))
@@ -597,7 +601,7 @@ class TrayApp(QWidget):
         if dialog.exec() == QDialog.DialogCode.Accepted:
             language_before = self.config.get('language', 'en')
             config = dialog.values()
-            if not config['host'] or not config['username']:
+            if bool(config['host']) != bool(config['username']):
                 plain_warning(self, tr('Settings'), tr('Enter a hostname and SSH username.'))
                 return
             try:
@@ -610,16 +614,20 @@ class TrayApp(QWidget):
                     set_autostart(dialog.autostart.isChecked())
                 except (OSError, ValueError) as exc:
                     plain_warning(self, tr('Autostart could not be changed'), display_text(exc))
-            if self.music_window is not None:
-                self.music_window.hide()
-                self.music_window.reset_connection()
+            changed = connection_key(config) != connection_key(self.config)
             self.config = config
-            self.power_state = None
-            self.generation += 1
-            self.busy.clear()
-            self.render_offline(tr('Connecting…'))
+            if changed:
+                if self.music_window is not None:
+                    self.music_window.hide()
+                    self.music_window.reset_connection()
+                self.power_state = None
+                self.generation += 1
+                self.busy.clear()
+                self.snapshot = None
+                self.render_offline(tr('Connecting…'))
             self.update_polling()
-            self.refresh()
+            if changed:
+                self.refresh()
             if config.get('language', 'en') != language_before:
                 plain_information(self, tr('Language saved'), tr('Restart Pi Audio Tray to apply the selected language.'))
 
@@ -633,11 +641,14 @@ class TrayApp(QWidget):
             self.active_profile = data['active']
             for row in data['profiles']:
                 self.profile_combo.addItem(row['name'], row['id'])
-                action = self.profile_menu.addAction(row['name'])
+                action = self.profile_menu.addAction(row['name'].replace('&', '&&'))
+                action.setToolTip(plain_tooltip(row['name']))
                 action.setCheckable(True)
                 action.setChecked(row['id'] == data['active'])
                 action.triggered.connect(lambda checked=False, identifier=row['id']: self.switch_profile(identifier))
             self.profile_combo.setCurrentIndex(self.profile_combo.findData(data['active']))
+            self.profile_menu.addSeparator()
+            self.profile_menu.addAction(tr('Manage Pis…'), self.manage_profiles)
         except (OSError, ValueError, TypeError) as exc:
             self.profile_combo.addItem(tr('Profiles unavailable'))
             self.profile_combo.setToolTip(display_text(exc))
@@ -846,6 +857,9 @@ class TrayApp(QWidget):
             self.row('pairing', tr('Enabled · {seconds}s remaining', seconds=max(0, self.expires - int(time.time()))))
 
     def quit(self):
+        if self.busy & {'provision', 'setup'}:
+            plain_information(self, tr('Pi operation in progress'), tr('Finish Pi setup before quitting.'))
+            return
         if self.music_window is not None:
             self.music_window.hide()
         self.timer.stop()
@@ -857,6 +871,10 @@ class TrayApp(QWidget):
             self.app.quit()
 
     def closeEvent(self, event):
+        if self.busy & {'provision', 'setup'}:
+            event.ignore()
+            self.quit()
+            return
         if QSystemTrayIcon.isSystemTrayAvailable():
             event.ignore()
             self.hide()
@@ -888,6 +906,9 @@ def main():
     if '--self-test' in sys.argv:
         from PySide6.QtCore import qVersion
         assert not icon().isNull()
+        menu_check = ScreenMenu()
+        assert menu_check.maximumHeight() > 0
+        menu_check.deleteLater()
         assert len(available_languages()) >= 19
         for _, _, country in available_languages():
             assert not flag_icon(country).isNull()

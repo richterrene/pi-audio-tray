@@ -81,6 +81,22 @@ class PiProfiles(unittest.TestCase):
         self.assertEqual(profiles.load()['active'], 'default')
         self.assertEqual(core.load_config()['host'], 'first-pi.example')
 
+    def test_failed_first_migration_keeps_the_previous_connection_selected(self):
+        first = {**core.DEFAULTS, 'host': 'first-pi.example', 'username': 'first'}
+        core.atomic_private_write(core.config_dir() / 'config.json', json.dumps(first).encode())
+        write = core.atomic_private_write
+        registry_writes = []
+        def failing_write(path, data):
+            if path.name == 'profiles.json':
+                registry_writes.append(path)
+                if len(registry_writes) == 2:
+                    raise OSError('Disk full')
+            write(path, data)
+        with patch('core.atomic_private_write', side_effect=failing_write):
+            with self.assertRaises(OSError):
+                core.save_config({**first, 'host': 'unsaved-pi.example'})
+        self.assertEqual(core.load_config(), first)
+
     @unittest.skipIf(os.name == 'nt', 'Symlink creation needs Windows privileges')
     def test_linked_registry_is_rejected(self):
         target = Path(self.temp.name) / 'outside'

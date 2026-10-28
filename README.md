@@ -106,9 +106,9 @@ Hardware and deployment caveats:
   DAC, memory capacity, thermal stability or audible playback. Test Spotify,
   Bluetooth, MPD and reboot persistence on each new deployment.
 
-## Set up a new Pi (0.7.3 preview)
+## Set up a new Pi (0.7.4 preview)
 
-The wizard is available in the **[0.7.3 preview release](https://github.com/richterrene/pi-audio-tray/releases/tag/v0.7.3)**
+The wizard is available in the **[0.7.4 preview release](https://github.com/richterrene/pi-audio-tray/releases/tag/v0.7.4)**
 for Linux, Windows and both Mac architectures. GitHub's latest stable release
 may be older and lack the wizard. **A complete installation on a spare blank Pi
 has not yet been tested.** Automated installer fixtures and native desktop
@@ -188,18 +188,18 @@ sudo privileges already granted by the OS. See the
   Key files on the Pi are private (directory mode 700, file mode 600).
 - Soloist build lifetime and automatic update status, including failed update runs.
 
-While the status window is visible (not minimized), or a Qt-rendered tray menu
-is visibly open, the app refreshes detailed status at the configured interval.
-Native exported menus request fresh details once when opened; their open/close
-notifications are not used to latch continuous polling. When both are
-closed, it checks only service/Bluetooth/update health for the tray dot once per
-minute (or less often if your configured interval is longer). Background checks
-do not request CPU, temperature, load, RAM, disk, uptime or Soloist build
-information; they do not return connected-device names. Opening the window/menu requests fresh details immediately;
-previous detail values may remain visible briefly while that request completes.
-One detailed request already in progress can finish after hiding the window.
-Pairing events remain active and explicit operations may trigger extra health
-checks. Version 0.3.3 requires the matching Pi helper’s new `health` action.
+Only the visible, non-minimized status window refreshes system statistics at the
+configured interval. The compact tray menu shows Pi, Spotify, Bluetooth and
+pairing health, with maintenance and profile choices grouped into submenus.
+Opening the menu requests a fresh **health-only** snapshot; it does not enable
+CPU, temperature, load, RAM, disk or uptime polling. With the status window hidden,
+regular health checks run once a minute (or less often if your interval is longer).
+Opening the status window requests detailed statistics immediately; a prior
+cached value can remain briefly while that request completes. A detailed request
+already in progress can finish after hiding the window. Pairing events and
+explicit operations can trigger additional health checks. Qt-rendered menus are
+bounded to the active monitor work area and can scroll; native exported menus
+retain OS rendering. Version 0.3.3+ requires the Pi helper's `health` action.
 
 CPU usage is averaged across all cores between refreshes (a one-second sample
 on the first refresh or after a cache reset); the displayed window shows the
@@ -235,7 +235,8 @@ how to add a language without changing the app's language registry.
 ## Start automatically at login
 
 In **Settings…**, enable **Start Pi Audio Tray when I sign in** and click
-**Save**. Turn it off and save to remove the registration. It is off by default,
+**Save**. Turn it off and save to disable the registration. Linux keeps a small disabled
+override if needed to mask a system-wide entry. It is off by default,
 starts in the tray/menu bar, and applies to the current desktop account after
 its next login, rather than running a system service before login. If a system
 tray is unavailable, the status window opens instead.
@@ -258,7 +259,7 @@ local executable paths only, with no SSH credentials or Pi settings.
 
 ## Screenshots
 
-These screenshots show the current desktop UI (0.7.3), rendered from the actual
+These screenshots show the current desktop UI (0.7.4), rendered from the actual
 Linux/Qt widgets with **fictional demo connection details and music metadata**. No real
 account, device address, SSH key, or Soloist API key is shown. macOS uses its
 native window and menu-bar presentation. Windows uses its system tray; see the
@@ -299,7 +300,7 @@ above. See the [setup guide](docs/NEW_PI_SETUP.md) before provisioning a fresh r
 
 ### Tray menu
 
-<img src="assets/screenshots/tray-menu.png" alt="Tray menu showing Pi statistics and the Shut down Pi action separately from Quit" width="480">
+<img src="assets/screenshots/tray-menu.png" alt="Compact tray menu with service status, grouped maintenance and separate Shut down Pi and Quit actions" width="480">
 
 ### Shutdown confirmation
 
@@ -329,12 +330,12 @@ closes only the tray application; **Shut down Pi…** powers off the receiver.
 ### Linux
 
 For the setup wizard, download the x86_64 AppImage from the
-[0.7.3 preview release](https://github.com/richterrene/pi-audio-tray/releases/tag/v0.7.3),
+[0.7.4 preview release](https://github.com/richterrene/pi-audio-tray/releases/tag/v0.7.4),
 make it executable, and launch it:
 
 ```sh
-chmod +x PiAudioTray-0.7.3-x86_64.AppImage
-./PiAudioTray-0.7.3-x86_64.AppImage --show
+chmod +x PiAudioTray-0.7.4-x86_64.AppImage
+./PiAudioTray-0.7.4-x86_64.AppImage --show
 ```
 
 Ubuntu's AppIndicator extension must be enabled for the tray icon. When no tray
@@ -351,8 +352,8 @@ Unknown host keys require explicit fingerprint approval; changed keys are reject
 
 ### Windows
 
-Download and fully extract `PiAudioTray-0.7.3-Windows-x86_64.zip` from the
-[preview release](https://github.com/richterrene/pi-audio-tray/releases/tag/v0.7.3), then run
+Download and fully extract `PiAudioTray-0.7.4-Windows-x86_64.zip` from the
+[preview release](https://github.com/richterrene/pi-audio-tray/releases/tag/v0.7.4), then run
 **Pi Audio Tray.exe** inside the extracted folder. Keep `_internal` beside it.
 No Python installation is needed. The build is unsigned; see [Windows setup and
 security](docs/WINDOWS.md). Receiver configuration and shutdown/pairing permissions
@@ -361,7 +362,7 @@ are the same as on Linux/macOS.
 ### macOS
 
 Download the ZIP matching your Mac's architecture from the
-[preview release](https://github.com/richterrene/pi-audio-tray/releases/tag/v0.7.3),
+[preview release](https://github.com/richterrene/pi-audio-tray/releases/tag/v0.7.4),
 extract it, and drag **Pi Audio
 Tray.app** into Applications. The app lives in the menu bar; **Open status** shows
 its window. Initial builds are ad-hoc signed, **not Developer ID signed or
@@ -454,7 +455,8 @@ Windows ACLs rather than POSIX modes. On macOS the default is `~/Library/Applica
 is not in the repository or AppImage. SSH private keys stay on the desktop.
 The Soloist API key is deliberately sent to the Pi over SSH and stored there;
 it is never included in Git or AppImage builds. Connected device names and addresses
-are shown at runtime only. There is no persistent application log.
+are shown at runtime only. The app does not write a persistent log itself; launchers may redirect its
+output. That output can contain hostnames and errors, so redact it before sharing.
 
 Builds copy source into a neutral temporary path to avoid embedding local account
 names in compiled Python paths. Build artifacts, keys, local configuration, and
@@ -462,6 +464,12 @@ virtual environments are excluded from Git. Do not commit your settings or runti
 screenshots if you intend to keep device names private.
 
 ## Develop and test
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for a first PR, test environments, screenshots
+and CI, and [the architecture map](docs/ARCHITECTURE.md) for module boundaries.
+The [2026-10-28 review](docs/CODE_REVIEW_2026-10-28.md) records edge-case fixes and
+remaining collaboration/validation limits.
+
 
 ```sh
 python3 -m venv .venv
@@ -486,8 +494,8 @@ and third-party notices can be inspected with `--appimage-extract`.
 
 The active `.github/workflows/desktop-builds.yml` workflow builds Linux on Ubuntu
 24.04, macOS on Apple Silicon and Intel macOS 15 runners, and Windows x64 on
-Windows Server 2022. It can be dispatched
-manually or triggered by a version tag. It uploads artifacts, not public releases,
+Windows Server 2022. Pull requests run its native tests on all four targets; package creation is
+skipped for PRs. Full builds can be dispatched manually or triggered by a version tag. It uploads artifacts, not public releases,
 and does not change repository visibility. Mac builds require native macOS tools;
 run `python build_macos.py` on the desired architecture. See the macOS notes.
 

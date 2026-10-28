@@ -5,7 +5,7 @@ import unittest
 from unittest.mock import patch
 from PySide6.QtWidgets import QApplication, QPushButton
 from app import TrayApp
-from ui_style import StableLabel, StatusIndicator, symbol, PATHS
+from ui_style import StableLabel, StatusIndicator, ScreenMenu, symbol, PATHS
 
 
 class StableStatusLayout(unittest.TestCase):
@@ -59,3 +59,17 @@ class StableStatusLayout(unittest.TestCase):
         self.assertEqual(indicator.size(), size)
         self.assertEqual(indicator.styleSheet(), style)
         self.assertEqual(indicator.state, 'ok')
+
+    def test_popup_and_submenu_limits_use_the_available_monitor_work_area(self):
+        from PySide6.QtCore import QRect
+        from PySide6.QtWidgets import QStyle
+        from unittest.mock import Mock
+        screen = Mock()
+        screen.availableGeometry.return_value = QRect(100, 100, 320, 200)
+        with patch('ui_style.QGuiApplication.screenAt', return_value=screen):
+            menu = ScreenMenu()
+            child = menu.submenu('More')
+        for popup in (menu, child):
+            self.assertLessEqual(popup.maximumHeight(), 200)
+            self.assertLessEqual(popup.maximumWidth(), 320)
+            self.assertEqual(popup.style().styleHint(QStyle.StyleHint.SH_Menu_Scrollable), 1)

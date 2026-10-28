@@ -1,5 +1,6 @@
 """Private local storage, single-instance locking and opt-in login autostart."""
 import errno
+import configparser
 import functools
 import os
 import stat
@@ -38,20 +39,37 @@ def autostart_enabled():
             return False
     path = autostart_path()
     reject_link(path, missing_ok=True)
-    try:
-        info = path.stat()
-        if not stat.S_ISREG(info.st_mode) or info.st_size > 16384:
-            raise ValueError('Autostart entry must be a small regular file')
-        data = path.read_bytes()
-    except FileNotFoundError:
+    candidates = [path, *linux_system_autostart_paths()] if sys.platform.startswith('linux') else [path]
+    for candidate in candidates:
+        try:
+            info = candidate.stat()
+            if not stat.S_ISREG(info.st_mode) or info.st_size > 16384:
+                raise ValueError('Autostart entry must be a small regular file')
+            data = candidate.read_bytes()
+            break
+        except FileNotFoundError:
+            continue
+    else:
         return False
     if sys.platform == 'darwin':
         config = plistlib.loads(data)
         if not isinstance(config, dict):
             raise ValueError('Invalid autostart property list')
         return config.get('Label') == AUTOSTART_LABEL and bool(config.get('RunAtLoad'))
-    lines = data.decode('utf-8').splitlines()
-    return '[Desktop Entry]' in lines and 'Hidden=true' not in lines and any(line.startswith('Exec=') for line in lines)
+    entry = configparser.ConfigParser(interpolation=None, strict=False)
+    entry.optionxform = str
+    try:
+        entry.read_string(data.decode('utf-8'))
+        return (not entry.getboolean('Desktop Entry', 'Hidden', fallback=False)
+                and bool(entry.get('Desktop Entry', 'Exec', fallback='').strip()))
+    except configparser.Error as exc:
+        raise ValueError('Invalid autostart desktop entry') from exc
+
+
+def linux_system_autostart_paths():
+    return [Path(root) / 'autostart/pi-audio-tray.desktop'
+            for root in os.environ.get('XDG_CONFIG_DIRS', '/etc/xdg').split(os.pathsep)
+            if root and Path(root).is_absolute()]
 
 
 def autostart_command():
@@ -100,10 +118,13 @@ def set_autostart(enabled):
     path = autostart_path()
     reject_link(path.parent, missing_ok=True)
     reject_link(path, missing_ok=True)
-    if not enabled:
+    if not enabled and (not sys.platform.startswith('linux') or not any(path.exists() for path in linux_system_autostart_paths())):
         path.unlink(missing_ok=True)
         return
-    if sys.platform == 'darwin':
+    if not enabled:
+        # Removing the user entry would expose a lower-priority system entry.
+        contents = b'[Desktop Entry]\nType=Application\nName=Pi Audio Tray\nHidden=true\n'
+    elif sys.platform == 'darwin':
         contents = plistlib.dumps({'Label': AUTOSTART_LABEL, 'ProgramArguments': command,
                                   'RunAtLoad': True, 'LimitLoadToSessionType': 'Aqua'})
     else:
