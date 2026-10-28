@@ -16,6 +16,11 @@ change the Pi's architecture requirements or the ARM64 Soloist updater.
 
 ## Installation
 
+Optional login autostart is available in Settings (off by default). It creates
+a per-user LaunchAgent for the next login. Move the app into Applications and
+reopen it before enabling this option; temporary/translocated locations are
+refused. macOS background-item controls may independently block launch.
+
 Extract the matching ZIP and move **Pi Audio Tray.app** to Applications. Launch
 it and enter the Pi's host, username and SSH key in Settings. The app normally
 stays in the menu bar rather than the Dock. Use **Open status** to show its window.
