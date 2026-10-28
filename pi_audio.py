@@ -1,6 +1,7 @@
 #!/usr/bin/python3 -I
 """Unprivileged, bounded audio add-on protocol. No arbitrary commands or graphs."""
 import json
+import importlib.util
 import os
 from pathlib import Path
 import re
@@ -9,6 +10,9 @@ import sys
 import tempfile
 
 UNIT = 'pi-audio-airplay.service'
+MODE_FILE = Path('/etc/pi-audio-tray/airplay-mode')
+AIRPLAY2 = Path('/usr/local/lib/pi-audio-tray/airplay2/shairport-5.6.2-nqptp-1.2.9/shairport-sync')
+TIMING = 'pi-audio-nqptp.service'
 ROOT = Path.home() / '.config/pi-audio-tray'
 STATES = {'active', 'inactive', 'failed', 'activating', 'deactivating', 'unknown'}
 
@@ -21,18 +25,30 @@ def command(*args):
     return result
 
 
-def state(unit):
-    value = command('/usr/bin/systemctl', '--user', 'is-active', unit).stdout.strip()
+def state(unit, system=False):
+    value = command('/usr/bin/systemctl', *([] if system else ['--user']), 'is-active', unit).stdout.strip()
     return value if value in STATES else 'unknown'
 
 
+def mode():
+    value = MODE_FILE.read_text().strip() if MODE_FILE.is_file() else 'classic'
+    if value not in ('classic', 'airplay2'):
+        raise ValueError('Invalid installed AirPlay mode')
+    return value
+
+
+def config_path():
+    return ROOT / ('airplay2.conf' if mode() == 'airplay2' else 'airplay.conf')
+
+
 def status():
-    binary = Path('/usr/bin/shairport-sync')
+    selected = mode()
+    binary = AIRPLAY2 if selected == 'airplay2' else Path('/usr/bin/shairport-sync')
     version = command(str(binary), '-V').stdout.strip() if binary.is_file() else ''
     installed = Path('/usr/local/lib/systemd/user/' + UNIT).is_file()
     name = ''
     try:
-        with (ROOT / 'airplay.conf').open() as stream:
+        with config_path().open() as stream:
             text = stream.read(4097)
         if len(text) <= 4096:
             match = re.search(r'^ name = "([A-Za-z0-9][A-Za-z0-9 ._-]{0,49})";$', text, re.MULTILINE)
@@ -40,7 +56,8 @@ def status():
     except OSError:
         pass
     return {'protocol': 1, 'installed': installed,
-            'configured': (ROOT / 'airplay.conf').is_file(),
+            'configured': config_path().is_file(), 'mode': selected,
+            'timing': state(TIMING, system=True) if selected == 'airplay2' else 'unknown',
             'name': name,
             'state': state(UNIT) if installed else 'unknown',
             'enabled': command('/usr/bin/systemctl', '--user', 'is-enabled', UNIT).stdout.strip() == 'enabled' if installed else False,
@@ -62,9 +79,12 @@ def validate_settings(value):
 def configuration(value):
     value = validate_settings(value)
     # json.dumps escapes quotes and backslashes; controls/non-ASCII were rejected.
+    ap2 = mode() == 'airplay2'
+    backend = 'pipewire' if ap2 else 'pa'
     return ('general = {\n name = ' + json.dumps(value['name']) + ';\n password = ' +
-            json.dumps(value['password']) + ';\n output_backend = "pa";\n mdns_backend = "avahi";\n};\n'
-            'pa = { application_name = "Pi Audio AirPlay"; };\n'
+            json.dumps(value['password']) + ';\n output_backend = "' + backend + '";\n mdns_backend = "avahi";\n' +
+            (' service_type = "airplay2";\n' if ap2 else '') + '};\n' +
+            backend + ' = { application_name = "Pi Audio AirPlay"; };\n' +
             'metadata = { enabled = "no"; };\n')
 
 
@@ -77,7 +97,7 @@ def configure(value):
     if ROOT.stat().st_uid != os.getuid():
         raise ValueError('Audio configuration must belong to the audio account')
     os.chmod(ROOT, 0o700)
-    destination = ROOT / 'airplay.conf'
+    destination = config_path()
     if destination.is_symlink():
         raise ValueError('Symbolic-link configuration files are unsupported')
     fd, temporary = tempfile.mkstemp(prefix='.airplay-', dir=ROOT)
@@ -101,11 +121,24 @@ def action(name, settings=None):
             if result.returncode:
                 raise RuntimeError('AirPlay restart failed; check the user service journal on the Pi')
     elif name in ('enable', 'disable'):
-        if name == 'enable' and not (ROOT / 'airplay.conf').is_file():
+        if name == 'enable' and not config_path().is_file():
             raise ValueError('Set the AirPlay name and password before enabling')
+        timing_was_enabled = False
+        if mode() == 'airplay2' and name == 'enable':
+            timing_was_enabled = command('/usr/bin/systemctl', 'is-enabled', TIMING).stdout.strip() == 'enabled'
+            result = command('/usr/bin/sudo', '-n', '/usr/bin/systemctl', 'enable', '--now', TIMING)
+            if result.returncode or state(TIMING, system=True) != 'active':
+                if not timing_was_enabled:
+                    command('/usr/bin/sudo', '-n', '/usr/bin/systemctl', 'disable', '--now', TIMING)
+                raise RuntimeError('AirPlay 2 timing service is not ready')
         result = command('/usr/bin/systemctl', '--user', name, '--now', UNIT)
         if result.returncode:
+            if mode() == 'airplay2' and name == 'enable' and not timing_was_enabled:
+                command('/usr/bin/sudo', '-n', '/usr/bin/systemctl', 'disable', '--now', TIMING)
             raise RuntimeError('AirPlay service operation failed; check the user service journal on the Pi')
+        if mode() == 'airplay2' and name == 'disable':
+            if command('/usr/bin/sudo', '-n', '/usr/bin/systemctl', 'disable', '--now', TIMING).returncode:
+                raise RuntimeError('AirPlay stopped but its timing service could not be disabled')
     else:
         raise ValueError('Unsupported audio action')
     return status()
@@ -118,7 +151,17 @@ def main():
     if len(sys.argv) != 2:
         raise ValueError('One audio action is required')
     name = sys.argv[1]
-    if name == 'status':
+    if name in ('policy-status', 'policy-configure'):
+        spec = importlib.util.spec_from_file_location('pi_policy', Path(__file__).with_name('pi_policy.py'))
+        policy = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(policy)
+        if name == 'policy-status':
+            result = policy.status()
+        else:
+            raw = sys.stdin.buffer.read(4097)
+            if len(raw) > 4096: raise ValueError('Policy request exceeds size limit')
+            result = policy.configure(json.loads(raw))
+    elif name == 'status':
         result = status()
     else:
         data = sys.stdin.buffer.read(4097)

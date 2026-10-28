@@ -1,5 +1,53 @@
 # Security and privacy
 
+## 0.8.0 maintenance, audio and volume boundaries
+
+The new on-demand [component inventory/repair](docs/PI_COMPONENTS.md) separates
+package presence, expected files and service state. Read-only probes do not read
+credentials and never act as playback tests. Maintenance requires the existing
+root-owned audio-account marker, rechecks platform/ownership and selected
+dependencies under the shared installer lock, and rejects an interrupted fresh
+installation. It is additive; unselected features are not removed/reconfigured.
+Selected app configuration can be replaced and shared packages/services can change.
+Root/user configuration snapshots are private. Missing established web credentials
+or CA material cause refusal, not silent password/CA rotation.
+
+[AirPlay 2](docs/AUDIO_ROADMAP.md) uses checksum-pinned sources, unprivileged builds,
+bounded link-free extraction, ARM64 executable checks and root-owned versioned
+deployment. Source builds require explicit reinstallation from a newer reviewed
+app for upgrades. NQPTP runs under DynamicUser with only binding capability; its
+upstream local timing/shared-memory interface assumes a trusted host. The SSH
+audio account gets only fixed enable/disable timing-service sudo commands. Variant
+changes preserve independent private settings and leave receiving disabled.
+
+[Exclusive-source policy](docs/SOURCE_POLICY.md) is opt-in and runs unprivileged.
+It uses bounded PipeWire/Spotify events and BlueZ signals captured from its unique
+bus owner. It controls only recognized streams, pauses where possible and falls
+back to muting. Failed controls produce degraded status rather than a guarantee.
+Runtime mute ownership uses server cookie plus serial/id to avoid affecting a
+different stream after restart/reuse. No track/queue metadata is persisted.
+
+The default launcher still opens no control API. Exclusive mode deliberately
+enables Soloist at **127.0.0.1 with an OS-assigned port** for pause/observe controls.
+That API lacks authentication and Origin checks: other local users/services can
+access it. This expands the local trust boundary, not the LAN listener set. The
+UI explains it before applying policy. No root permission is needed for stream
+arbitration. API-key argv exposure and hidepid limitations below still apply.
+
+On-demand updates grant exactly `pi-system-updates check` / `install` to the SSH
+account. They refresh signed indexes and run the configured unattended-upgrades
+policy, never accept arbitrary package arguments, and refuse a conflicting
+automatic-reboot setting. They do not request an immediate reboot or change the
+conditional timer. Trusted repositories can deliver root code; allowed updates
+may restart services. Held/excluded packages remain visible afterward. Package
+diagnostics are root-private; public timestamp/reboot metadata contain no secrets.
+
+Master volume uses normal-user SSH and fixed wpctl commands against a verified
+default sink. Values are limited to 0–100%, with output serial/id and server-cookie
+checks, separate mute operations and refusal to unmute an amplified output.
+Opening a control reads only. Slider requests coalesce without retargeting an old
+request at a different receiver/output. Source policy never sets hardware gain.
+
 ## Optional classic AirPlay integration
 
 The AirPlay add-on uses the existing verified SSH transport. Administrator setup
@@ -83,7 +131,8 @@ Other agents, local administrators and BlueZ policy can override pairing state.
   processes under the audio account can still read it. Treat that account and
   administrators as trusted. The supplied unit disables core dumps. Never publish full process
   listings, `systemctl status soloist`, crash dumps, or unsanitized logs.
-- The supplied launcher does not enable Soloist’s optional WebSocket server.
+- By default the supplied launcher leaves Soloist’s optional WebSocket server disabled.
+  Opt-in exclusive-source policy enables it on localhost only; see the 0.8.0 boundary below.
   That server has no authentication, including for other local users. If you
   enable it yourself, local control commands become available, but do not expose
   it to your LAN or the internet.
@@ -207,8 +256,9 @@ Windows 11 computer. [Windows details](docs/WINDOWS.md).
   This check is not a system-wide package-manager lock and cannot eliminate a
   race with a manually started update. Maintain valid system time and review
   configured APT origins. See README for the complete schedule.
-- The supplied units disable the optional unauthenticated WebSocket server and
-  Soloist core dumps. Desktop process memory, swap, clipboard managers, terminal
+- The supplied units disable Soloist core dumps. The optional unauthenticated
+  WebSocket server stays disabled unless exclusive-source control is enabled;
+  then it listens only on loopback and remains accessible to other local users. Desktop process memory, swap, clipboard managers, terminal
   capture, system logs, backups and third-party crash collection can still retain
   sensitive data. Python does not provide guaranteed secret-memory erasure.
 - Backups of `.config/soloist`, systemd state/session directories or your home

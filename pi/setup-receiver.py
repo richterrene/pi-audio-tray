@@ -1,7 +1,8 @@
 #!/usr/bin/python3 -I
-"""Administrator-only fresh receiver installation; no credentials in arguments."""
+"""Administrator-only fresh installation or additive maintenance; no credentials in arguments."""
 import fcntl
 import importlib.util
+import ipaddress
 import json
 import os
 from pathlib import Path
@@ -94,24 +95,86 @@ def main():
                 raise ValueError('Invalid setup bundle')
             shutil.copyfile(path, Path(snapshot) / path.name, follow_symlinks=False)
         SOURCE = Path(snapshot)
-        plan = module('setup_plan').validate_plan(json.loads(sys.argv[1]))
+        request = json.loads(sys.argv[1])
+        maintenance = isinstance(request, dict) and request.get('operation') == 'maintain'
+        if maintenance:
+            request = module('setup_plan').validate_maintenance(request)
+            plan = request['options']
+            selected = set(request['components'])
+            owner = Path('/etc/pi-audio-tray/soloist-user')
+            if owner.is_symlink() or not owner.is_file() or owner.stat().st_uid != 0 or owner.stat().st_mode & 0o022 or owner.read_text().strip() != account.pw_name:
+                raise ValueError('Maintenance requires an existing Pi Audio receiver owned by this audio account; use fresh setup otherwise')
+            original_state = STATE / 'state.json'
+            if original_state.exists() and not json.loads(original_state.read_text()).get('complete'):
+                raise ValueError('Finish the original interrupted fresh installation before maintenance')
+        else:
+            plan = module('setup_plan').validate_plan(request)
+            selected = {'receiver', 'shutdown'}
         probe = module('setup-probe').inventory()
         # A failed partial installation may be resumed only with the identical plan/account.
-        identity = {'user': account.pw_name, 'plan': plan}
-        state_file = STATE / 'state.json'
+        identity = {'user': account.pw_name, 'plan': request if maintenance else plan}
+        state_file = STATE / ('maintenance.json' if maintenance else 'state.json')
         state = json.loads(state_file.read_text()) if state_file.exists() else None
+        if maintenance and state and state.get('complete'):
+            state = None  # Explicit repair may be repeated; never skip a completed prior repair.
+        if maintenance and state and state.get('identity') != identity:
+            previous = Path(tempfile.mkdtemp(prefix='previous-maintenance-', dir=STATE))
+            write(previous / 'state.json', json.dumps(state), 0o600)
+            state = None  # Additive maintenance can change its plan after a failed run.
         if state and (state.get('identity') != identity or state.get('complete')):
             raise ValueError('Setup already completed or a different plan is pending; integrate manually')
-        if not state and not probe['supported']:
+        if not maintenance and not state and not probe['supported']:
             raise ValueError('; '.join(probe['reasons']))
         # Never bypass OS/architecture/account checks when resuming.
-        if probe['userspace_architecture'] != 'arm64' or probe['python_bits'] != 64 or probe['architecture'] != 'aarch64' or 'Raspberry Pi' not in probe['model'] or not Path('/etc/os-release').read_text().count('VERSION_ID="13"'):
+        release = dict(line.split('=', 1) for line in Path('/etc/os-release').read_text().splitlines() if '=' in line)
+        if probe['userspace_architecture'] != 'arm64' or probe['python_bits'] != 64 or probe['architecture'] != 'aarch64' or 'Raspberry Pi' not in probe['model'] or release.get('VERSION_ID', '').strip('"') != '13' or release.get('ID', '').strip('"') not in ('debian', 'raspbian'):
             raise ValueError('Unsupported receiver')
         home = Path(account.pw_dir)
         if home.is_symlink() or any(c.isspace() or c in '"%\\' for c in str(home)):
             raise ValueError('Unsupported audio home directory')
+        if maintenance:
+            # Only named app-owned configuration paths are replaced. Preserve
+            # a root-private snapshot and require existing credential material.
+            safe_dir('/etc/pi-audio-tray')
+            safe_dir('/usr/local/lib/pi-audio-tray')
+            cockpit_owned = any(Path('/etc/systemd/system/cockpit.socket.d/' + name).is_file() for name in ('pi-audio.conf', 'pi-audio-local.conf'))
+            if plan['cockpit'] and not cockpit_owned:
+                check = subprocess.run(['/usr/bin/dpkg-query', '-W', '-f=${Status}', 'cockpit-ws'], capture_output=True, text=True, timeout=10)
+                if check.returncode == 0 and check.stdout == 'install ok installed':
+                    raise ValueError('Existing unmanaged Cockpit requires manual integration')
+            if plan['web'] and Path('/etc/systemd/system/pi-audio-web.service').exists():
+                for relative in ('htpasswd', 'tls/ca.pem', 'tls/ca.key', 'tls/server.pem', 'tls/server.key', 'tls/server.csr', 'tls/extensions'):
+                    path = Path('/etc/pi-audio-tray/music') / relative
+                    if not path.is_file() or path.is_symlink():
+                        raise ValueError('Restore missing web credentials/certificates from backup before repair')
+                try:
+                    ipaddress.ip_address(plan['hostname'])
+                    check_name = '-verify_ip'
+                except ValueError:
+                    check_name = '-verify_hostname'
+                run('openssl', 'verify', '-no_check_time', check_name, plan['hostname'], '-CAfile', '/etc/pi-audio-tray/music/tls/ca.pem', '/etc/pi-audio-tray/music/tls/server.pem')
+            if plan['music'] and Path('/etc/systemd/system/pi-audio-mpd.service').is_file():
+                unit_text = Path('/etc/systemd/system/pi-audio-mpd.service').read_text()
+                if not re.search(r'^User=' + re.escape(account.pw_name) + r'$', unit_text, re.MULTILINE):
+                    raise ValueError('Existing MPD service belongs to another audio account')
+            if plan['music']:
+                fstab = Path('/etc/fstab').read_text()
+                matches = re.findall(r'^UUID=([^\s]+)\s+/srv/pi-audio-music\s+', fstab, re.MULTILINE)
+                if matches and (len(matches) != 1 or matches[0].casefold() != plan['usb_uuid'].casefold()):
+                    raise ValueError('Repair must use the existing USB filesystem UUID')
+            backup = Path(tempfile.mkdtemp(prefix='configuration-backup-', dir=STATE))
+            paths = [Path('/etc/fstab'), *Path('/etc/systemd/system').glob('pi-audio-*'),
+                     *Path('/etc/systemd/system').glob('soloist-update.*'),
+                     Path('/etc/systemd/system/cockpit.socket.d/pi-audio.conf'),
+                     Path('/etc/sudoers.d/pi-audio-tray'), Path('/etc/pi-audio-tray/music/mpd.conf'),
+                     Path('/etc/pi-audio-tray/music/nginx.conf')]
+            for index, path in enumerate(paths):
+                if path.is_file() and not path.is_symlink():
+                    shutil.copyfile(path, backup / (str(index) + '-' + path.name), follow_symlinks=False)
         for port in ([80, 443, 8443, 8080] if plan['web'] else []) + ([9090] if plan['cockpit'] else []):
-            if not state:
+            owned_port = maintenance and ((port == 9090 and cockpit_owned) or
+                         (port != 9090 and Path('/etc/systemd/system/pi-audio-web.service').exists()))
+            if not state and not owned_port:
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
                     listener.bind(('127.0.0.1', port))
         if plan['music']:
@@ -138,6 +201,12 @@ def main():
         def userfile(name, destination, mode=0o644):
             # Execute file placement as the account: never follow user-controlled home paths as root.
             user('mkdir', '-p', str(destination.parent))
+            if maintenance:
+                user_backup = home / '.local/state/pi-audio-tray/setup-backups' / backup.name
+                user('install', '-d', '-m', '700', str(user_backup))
+                exists = subprocess.run([*usercmd, '/usr/bin/test', '-f', str(destination)], stdin=subprocess.DEVNULL, stdout=LOG, stderr=LOG, timeout=10).returncode == 0
+                if exists:
+                    user('/usr/bin/cp', '--no-clobber', '--', str(destination), str(user_backup / name))
             with tempfile.NamedTemporaryFile(dir='/tmp', prefix='pi-audio-owned-', delete=False) as temp:
                 temp.write((SOURCE / name).read_bytes())
                 os.fchown(temp.fileno(), uid, account.pw_gid)
@@ -147,17 +216,23 @@ def main():
                 os.unlink(temp.name)
         def packages():
             run('apt-get', 'update')
-            run('apt-get', 'install', '-y', '--no-install-recommends', 'sudo', 'ca-certificates', 'bluez', 'rfkill', 'python3-dbus', 'python3-gi', 'pipewire', 'pipewire-pulse', 'wireplumber', 'pipewire-bin', 'libspa-0.2-bluetooth', 'alsa-utils', 'avahi-daemon')
-        stage('base packages', packages)
+            run('apt-get', 'install', '-y', '--reinstall', '--no-remove', '--no-install-recommends', 'sudo', 'ca-certificates', 'bluez', 'rfkill', 'python3-dbus', 'python3-gi', 'pipewire', 'pipewire-pulse', 'wireplumber', 'pipewire-bin', 'libspa-0.2-bluetooth', 'alsa-utils', 'avahi-daemon')
+        if 'receiver' in selected:
+            stage('base packages', packages)
         def receiver():
+            policy_enabled = False
+            if maintenance and Path('/usr/local/lib/systemd/user/pi-audio-policy.service').is_file():
+                policy_enabled = subprocess.run([*usercmd, '/usr/bin/systemctl', '--user', 'is-enabled', '--quiet', 'pi-audio-policy.service'], stdin=subprocess.DEVNULL, stdout=LOG, stderr=LOG, timeout=10).returncode == 0
+                user('systemctl', '--user', 'stop', 'pi-audio-policy.service')
             root = safe_dir('/usr/local/lib/pi-audio-tray')
-            for source, target, mode in [('pi_helper.py', 'pi-helper', 0o755), ('pi_music.py', 'pi-music', 0o755), ('pi_upnp.py', 'pi_upnp.py', 0o644), ('soloist-launch.py', 'soloist-launch', 0o755), ('soloist-update.py', 'soloist-update', 0o755)]:
+            for source, target, mode in [('pi_helper.py', 'pi-helper', 0o755), ('pi_music.py', 'pi-music', 0o755), ('pi_upnp.py', 'pi_upnp.py', 0o644), ('pi_audio.py', 'pi-audio', 0o755), ('pi_policy.py', 'pi_policy.py', 0o755), ('soloist-launch.py', 'soloist-launch', 0o755), ('soloist-update.py', 'soloist-update', 0o755)]:
                 install(source, root / target, mode)
             write('/etc/pi-audio-tray/soloist-user', account.pw_name + '\n')
             for name in ('soloist-update.service', 'soloist-update.timer'):
                 install(name, '/etc/systemd/system/' + name)
             user('install', '-d', '-m', '700', str(home / '.config/soloist'))
             userfile('soloist.service', home / '.config/systemd/user/soloist.service')
+            install('pi-audio-policy.service', '/usr/local/lib/systemd/user/pi-audio-policy.service')
             userfile('50-audio-receiver.conf', home / '.config/wireplumber/wireplumber.conf.d/50-audio-receiver.conf')
             run('usermod', '-aG', 'audio,bluetooth', account.pw_name)
             run('loginctl', 'enable-linger', account.pw_name)
@@ -172,21 +247,45 @@ def main():
             run('systemctl', 'enable', '--now', 'pi-audio-bluetooth-privacy.service')
             run('systemctl', 'enable', '--now', 'soloist-update.timer')
             run('systemctl', 'start', 'soloist-update.service')
-        stage('audio receiver and Soloist', receiver)
+            if maintenance:
+                user('systemctl', '--user', 'restart', 'pipewire.service', 'pipewire-pulse.service', 'wireplumber.service')
+                has_key = subprocess.run([*usercmd, '/usr/bin/test', '-s', str(home / '.config/soloist/api-key')], stdin=subprocess.DEVNULL, stdout=LOG, stderr=LOG, timeout=10).returncode == 0
+                if has_key:
+                    user('systemctl', '--user', 'restart', 'soloist.service')
+                mpd_unit = Path('/etc/systemd/system/pi-audio-mpd.service')
+                if mpd_unit.is_file() and re.search(r'^User=' + re.escape(account.pw_name) + r'$', mpd_unit.read_text(), re.MULTILINE):
+                    run('systemctl', 'try-restart', 'pi-audio-mpd.service')
+                if policy_enabled:
+                    user('systemctl', '--user', 'start', 'pi-audio-policy.service')
+        if 'receiver' in selected:
+            stage('audio receiver and Soloist', receiver)
         def permissions():
             rules = [f'{account.pw_name} ALL=(root) NOPASSWD: /usr/local/lib/pi-audio-tray/pi-helper pair', f'{account.pw_name} ALL=(root) NOPASSWD: /usr/local/lib/pi-audio-tray/pi-helper off', f'{account.pw_name} ALL=(root) NOPASSWD: /usr/bin/systemctl start soloist-update.service']
             if plan['shutdown']:
                 rules.append(f'{account.pw_name} ALL=(root) NOPASSWD: /usr/bin/systemctl --no-block poweroff')
             candidate = STATE / 'sudoers'
-            write(candidate, '\n'.join(rules) + '\n', 0o440)
+            previous = Path('/etc/sudoers.d/pi-audio-tray')
+            existing = previous.read_text() if maintenance and previous.is_file() and not previous.is_symlink() else ''
+            write(candidate, existing.rstrip() + ('\n' if existing else '') + '\n'.join(rule for rule in rules if rule not in existing.splitlines()) + '\n', 0o440)
             run('visudo', '-cf', str(candidate))
             write('/etc/sudoers.d/pi-audio-tray', candidate.read_text(), 0o440)
-        stage('restricted runtime permissions', permissions)
+        if 'receiver' in selected or 'shutdown' in selected:
+            stage('restricted runtime permissions', permissions)
         if plan['updates']:
             def updates():
-                run('apt-get', 'install', '-y', '--no-install-recommends', 'unattended-upgrades', 'needrestart')
+                run('apt-get', 'install', '-y', '--reinstall', '--no-remove', '--no-install-recommends', 'unattended-upgrades', 'needrestart')
+                if maintenance:
+                    install('soloist-update.py', '/usr/local/lib/pi-audio-tray/soloist-update', 0o755)
+                    for name in ('soloist-update.service', 'soloist-update.timer'):
+                        install(name, '/etc/systemd/system/' + name)
                 for name, dest in [('52pi-audio-upgrades', '/etc/apt/apt.conf.d/52pi-audio-upgrades'), ('needrestart.conf', '/etc/needrestart/conf.d/pi-audio.conf'), ('apt-daily-timer.conf', '/etc/systemd/system/apt-daily.timer.d/pi-audio.conf'), ('apt-upgrade-timer.conf', '/etc/systemd/system/apt-daily-upgrade.timer.d/pi-audio.conf'), ('reboot-if-needed.py', '/usr/local/lib/pi-audio-tray/reboot-if-needed'), ('pi-audio-reboot.service', '/etc/systemd/system/pi-audio-reboot.service'), ('pi-audio-reboot.timer', '/etc/systemd/system/pi-audio-reboot.timer')]:
                     install(name, dest, 0o755 if name.endswith('.py') else 0o644)
+                install('system-updates.py', '/usr/local/lib/pi-audio-tray/pi-system-updates', 0o755)
+                rules = ''.join(f'{account.pw_name} ALL=(root) NOPASSWD: /usr/local/lib/pi-audio-tray/pi-system-updates {operation}\n' for operation in ('check', 'install'))
+                candidate = STATE / 'update-sudoers'
+                write(candidate, rules, 0o440)
+                run('visudo', '-cf', str(candidate))
+                write('/etc/sudoers.d/pi-audio-updates', rules, 0o440)
                 run('systemctl', 'daemon-reload')
 
             stage('system updates and conditional 05:30 reboot', updates)
@@ -196,12 +295,14 @@ def main():
             def cockpit():
                 # Mask socket before package scripts can open a LAN listener.
                 run('systemctl', 'mask', 'cockpit.socket')
-                run('apt-get', 'install', '-y', '--no-install-recommends', 'cockpit-ws', 'cockpit-system')
+                run('apt-get', 'install', '-y', '--reinstall', '--no-remove', '--no-install-recommends', 'cockpit-ws', 'cockpit-system')
                 write('/etc/systemd/system/cockpit.socket.d/pi-audio.conf', '[Socket]\nListenStream=\nListenStream=127.0.0.1:9090\n')
                 run('systemctl', 'daemon-reload')
                 run('systemctl', 'unmask', 'cockpit.socket')
                 run('systemctl', 'enable', '--now', 'cockpit.socket')
             stage('Cockpit (SSH tunnel only)', cockpit)
+            if maintenance:
+                run('systemctl', 'restart', 'cockpit.socket')
         if plan['privacy']:
             def privacy():
                 fstab = Path('/etc/fstab')
@@ -224,19 +325,24 @@ def main():
                 run('mount', '-o', 'remount,hidepid=2', '/proc')
             stage('process privacy (hidepid=2)', privacy)
         emit('verify', 'Verifying service startup')
-        run('systemctl', 'is-active', '--quiet', 'bluetooth.service')
-        user('systemctl', '--user', 'is-active', '--quiet', 'pipewire.service', 'wireplumber.service')
+        if 'receiver' in selected:
+            run('systemctl', 'is-active', '--quiet', 'bluetooth.service')
+            user('systemctl', '--user', 'is-active', '--quiet', 'pipewire.service', 'wireplumber.service')
         if plan['music']:
             run('systemctl', 'is-active', '--quiet', 'pi-audio-mpd.service')
+            if maintenance and not plan['web']:
+                run('systemctl', 'restart', 'pi-audio-mpd.service')
         if plan['web']:
             run('systemctl', 'is-active', '--quiet', 'pi-audio-web.service', 'pi-audio-login.service', 'pi-audio-mympd.service')
         # Arm automatic maintenance only after every selected component verifies.
         if plan['updates']:
             run('systemctl', 'enable', '--now', 'apt-daily.timer', 'apt-daily-upgrade.timer', 'pi-audio-reboot.timer')
+            if maintenance:
+                run('systemctl', 'enable', '--now', 'soloist-update.timer')
             run('systemctl', 'restart', 'apt-daily.timer', 'apt-daily-upgrade.timer')
         state['complete'] = True
         write(state_file, json.dumps(state), 0o600)
-        emit('complete', 'Installed. Set your Soloist API key in Settings, then choose an audio output below.')
+        emit('complete', 'Selected components installed/repaired. Existing credentials and media were preserved.' if maintenance else 'Installed. Set your Soloist API key in Settings, then choose an audio output below.')
 
 
 if __name__ == '__main__':

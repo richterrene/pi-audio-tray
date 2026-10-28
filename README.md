@@ -21,11 +21,13 @@ The optional **Music…** window browses a Pi-attached library and controls its
 MPD queue and volume. A mobile-friendly myMPD web player can share the same queue
 over authenticated HTTPS, with a remembered browser login. HTTP port 80 can
 redirect to standard HTTPS, avoiding an explicit port in the URL. Enable it in the
-new-Pi wizard or follow the manual setup; see
+new-Pi wizard, install/repair it through Pi components, or follow the manual setup; see
 [requirements, installation, certificate trust and security](docs/LOCAL_MUSIC.md).
 The supplied installer targets Debian/Raspberry Pi OS 13 with PipeWire and a
 FAT32 USB drive. Spotify/Bluetooth and local playback can mix; pause the previous
-source when switching.
+source when switching, or opt into the [exclusive source policy](docs/SOURCE_POLICY.md).
+The tray’s **Master volume…** controls the combined Pi output independently of
+each player; **Maintenance → System updates…** checks and installs allowed updates.
 
 ## Compatibility and requirements
 
@@ -51,8 +53,12 @@ not established. Release packages are built and smoke-tested on Ubuntu 24.04;
 interactive desktop use has been tested on the Ubuntu version listed above. Bluetooth audio after migration should be tested
 on each deployment; service readiness alone does not prove audible playback.
 
-Existing receivers can use **Update Pi helper…** or the
-[manual upgrade instructions](docs/PI_SETUP.md#upgrading-an-existing-installation).
+Existing managed receivers can use **Maintenance → Check / repair Pi components…**
+to inspect all supported tools and install or repair selected components. Unselected
+features are not removed or reconfigured; shared packages may be updated.
+For the older pairing/status helper, **Update Pi helper…** and the
+[manual upgrade instructions](docs/PI_SETUP.md#upgrading-an-existing-installation)
+remain available.
 Updating the desktop package alone does not replace Pi-side maintenance scripts.
 See the [security model and runtime permissions](SECURITY.md) before granting
 administrative access.
@@ -106,9 +112,9 @@ Hardware and deployment caveats:
   DAC, memory capacity, thermal stability or audible playback. Test Spotify,
   Bluetooth, MPD and reboot persistence on each new deployment.
 
-## Set up a new Pi (0.7.4 preview)
+## Set up a new Pi (0.8.0 preview)
 
-The wizard is available in the **[0.7.4 preview release](https://github.com/richterrene/pi-audio-tray/releases/tag/v0.7.4)**
+The wizard is available in the **[0.8.0 preview release](https://github.com/richterrene/pi-audio-tray/releases/tag/v0.8.0)**
 for Linux, Windows and both Mac architectures. GitHub's latest stable release
 may be older and lack the wizard. **A complete installation on a spare blank Pi
 has not yet been tested.** Automated installer fixtures and native desktop
@@ -168,12 +174,29 @@ sudo privileges already granted by the OS. See the
 
 ## Features
 
-The next source revision adds optional **classic AirPlay** under
-**Maintenance → Audio integrations…**: install on an existing supported receiver,
-set an AirPlay name/password, then enable. It uses the existing PipeWire output
-and can be disabled independently. It is not in the 0.7.4 packages and awaits physical Apple-device
-validation. AirPlay 2, system-wide DSP and synchronized multiroom are planned,
-not available features; see the [audio roadmap and setup/security details](docs/AUDIO_ROADMAP.md).
+The **0.8.0 preview** adds:
+
+- **Master volume…** in the tray: combined PipeWire output volume and mute,
+  limited to 100%, with stale-device checks. Individual player volumes stay separate.
+- **Check / repair Pi components…**: on-demand package, configuration and service
+  checks for the selected Pi; explicit install/repair plans for existing managed
+  receivers, with no uninstall. See [component maintenance](docs/PI_COMPONENTS.md).
+- **Audio integrations…**: choose classic AirPlay (Debian package) or AirPlay 2
+  (checksum-pinned Shairport Sync 5.6.2 + NQPTP 1.2.9, compiled without root).
+  Separate private settings are preserved when switching variants; receiving is
+  left disabled after installation. Physical Apple-device validation remains pending.
+- **Playback source policy…**: keep mixing enabled (default), or opt into
+  latest-started-source priority. Spotify/MPD/BlueZ pause controls are used where
+  available; other streams are muted. Some senders keep advancing while muted.
+  See [policy behavior and localhost control security](docs/SOURCE_POLICY.md).
+- **System updates…**: cached pending packages, fresh repository checks and
+  on-demand updates allowed by the Pi's policy, without requesting an immediate
+  reboot. Install/repair **Automatic updates** once to deploy the narrow helper.
+
+Existing Pis need a **core receiver repair** to deploy source-policy controls;
+master volume and read-only component/update checks need no new Pi helper.
+AirPlay 2 uses the versions reviewed in the app; APT does not update that source
+build. DSP and Snapcast multiroom remain [planned work](docs/AUDIO_ROADMAP.md).
 
 - Fresh-Pi setup wizard with optional music/web services and Cockpit; [preview limits](docs/NEW_PI_SETUP.md).
 - Pi reachability, Soloist/Raspotify service state, Bluetooth power, audio services,
@@ -266,7 +289,7 @@ local executable paths only, with no SSH credentials or Pi settings.
 
 ## Screenshots
 
-These screenshots show the current desktop UI (0.7.4), rendered from the actual
+These screenshots show the current desktop UI (0.8.0), rendered from the actual
 Linux/Qt widgets with **fictional demo connection details and music metadata**. No real
 account, device address, SSH key, or Soloist API key is shown. macOS uses its
 native window and menu-bar presentation. Windows uses its system tray; see the
@@ -311,11 +334,19 @@ above. See the [setup guide](docs/NEW_PI_SETUP.md) before provisioning a fresh r
 
 ### Optional audio integrations
 
-<img src="assets/screenshots/audio-integrations.png" alt="Classic AirPlay settings with separate password fields and explicit install, enable and disable controls; fictional demonstration data" width="610">
+<img src="assets/screenshots/audio-integrations.png" alt="AirPlay installation choices including AirPlay 2, separate password fields, and explicit enable controls; fictional demonstration data" width="610">
 
 ### Shutdown confirmation
 
 <img src="assets/screenshots/shutdown-confirmation.png" alt="Shutdown confirmation naming the demo Pi, explaining audio and SSH will stop, with No selected by default" width="560">
+
+<img src="assets/screenshots/pi-components.png" alt="Per-Pi component status and selective installation or repair" width="850">
+
+<img src="assets/screenshots/master-volume.png" alt="Master output volume and mute controls" width="500">
+
+<img src="assets/screenshots/source-policy.png" alt="Optional exclusive audio source policy and its behavior" width="610">
+
+<img src="assets/screenshots/system-updates.png" alt="On-demand system update inventory and reviewed installation controls" width="720">
 
 Regenerate these screenshots from the actual widgets using
 `python tools/generate_screenshots.py`; the script uses a temporary config
@@ -341,12 +372,12 @@ closes only the tray application; **Shut down Pi…** powers off the receiver.
 ### Linux
 
 For the setup wizard, download the x86_64 AppImage from the
-[0.7.4 preview release](https://github.com/richterrene/pi-audio-tray/releases/tag/v0.7.4),
+[0.8.0 preview release](https://github.com/richterrene/pi-audio-tray/releases/tag/v0.8.0),
 make it executable, and launch it:
 
 ```sh
-chmod +x PiAudioTray-0.7.4-x86_64.AppImage
-./PiAudioTray-0.7.4-x86_64.AppImage --show
+chmod +x PiAudioTray-0.8.0-x86_64.AppImage
+./PiAudioTray-0.8.0-x86_64.AppImage --show
 ```
 
 Ubuntu's AppIndicator extension must be enabled for the tray icon. When no tray
@@ -363,8 +394,8 @@ Unknown host keys require explicit fingerprint approval; changed keys are reject
 
 ### Windows
 
-Download and fully extract `PiAudioTray-0.7.4-Windows-x86_64.zip` from the
-[preview release](https://github.com/richterrene/pi-audio-tray/releases/tag/v0.7.4), then run
+Download and fully extract `PiAudioTray-0.8.0-Windows-x86_64.zip` from the
+[preview release](https://github.com/richterrene/pi-audio-tray/releases/tag/v0.8.0), then run
 **Pi Audio Tray.exe** inside the extracted folder. Keep `_internal` beside it.
 No Python installation is needed. The build is unsigned; see [Windows setup and
 security](docs/WINDOWS.md). Receiver configuration and shutdown/pairing permissions
@@ -373,7 +404,7 @@ are the same as on Linux/macOS.
 ### macOS
 
 Download the ZIP matching your Mac's architecture from the
-[preview release](https://github.com/richterrene/pi-audio-tray/releases/tag/v0.7.4),
+[preview release](https://github.com/richterrene/pi-audio-tray/releases/tag/v0.8.0),
 extract it, and drag **Pi Audio
 Tray.app** into Applications. The app lives in the menu bar; **Open status** shows
 its window. Initial builds are ad-hoc signed, **not Developer ID signed or
@@ -437,9 +468,9 @@ sudo unattended-upgrade --dry-run --debug
 systemctl list-timers apt-daily.timer apt-daily-upgrade.timer soloist-update.timer pi-audio-reboot.timer
 ```
 
-The supplied Soloist unit disables the unauthenticated WebSocket control server.
-Consequently, `soloist ctl` commands requiring that server are unavailable by
-default; playback is controlled through Spotify Connect.
+The supplied launcher leaves Soloist’s unauthenticated WebSocket server disabled
+by default. Opting into exclusive-source control enables it on loopback only;
+other local Pi users can access that API. See [source policy](docs/SOURCE_POLICY.md).
 
 Logs are available with `journalctl -u soloist-update.service` and under
 `/var/log/unattended-upgrades/`.

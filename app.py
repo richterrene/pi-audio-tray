@@ -307,6 +307,7 @@ class TrayApp(QWidget):
         self.menu.aboutToShow.connect(lambda: self.set_menu_open(True))
         self.menu.aboutToHide.connect(lambda: self.set_menu_open(False))
         self.menu.addAction(tr('Open status'), self.open_window)
+        self.menu.addAction(symbol('audio'), tr('Master volume…'), lambda: self.receiver_dialog('volume'))
         self.menu.addAction(symbol('music'), tr('Music…'), self.open_music)
         self.menu.addSeparator()
         self.menu_rows = {}
@@ -324,6 +325,9 @@ class TrayApp(QWidget):
         maintenance = self.menu.submenu(tr('Maintenance'), symbol('setup'))
         maintenance.addAction(tr('Refresh now'), self.refresh)
         maintenance.addAction(tr('Set up a new Pi…'), self.setup)
+        maintenance.addAction(tr('Check / repair Pi components…'), self.components)
+        maintenance.addAction(tr('Playback source policy…'), lambda: self.receiver_dialog('policy'))
+        maintenance.addAction(tr('System updates…'), lambda: self.receiver_dialog('updates'))
         maintenance.addAction(tr('Audio integrations…'), self.audio_integrations)
         maintenance.addAction(tr('Update Pi helper…'), self.update_helper)
         soloist_menu = maintenance.submenu('Spotify Soloist')
@@ -727,6 +731,12 @@ class TrayApp(QWidget):
             self.refresh()
 
     def audio_integrations(self):
+        self.receiver_dialog('audio')
+
+    def components(self):
+        self.receiver_dialog('components')
+
+    def receiver_dialog(self, kind):
         if not self.config['host'] or not self.config['username']:
             self.settings()
             return
@@ -734,13 +744,15 @@ class TrayApp(QWidget):
             plain_information(self, tr('Pi operation active'), tr('Finish the current Pi operation before setup.'))
             return
         from audio_ui import AudioDialog
+        from component_ui import ComponentsDialog
+        from maintenance_ui import PolicyDialog, UpdatesDialog, VolumeDialog
         self.busy.add('provision')
         if self.music_window is not None:
             self.music_window.hide()
         self.timer.stop()
-        dialog = AudioDialog(self.config, self)
+        dialog = {'audio': AudioDialog, 'components': ComponentsDialog, 'policy': PolicyDialog, 'updates': UpdatesDialog, 'volume': VolumeDialog}[kind](self.config, self)
         try:
-            QTimer.singleShot(0, dialog.refresh)
+            QTimer.singleShot(0, dialog.check if kind == 'components' else dialog.refresh)
             dialog.exec()
         finally:
             dialog.deleteLater()
@@ -951,6 +963,13 @@ def main():
             assert (provision.ROOT / name).is_file(), name
         audio_check = AudioDialog({})
         audio_check.deleteLater()
+        from component_ui import ComponentsDialog
+        component_check = ComponentsDialog({'host': '', 'username': ''})
+        component_check.deleteLater()
+        from maintenance_ui import PolicyDialog, UpdatesDialog, VolumeDialog
+        for cls in (PolicyDialog, UpdatesDialog, VolumeDialog):
+            check = cls({'host': '', 'username': ''})
+            check.deleteLater()
         previous = os.environ.get('XDG_CONFIG_HOME')
         try:
             with tempfile.TemporaryDirectory(prefix='pi-audio-self-test-') as folder:

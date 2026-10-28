@@ -80,9 +80,9 @@ def main():
     for unit in distribution_units:
         run('systemctl', 'mask', '--now', unit)
     run('apt-get', 'update')
-    run('apt-get', 'install', '-y', '--no-install-recommends', 'mpd', 'mpc')
+    run('apt-get', 'install', '-y', '--reinstall', '--no-remove', '--no-install-recommends', 'mpd', 'mpc')
     if not args.no_web:
-        run('apt-get', 'install', '-y', '--no-install-recommends', 'nginx', 'apache2-utils', 'openssl', 'gnupg', 'ca-certificates')
+        run('apt-get', 'install', '-y', '--reinstall', '--no-remove', '--no-install-recommends', 'nginx', 'apache2-utils', 'openssl', 'gnupg', 'ca-certificates')
     if not args.no_web:
         with tempfile.TemporaryDirectory(prefix='pi-music-key-') as temp:
             key = Path(temp) / 'key.asc'
@@ -96,7 +96,7 @@ def main():
         write('/etc/apt/sources.list.d/pi-audio-mympd.list', f'deb [signed-by=/usr/share/keyrings/pi-audio-mympd.gpg] {REPO} ./\n')
         write('/etc/apt/preferences.d/pi-audio-mympd', 'Package: mympd\nPin: origin "download.opensuse.org"\nPin-Priority: 500\n\nPackage: *\nPin: origin "download.opensuse.org"\nPin-Priority: -1\n')
         run('apt-get', 'update')
-        run('apt-get', 'install', '-y', '--no-install-recommends', 'mympd')
+        run('apt-get', 'install', '-y', '--reinstall', '--no-remove', '--no-install-recommends', 'mympd')
         write('/etc/apt/apt.conf.d/53pi-audio-mympd', 'Unattended-Upgrade::Origins-Pattern { "origin=obs://build.opensuse.org/home:jcorporation/Debian_13,codename=Debian_13"; };\n')
     try:
         music_gid = grp.getgrnam('pi-audio-music').gr_gid

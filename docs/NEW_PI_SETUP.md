@@ -67,6 +67,13 @@ myMPD repository. See [music security and certificate setup](LOCAL_MUSIC.md).
 The wizard does not expose services to the public internet, configure router
 forwarding, install a media server on your desktop or import a CA into clients.
 
+## Existing receivers
+
+Use **Check / repair existing Pi components…** for additive maintenance of an
+existing managed receiver. The fresh wizard remains protected against overwriting
+completed/custom installations. See [component inspection and repair](PI_COMPONENTS.md).
+Uninstalling is not offered; unselected maintenance components are left alone.
+
 ## Run the wizard
 
 Choose **Set up a new Pi… → Check Pi**. The read-only inventory reports the OS,

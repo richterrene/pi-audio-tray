@@ -26,7 +26,7 @@ def settings(**changes):
 
 def snapshot(**changes):
     return {'protocol': 1, 'installed': True, 'configured': True, 'name': 'Test Audio',
-            'state': 'inactive', 'enabled': False, 'pipewire': 'active', 'version': '4.3.7-pa-', **changes}
+            'state': 'inactive', 'enabled': False, 'pipewire': 'active', 'version': '4.3.7-pa-', 'mode': 'classic', 'timing': 'unknown', **changes}
 
 
 class AudioProtocol(unittest.TestCase):
@@ -134,7 +134,7 @@ class AudioProtocol(unittest.TestCase):
             self.assertTrue((ROOT / name).is_file())
         with patch.object(provision, 'administrator_install') as install:
             audio.install({}, 'sudo-example', print)
-        self.assertEqual(install.call_args.args[1], {})
+        self.assertEqual(install.call_args.args[1], {'mode': 'classic'})
         self.assertEqual(install.call_args.args[4:], ('install-airplay.py', audio.PI_FILES, audio.TOP_FILES))
 
 
@@ -150,11 +150,15 @@ class AirPlayInstaller(unittest.TestCase):
             source.mkdir()
             for name in audio.PI_FILES:
                 shutil.copyfile(ROOT / 'pi' / name, source / name)
-            shutil.copyfile(ROOT / 'pi_audio.py', source / 'pi_audio.py')
+
+            for name in audio.TOP_FILES:
+                shutil.copyfile(ROOT / name, source / name)
             installer.__file__ = str(source / 'install-airplay.py')
             installer.STATE = base / 'state'
+            installer.SETUP_STATE = base / 'setup-state'
             commands, outputs = [], {}
             receiver = Mock()
+            receiver.safe_dir.side_effect = lambda path, *args: Path(path).mkdir(parents=True, exist_ok=True) if Path(path).is_relative_to(base) else None
             receiver.run.side_effect = lambda *args, **kwargs: commands.append(args)
             def write(path, text, mode=0o644):
                 outputs[str(path)] = (text, mode)

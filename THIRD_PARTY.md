@@ -19,3 +19,12 @@ The optional AirPlay installer obtains Shairport Sync from the receiver's Debian
 APT repository. Its binary is not bundled in desktop releases. Package licensing,
 copyright notices and source availability are supplied by that repository; see
 [Shairport Sync upstream](https://github.com/mikebrady/shairport-sync).
+
+The optional AirPlay 2 installer builds pinned Shairport Sync 5.6.2 and NQPTP
+1.2.9 sources on the Pi. These programs are not bundled in desktop releases.
+Both use GPLv2-or-later licensing; the installer retains each upstream COPYING
+file alongside the versioned receiver binaries. The exact source URLs and
+SHA-256 digests are in `pi/airplay-build.py`. Rebuilding modified versions is
+possible from those sources; a newer reviewed app and explicit reinstall are
+required to update the pinned builds. See [the audio roadmap](docs/AUDIO_ROADMAP.md)
+for build, timing-service and validation boundaries.

@@ -11,13 +11,13 @@ from setup_plan import validate_plan
 
 ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 # Explicit manifest: never upload a checkout, local configuration or __pycache__.
-PI_FILES = ('setup-probe.py', 'setup-receiver.py', 'soloist-launch.py',
+PI_FILES = ('setup-probe.py', 'component-probe.py', 'setup-receiver.py', 'soloist-launch.py',
     'soloist.service', 'soloist-update.py', 'soloist-update.service', 'soloist-update.timer',
     '50-audio-receiver.conf', '52pi-audio-upgrades', 'needrestart.conf',
     'apt-daily-timer.conf', 'apt-upgrade-timer.conf', 'reboot-if-needed.py',
-    'pi-audio-reboot.service', 'pi-audio-reboot.timer', 'install-music.py',
+    'pi-audio-reboot.service', 'pi-audio-reboot.timer', 'pi-audio-policy.service', 'system-updates.py', 'install-music.py',
     'install-web-login.py', 'web_login.py', 'web_login_config.py', 'renew-music-tls.py')
-TOP_FILES = ('setup_plan.py', 'pi_helper.py', 'pi_music.py', 'pi_upnp.py')
+TOP_FILES = ('setup_plan.py', 'pi_helper.py', 'pi_music.py', 'pi_upnp.py', 'pi_audio.py', 'pi_policy.py')
 
 
 def preflight(config):
@@ -36,6 +36,41 @@ def install(config, plan, password, progress):
     plan = validate_plan(plan)
     return administrator_install(config, plan, password, progress,
                                  'setup-receiver.py', PI_FILES, TOP_FILES)
+
+
+def read_progress(channel, progress, failure_log):
+    """Bounded fixed-event stream shared by setup and installed maintenance jobs."""
+    buffer = bytearray()
+    total = 0
+    complete = False
+    deadline = time.monotonic() + 3600
+    while True:
+        if time.monotonic() >= deadline:
+            raise TimeoutError('Setup exceeded one hour; inspect the Pi before retrying')
+        if channel.recv_ready():
+            data = channel.recv(8192)
+            total += len(data)
+            buffer.extend(data)
+            if total > 128 * 1024 or len(buffer) > 16384:
+                raise ValueError('Setup exceeded its progress output limit')
+            while b'\n' in buffer:
+                line, _, rest = buffer.partition(b'\n')
+                buffer = bytearray(rest)
+                item = json.loads(line)
+                if not isinstance(item, dict) or not isinstance(item.get('message'), str) or len(item['message']) > 2048:
+                    raise ValueError('Invalid setup progress')
+                progress(item['message'])
+                complete = complete or item.get('step') == 'complete'
+        # Do not forward sudo errors or arbitrary program diagnostics.
+        if channel.recv_stderr_ready():
+            total += len(channel.recv_stderr(8192))
+            if total > 128 * 1024:
+                raise ValueError('Setup exceeded its output limit')
+        if channel.exit_status_ready() and not channel.recv_ready() and not channel.recv_stderr_ready():
+            break
+        time.sleep(0.05)
+    if channel.recv_exit_status() != 0 or not complete:
+        raise RuntimeError('Setup did not complete. Check administrator authentication and the root-private log ' + failure_log + '. Do not reimage or remove the partial setup state.')
 
 
 def administrator_install(config, plan, password, progress, installer, pi_files, top_files,
@@ -61,37 +96,7 @@ def administrator_install(config, plan, password, progress, installer, pi_files,
             channel.exec_command(command)
             channel.sendall((password + '\n').encode())
             channel.shutdown_write()
-            buffer = bytearray()
-            total = 0
-            complete = False
-            deadline = time.monotonic() + 3600
-            while True:
-                if time.monotonic() >= deadline:
-                    raise TimeoutError('Setup exceeded one hour; inspect the Pi before retrying')
-                if channel.recv_ready():
-                    data = channel.recv(8192)
-                    total += len(data)
-                    buffer.extend(data)
-                    if total > 128 * 1024 or len(buffer) > 16384:
-                        raise ValueError('Setup exceeded its progress output limit')
-                    while b'\n' in buffer:
-                        line, _, rest = buffer.partition(b'\n')
-                        buffer = bytearray(rest)
-                        item = json.loads(line)
-                        if not isinstance(item, dict) or not isinstance(item.get('message'), str) or len(item['message']) > 2048:
-                            raise ValueError('Invalid setup progress')
-                        progress(item['message'])
-                        complete = complete or item.get('step') == 'complete'
-                # Do not forward sudo errors or arbitrary program diagnostics.
-                if channel.recv_stderr_ready():
-                    total += len(channel.recv_stderr(8192))
-                    if total > 128 * 1024:
-                        raise ValueError('Setup exceeded its output limit')
-                if channel.exit_status_ready() and not channel.recv_ready() and not channel.recv_stderr_ready():
-                    break
-                time.sleep(0.05)
-            if channel.recv_exit_status() != 0 or not complete:
-                raise RuntimeError('Setup did not complete. Check administrator authentication and the root-private log ' + failure_log + '. Do not reimage or remove the partial setup state.')
+            read_progress(channel, progress, failure_log)
         finally:
             channel.close()
     finally:

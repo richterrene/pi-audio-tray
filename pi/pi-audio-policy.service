@@ -1,0 +1,18 @@
+[Unit]
+Description=Pi Audio exclusive-source policy
+Requires=pipewire.service wireplumber.service
+After=pipewire.service wireplumber.service
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+[Service]
+ExecStart=/usr/local/lib/pi-audio-tray/pi_policy.py
+ExecStopPost=/usr/local/lib/pi-audio-tray/pi_policy.py --restore
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+UMask=0077
+
+[Install]
+WantedBy=default.target
