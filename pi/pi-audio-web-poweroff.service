@@ -1,0 +1,23 @@
+[Unit]
+Description=Pi Audio confirmed web shutdown
+[Service]
+Type=oneshot
+# Let nginx deliver the acknowledgement before shutdown stops the web services.
+ExecStartPre=/usr/bin/sleep 2
+ExecStart=/usr/bin/python3 -I /usr/local/lib/pi-audio-tray/web-power.py --execute
+User=root
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+ProtectHome=yes
+InaccessiblePaths=-/etc/shadow -/etc/gshadow -/etc/ssh -/etc/pi-audio-tray -/var/lib/pi-audio-login -/srv/pi-audio-music
+ProtectSystem=strict
+ReadWritePaths=/var/lib/pi-audio-setup/lock
+PrivateTmp=yes
+PrivateDevices=yes
+RestrictAddressFamilies=AF_UNIX
+RestrictSUIDSGID=yes
+UMask=0077
+LimitCORE=0
+TimeoutStartSec=15
+MemoryMax=64M
+TasksMax=8

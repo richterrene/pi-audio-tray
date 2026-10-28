@@ -967,6 +967,8 @@ def main():
             assert (provision.ROOT / 'pi' / name).is_file(), name
         for name in provision.TOP_FILES:
             assert (provision.ROOT / name).is_file(), name
+        for name in ('install-web-power.py', 'web_power.py', 'pi-audio-power.socket', 'pi-audio-power@.service', 'pi-audio-web-poweroff.service'):
+            assert (provision.ROOT / 'pi' / name).is_file(), name
         setup_check = SetupDialog({'host': '', 'username': ''})
         setup_check.deleteLater()
         import audio

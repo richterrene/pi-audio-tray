@@ -1,5 +1,24 @@
 # Security and privacy
 
+## Optional web shutdown (0.10.0)
+
+See [setup, capability and recovery](docs/WEB_POWER.md). This is opt-in: existing
+web music logins gain shutdown authority only after an administrator installs
+the separate fixed broker/socket component. The authentication service remains
+unprivileged with `NoNewPrivileges=yes`; no sudo rule, public listener, arbitrary
+command or myMPD script endpoint is enabled. A 0600 Unix socket and kernel peer
+UID checks restrict the root broker to the dedicated authentication account.
+
+Authenticated shutdown requires the existing Origin/CSRF boundary plus a
+120-second one-use confirmation bound to the session. Confirmation/session
+secrets are hashed in the existing private database, bounded and rejected after
+logout/password rotation. GET, replay and cross-session forms do not queue an
+action. A fixed delayed service rechecks the setup lock, package locks and known
+update states before graceful poweroff. There is no forced shutdown or remote
+power-on. Same-origin compromised player code or a stolen valid login remains a
+risk because this feature intentionally grants that login shutdown authority;
+a confirmation is not protection against same-origin code execution.
+
 ## 0.9.0 fixed stereo equalizer
 
 See [operation and recovery](docs/EQUALIZER.md) and the [0.9.0 review record](docs/security/REVIEW_0_9.md). The optional EQ add-on uses the
