@@ -424,3 +424,30 @@ an absent registration. A moved/deleted executable can prevent launch until the
 user opens the app at its new location and saves the option again. Native login
 sessions on Windows/macOS still need manual end-to-end validation; automated
 checks cover registration roundtrips and packaged startup smoke tests.
+
+
+## Named receivers and localization (0.7.3)
+
+Receiver profiles contain local connection metadata, never private-key contents
+or remote API/login secrets. They use the existing private configuration directory,
+atomic writes and Windows protected DACLs. The bounded registry validates schema,
+names, IDs and connections; linked/non-regular registries are refused. Legacy
+settings migrate without connecting or altering host-key trust. The registry is
+authoritative; corruption does not select a stale legacy receiver automatically.
+Only one profile is active. Pairing/mutations/pending shutdown block switching;
+connection generations discard stale results and unsent music commands. Already
+sent operations may finish on the previous Pi. Named host/alias SSH verification
+still applies, and shared hostnames share host-key trust. See
+[profiles and recovery](docs/PI_PROFILES.md).
+
+Language catalogs are bundled UTF-8 JSON, not executable plugins. They are
+size-bounded, use validated language/country codes and simple named placeholders,
+and reject control/bidi characters or changed format signatures. No translation
+service runs or receives data from the application. Initial source-text-only
+machine translation is a development step; contributors should proofread safety
+confirmations and preserve technical commands and paths. Missing messages use
+English, and malformed catalogs are skipped. Track/device/profile names remain
+user data rather than translation keys. The compact status LED escapes tooltip
+markup and retains an accessible description and a click-to-open plain-text
+message. Routine polling does not animate it. Pairing approval and mutation
+failure dialogs remain explicit.

@@ -7,9 +7,9 @@ Connect over SSH, monitor the receiver, and open or close Bluetooth pairing
 without typing commands. There are no cloud services or telemetry.
 
 The status window groups receiver services and system health into two cards, with
-vector symbols and reserved space for refresh messages. Long status text stays
-available in tooltips; switching between refreshing and updated keeps the controls
-and rows in place. Colors follow the desktop palette with teal action accents.
+vector symbols and a small, non-animated status LED in the bottom corner. Hover
+for the latest status or click for details; routine refreshes do not show a
+central message or move the controls and rows. Colors follow the desktop palette with teal action accents.
 
 **Status: experimental.** The combination below has been tested on real hardware.
 Other distributions and boards have not been validated. This project is not
@@ -106,9 +106,9 @@ Hardware and deployment caveats:
   DAC, memory capacity, thermal stability or audible playback. Test Spotify,
   Bluetooth, MPD and reboot persistence on each new deployment.
 
-## Set up a new Pi (0.7.2 preview)
+## Set up a new Pi (0.7.3 preview)
 
-The wizard is available in the **[0.7.2 preview release](https://github.com/richterrene/pi-audio-tray/releases/tag/v0.7.2)**
+The wizard is available in the **[0.7.3 preview release](https://github.com/richterrene/pi-audio-tray/releases/tag/v0.7.3)**
 for Linux, Windows and both Mac architectures. GitHub's latest stable release
 may be older and lack the wizard. **A complete installation on a spare blank Pi
 has not yet been tested.** Automated installer fixtures and native desktop
@@ -213,6 +213,25 @@ privately on the Pi; no historical time series is stored.
 Spotify status is the **service status**, not currently playing tracks. Bluetooth
 device status indicates a connection, not proof of current audio playback.
 
+## Multiple Pis and interface language
+
+Use **Manage Pis…** to add, rename or remove named connections, then choose an
+**Active Pi** in the window or **Switch Pi** in the tray menu. Each profile keeps
+its own SSH connection and web-player URL. Existing settings become **My Pi**.
+Only one Pi is monitored at a time; switching leaves its playback running and is
+blocked during pairing or another operation. See [Pi profiles](docs/PI_PROFILES.md)
+for host-key verification, migration, storage and recovery details.
+
+In **Settings**, choose a language by its national flag and native name, then
+**Save**. Quit and reopen the tray app to apply it; no Pi reboot is needed.
+The initial set includes English, German, French, Spanish, Italian, Portuguese,
+Dutch, Polish, Czech, Romanian, Hungarian, Greek, Swedish, Danish, Norwegian
+Bokmål, Finnish, Ukrainian, Turkish and Russian. Initial translations are
+machine-assisted and welcome native-speaker corrections. Remote technical
+errors may remain English; myMPD's web interface manages its own language.
+[Translation files and contribution instructions](docs/TRANSLATIONS.md) explain
+how to add a language without changing the app's language registry.
+
 ## Start automatically at login
 
 In **Settings…**, enable **Start Pi Audio Tray when I sign in** and click
@@ -239,7 +258,7 @@ local executable paths only, with no SSH credentials or Pi settings.
 
 ## Screenshots
 
-These screenshots show the current desktop UI (0.7.2), rendered from the actual
+These screenshots show the current desktop UI (0.7.3), rendered from the actual
 Linux/Qt widgets with **fictional demo connection details and music metadata**. No real
 account, device address, SSH key, or Soloist API key is shown. macOS uses its
 native window and menu-bar presentation. Windows uses its system tray; see the
@@ -259,6 +278,12 @@ above. See the [setup guide](docs/NEW_PI_SETUP.md) before provisioning a fresh r
 ### Connection and Soloist key settings
 
 <img src="assets/screenshots/settings.png" alt="Connection settings and buttons for securely setting or removing the Soloist API key" width="590">
+
+### Pi profiles and language selection
+
+<img src="assets/screenshots/pi-profiles.png" alt="Named Pi profiles with add, rename, remove and select controls" width="520">
+
+<img src="assets/screenshots/settings-german.png" alt="German settings with a flag and native-name language selector" width="640">
 
 ### Music library
 
@@ -304,12 +329,12 @@ closes only the tray application; **Shut down Pi…** powers off the receiver.
 ### Linux
 
 For the setup wizard, download the x86_64 AppImage from the
-[0.7.2 preview release](https://github.com/richterrene/pi-audio-tray/releases/tag/v0.7.2),
+[0.7.3 preview release](https://github.com/richterrene/pi-audio-tray/releases/tag/v0.7.3),
 make it executable, and launch it:
 
 ```sh
-chmod +x PiAudioTray-0.7.2-x86_64.AppImage
-./PiAudioTray-0.7.2-x86_64.AppImage --show
+chmod +x PiAudioTray-0.7.3-x86_64.AppImage
+./PiAudioTray-0.7.3-x86_64.AppImage --show
 ```
 
 Ubuntu's AppIndicator extension must be enabled for the tray icon. When no tray
@@ -326,8 +351,8 @@ Unknown host keys require explicit fingerprint approval; changed keys are reject
 
 ### Windows
 
-Download and fully extract `PiAudioTray-0.7.2-Windows-x86_64.zip` from the
-[preview release](https://github.com/richterrene/pi-audio-tray/releases/tag/v0.7.2), then run
+Download and fully extract `PiAudioTray-0.7.3-Windows-x86_64.zip` from the
+[preview release](https://github.com/richterrene/pi-audio-tray/releases/tag/v0.7.3), then run
 **Pi Audio Tray.exe** inside the extracted folder. Keep `_internal` beside it.
 No Python installation is needed. The build is unsigned; see [Windows setup and
 security](docs/WINDOWS.md). Receiver configuration and shutdown/pairing permissions
@@ -336,7 +361,7 @@ are the same as on Linux/macOS.
 ### macOS
 
 Download the ZIP matching your Mac's architecture from the
-[preview release](https://github.com/richterrene/pi-audio-tray/releases/tag/v0.7.2),
+[preview release](https://github.com/richterrene/pi-audio-tray/releases/tag/v0.7.3),
 extract it, and drag **Pi Audio
 Tray.app** into Applications. The app lives in the menu bar; **Open status** shows
 its window. Initial builds are ad-hoc signed, **not Developer ID signed or

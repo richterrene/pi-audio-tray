@@ -1,6 +1,7 @@
 """Optional local-library window. Playback details are polled only while visible."""
 from pathlib import PurePosixPath
 import threading
+from i18n import tr
 from PySide6.QtCore import QObject, Qt, QTimer, Signal, QUrl, QSignalBlocker
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (QDialog, QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
@@ -15,7 +16,7 @@ class MusicEvents(QObject):
 class MusicWindow(QDialog):
     def __init__(self, parent):
         super().__init__(parent)
-        self.setWindowTitle('Pi Audio · Music')
+        self.setWindowTitle(tr('Pi Audio · Music'))
         self.resize(780, 580)
         self.path, self.offset, self.more, self.busy = '', 0, False, False
         self.queue_offset = 0
@@ -25,61 +26,61 @@ class MusicWindow(QDialog):
         self.events = MusicEvents(self)
         self.events.finished.connect(self.operation_done)
         layout = QVBoxLayout(self)
-        note = QLabel('The phone interface and this window share one player and queue.\n'
-                      'Pause Spotify or Bluetooth playback before starting local music.')
+        note = QLabel(tr('The phone interface and this window share one player and queue.\n'
+                      'Pause Spotify or Bluetooth playback before starting local music.'))
         note.setTextFormat(Qt.TextFormat.PlainText)
         layout.addWidget(note)
-        self.now = QLabel('Player not checked yet')
+        self.now = QLabel(tr('Player not checked yet'))
         self.now.setTextFormat(Qt.TextFormat.PlainText)
         self.now.setWordWrap(True)
         layout.addWidget(self.now)
         controls = QHBoxLayout()
         self.buttons = []
-        for text, action in [('Previous', 'previous'), ('Play', 'play'), ('Pause', 'pause'), ('Stop', 'stop'), ('Next', 'next')]:
+        for text, action in [(tr('Previous'), 'previous'), (tr('Play'), 'play'), (tr('Pause'), 'pause'), (tr('Stop'), 'stop'), (tr('Next'), 'next')]:
             button = QPushButton(text)
             button.clicked.connect(lambda checked=False, a=action: self.request({'action': a}))
             controls.addWidget(button)
             self.buttons.append(button)
-        controls.addWidget(QLabel('Volume'))
+        controls.addWidget(QLabel(tr('Volume')))
         self.volume = QSpinBox()
         self.volume.setRange(0, 100)
         self.volume.setSuffix(' %')
         self.volume.editingFinished.connect(lambda: self.request({'action': 'volume', 'value': self.volume.value()}))
         controls.addWidget(self.volume)
         layout.addLayout(controls)
-        self.location = QLabel('Library')
+        self.location = QLabel(tr('Library'))
         self.location.setTextFormat(Qt.TextFormat.PlainText)
         self.location.setWordWrap(True)
         layout.addWidget(self.location)
         self.tabs = QTabWidget()
         self.library, self.queue = QListWidget(), QListWidget()
-        self.tabs.addTab(self.library, 'Library')
-        self.tabs.addTab(self.queue, 'Queue')
+        self.tabs.addTab(self.library, tr('Library'))
+        self.tabs.addTab(self.queue, tr('Queue'))
         self.tabs.currentChanged.connect(self.reload_page)
         self.library.itemDoubleClicked.connect(self.activate_library)
         self.queue.itemDoubleClicked.connect(self.activate_queue)
         layout.addWidget(self.tabs)
         navigation = QHBoxLayout()
-        for text, callback in [('Up', self.up), ('Previous page', lambda: self.page(-100)),
-                                ('Next page', lambda: self.page(100)), ('Refresh', self.reload_page)]:
+        for text, callback in [(tr('Up'), self.up), (tr('Previous page'), lambda: self.page(-100)),
+                                (tr('Next page'), lambda: self.page(100)), (tr('Refresh'), self.reload_page)]:
             button = QPushButton(text)
             button.clicked.connect(callback)
             navigation.addWidget(button)
             self.buttons.append(button)
         layout.addLayout(navigation)
         navigation = QHBoxLayout()
-        for text, callback in [('Add selected to queue', self.add_selected), ('Rescan USB', lambda: self.request({'action': 'update'})),
-                                ('Open web player', self.open_web)]:
+        for text, callback in [(tr('Add selected to queue'), self.add_selected), (tr('Rescan USB'), lambda: self.request({'action': 'update'})),
+                                (tr('Open web player'), self.open_web)]:
             button = QPushButton(text)
             button.clicked.connect(callback)
             navigation.addWidget(button)
             self.buttons.append(button)
         layout.addLayout(navigation)
-        self.message = QLabel('Double-click a folder to browse, or a track to play it.')
+        self.message = QLabel(tr('Double-click a folder to browse, or a track to play it.'))
         self.message.setTextFormat(Qt.TextFormat.PlainText)
         self.message.setWordWrap(True)
         layout.addWidget(self.message)
-        network = QPushButton('Network music…')
+        network = QPushButton(tr('Network music…'))
         network.clicked.connect(self.open_network)
         layout.addWidget(network)
         self.network_window = None
@@ -101,7 +102,7 @@ class MusicWindow(QDialog):
         elif action == 'volume':
             self.pending_requests = [job for job in self.pending_requests if job[0].get('action') != 'volume']
         if len(self.pending_requests) >= 32:
-            self.message.setText('Too many pending commands. Wait for the Pi to respond.')
+            self.message.setText(tr('Too many pending commands. Wait for the Pi to respond.'))
             return
         config = self.parent().config.copy()
         generation = getattr(self.parent(), 'generation', 0)
@@ -148,15 +149,15 @@ class MusicWindow(QDialog):
         if config != self.parent().config or (generation and generation[0] != getattr(self.parent(), 'generation', 0)):
             return
         if error:
-            self.message.setText('Music unavailable: ' + display_text(error) +
-                                 ' · The Pi needs the optional local-music setup. See docs/LOCAL_MUSIC.md.')
+            self.message.setText(tr('Music unavailable: ') + display_text(error) +
+                                 tr(' · The Pi needs the optional local-music setup. See docs/LOCAL_MUSIC.md.'))
             return
         if not isinstance(status, dict) or not isinstance(status.get('status'), dict) or not isinstance(status.get('current'), dict):
-            self.message.setText('Invalid music status received')
+            self.message.setText(tr('Invalid music status received'))
             return
         current, state = status['current'], status['status']
-        title = current.get('Title') or current.get('file') or 'No track selected'
-        self.now.setText(display_text(state.get('state', 'unknown')) + ' · ' + display_text(title) +
+        title = current.get('Title') or current.get('file') or tr('No track selected')
+        self.now.setText(tr(display_text(state.get('state', 'unknown'))) + ' · ' + display_text(title) +
                          (' — ' + display_text(current['Artist']) if current.get('Artist') else ''))
         try:
             volume = int(state.get('volume', -1))
@@ -182,19 +183,19 @@ class MusicWindow(QDialog):
             if not isinstance(items, list) or len(items) > 100 or any(
                     not isinstance(row, dict) or not isinstance(row.get('directory', row.get('file')), str)
                     for row in items):
-                self.message.setText('Invalid music page received')
+                self.message.setText(tr('Invalid music page received'))
                 return
             preserve = self.page_contexts.get(action) == context
             self.update_items(widget, items, preserve)
             self.page_contexts[action] = context
             self.more = result.get('more') is True
-            count = f'entries {request.get("offset", 0) + 1}–{request.get("offset", 0) + len(items)}' if items else 'No entries'
-            self.location.setText(('Library / ' + self.path if action == 'browse' else 'Queue') + ' · ' + count)
+            count = tr('entries {first}–{last}', first=request.get('offset', 0) + 1, last=request.get('offset', 0) + len(items)) if items else tr('No entries')
+            self.location.setText((tr('Library / ') + self.path if action == 'browse' else tr('Queue')) + ' · ' + count)
             if not background:
-                self.message.setText('Double-click a folder to browse, or a track to play it.' +
-                                     (' More entries on the next page.' if self.more else ''))
+                self.message.setText(tr('Double-click a folder to browse, or a track to play it.') +
+                                     (tr(' More entries on the next page.') if self.more else ''))
         elif action != 'status':
-            self.message.setText('Player updated.')
+            self.message.setText(tr('Player updated.'))
             self.reload_page()
 
     @staticmethod
@@ -221,7 +222,7 @@ class MusicWindow(QDialog):
                 widget.insertItem(index, item)
             path = row.get('directory') or row.get('file', '')
             title = row.get('Title') or PurePosixPath(str(path)).name
-            text = ('[Folder] ' if 'directory' in row else '') + display_text(title)
+            text = (tr('[Folder] ') if 'directory' in row else '') + display_text(title)
             if row.get('Artist'):
                 text += ' — ' + display_text(row['Artist'])
             if item.text() != text:

@@ -5,7 +5,7 @@ import unittest
 from unittest.mock import patch
 from PySide6.QtWidgets import QApplication, QPushButton
 from app import TrayApp
-from ui_style import StableLabel, symbol, PATHS
+from ui_style import StableLabel, StatusIndicator, symbol, PATHS
 
 
 class StableStatusLayout(unittest.TestCase):
@@ -44,3 +44,18 @@ class StableStatusLayout(unittest.TestCase):
         self.assertIn('&lt;img', label.toolTip())
         for name in PATHS:
             self.assertFalse(symbol(name).isNull())
+
+    def test_led_keeps_details_accessible_without_showing_or_animating_messages(self):
+        indicator = StatusIndicator('Updated 12:00')
+        indicator.set_state('ok')
+        style = indicator.styleSheet()
+        size = indicator.size()
+        message = '<img src="https://example.invalid/image">'
+        indicator.setText(message)
+        self.assertEqual(indicator.text(), message)
+        self.assertEqual(indicator.accessibleDescription(), message)
+        self.assertNotIn('<img', indicator.toolTip())
+        self.assertIn('&lt;img', indicator.toolTip())
+        self.assertEqual(indicator.size(), size)
+        self.assertEqual(indicator.styleSheet(), style)
+        self.assertEqual(indicator.state, 'ok')

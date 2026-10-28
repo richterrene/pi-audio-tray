@@ -21,7 +21,7 @@ from platform_support import secure_directory, private_file, open_instance_lock
 
 REMOTE_HELPER = '/usr/local/lib/pi-audio-tray/pi-helper'
 DEFAULTS = {'host': '', 'username': '', 'port': 22, 'key_file': '',
-            'host_key_alias': '', 'poll_seconds': 10, 'music_web_url': ''}
+            'host_key_alias': '', 'poll_seconds': 10, 'music_web_url': '', 'language': 'en'}
 MAX_OUTPUT = 128 * 1024
 MAX_PAIR_LINE = 8192
 
@@ -64,7 +64,7 @@ def config_dir():
     return root
 
 
-def load_config():
+def load_legacy_config():
     try:
         data = json.loads((config_dir() / 'config.json').read_text())
         return validate_config({**DEFAULTS, **data})
@@ -72,10 +72,21 @@ def load_config():
         return DEFAULTS.copy()
 
 
+def load_config():
+    import profiles
+    try:
+        return profiles.current_config()
+    except (OSError, ValueError, TypeError):
+        # A corrupt authoritative registry must not silently select a stale Pi.
+        return DEFAULTS.copy()
+
+
 def validate_config(data):
     if not isinstance(data, dict):
         raise ValueError('Invalid connection settings')
     result = {key: data.get(key, value) for key, value in DEFAULTS.items()}
+    if not isinstance(result['language'], str) or not re.fullmatch(r'[a-z]{2,3}(?:-[A-Z]{2})?', result['language']):
+        raise ValueError('Invalid language code')
     for key in ('host', 'username', 'key_file', 'host_key_alias', 'music_web_url'):
         if not isinstance(result[key], str) or len(result[key]) > 4096 or any(
                 not c.isprintable() or unicodedata.category(c) == 'Cf' for c in result[key]):
@@ -99,9 +110,8 @@ def validate_config(data):
 
 
 def save_config(data):
-    data = validate_config(data)
-    root = config_dir()
-    atomic_private_write(root / 'config.json', (json.dumps(data, indent=2) + '\n').encode())
+    import profiles
+    profiles.save_current_config(data)
 
 
 class UnknownHost(Exception):
