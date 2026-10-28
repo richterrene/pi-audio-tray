@@ -31,6 +31,7 @@ class DialogWorkers(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
+        cls.app.setQuitOnLastWindowClosed(False)  # Match the production tray lifecycle.
 
     def wait_for(self, predicate):
         deadline = time.monotonic() + 3
