@@ -101,8 +101,9 @@ administrator recovery; the app never silently runs a purge or forced reboot.
 ## Optional equalizer
 
 The component inventory includes the fixed EQ helper/module and user-service
-state. Installation and curve changes use the separate **Equalizer / DSP…**
-button rather than the package-repair checklist. This add-on requires a managed
+state. Installation uses the separate **Install / repair equalizer…** button rather
+than the package-repair checklist. Everyday curve changes use **Equalizer…**
+beside **Master volume…** in the tray menu. This add-on requires a managed
 PipeWire receiver; it leaves EQ bypassed on install/repair and preserves saved
 preferences. Disabled/bypassed is a valid state, not a broken player.
 See [equalizer setup and recovery](EQUALIZER.md).

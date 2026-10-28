@@ -172,6 +172,7 @@ class Dialog(unittest.TestCase):
     def test_per_pi_capture_preset_edits_are_local_and_no_polling_timer(self):
         from dsp_ui import DspDialog
         from PySide6.QtCore import QTimer
+        from PySide6.QtWidgets import QLineEdit
         connection={'host':'audio-pi.local','username':'audio'}
         dialog=DspDialog(connection);connection['host']='another.local'
         with patch.object(dsp,'request') as request:
@@ -183,6 +184,9 @@ class Dialog(unittest.TestCase):
             request.assert_not_called()
         self.assertEqual(dialog.config['host'],'audio-pi.local')
         self.assertEqual(dialog.findChildren(QTimer),[])
+        self.assertFalse(any(field.echoMode() == QLineEdit.EchoMode.Password for field in dialog.findChildren(QLineEdit)))
+        self.assertFalse(hasattr(dialog, 'password'))
+        self.assertFalse(hasattr(dialog, 'install_button'))
         dialog.deleteLater()
 
 

@@ -83,3 +83,14 @@ only synthetic-node diagnostics. Current-source native desktop packaging checks
 must pass before release; local Linux checks do not establish macOS/Windows
 interactive behavior. See [operation/recovery](../EQUALIZER.md) and
 [the security model](../../SECURITY.md).
+
+## 0.9.1 navigation and credential separation
+
+Everyday Equalizer controls now sit beside Master volume in the tray menu.
+Administrator installation/repair is a separate dialog reached through Pi
+components; the playback dialog no longer constructs a password field or offers
+installation actions. The same fixed installer, verified SSH transport, explicit
+confirmation and credential clearing remain. No receiver helper, startup setting,
+EQ curve or runtime privilege changes are needed for this desktop update. Real
+Qt worker/close regressions include both dialogs, and the compact-menu limit is
+retained. Screenshots and all language catalogs follow the new navigation.

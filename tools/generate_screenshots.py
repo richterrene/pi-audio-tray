@@ -21,7 +21,7 @@ from music_ui import MusicWindow
 from network_ui import NetworkWindow
 from setup_ui import SetupDialog
 from audio_ui import AudioDialog
-from dsp_ui import DspDialog
+from dsp_ui import DspDialog, DspInstallDialog
 from component_ui import ComponentsDialog
 from maintenance_ui import PolicyDialog, UpdatesDialog, VolumeDialog
 import components
@@ -178,6 +178,12 @@ def main():
     equalizer.show()
     capture(equalizer, output / 'equalizer.png')
     equalizer.hide()
+    eq_setup = DspInstallDialog(window.config, window)
+    eq_setup.show_status(equalizer.snapshot)
+    eq_setup.controls()
+    eq_setup.show()
+    capture(eq_setup, output / 'equalizer-setup.png')
+    eq_setup.hide()
     inventory = ComponentsDialog(window.config, window)
     inventory.show_inventory({'protocol': 1, 'managed': True, 'supported': True,
         'rows': [{'id': name, 'action': components.MAPPING[name], 'installed': True,

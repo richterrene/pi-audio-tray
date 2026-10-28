@@ -13,9 +13,8 @@ from maintenance_ui import MaintenanceDialog
 class DspDialog(MaintenanceDialog):
     def __init__(self, config, parent=None):
         super().__init__(config, parent)
-        self.setWindowTitle(tr('Equalizer / DSP'))
+        self.setWindowTitle(tr('Equalizer'))
         self.resize(780, 590)
-        self.recheck = False
         self.updating = False
         self.enabled = QCheckBox(tr('Enable equalizer'))
         self.body.addWidget(self.enabled)
@@ -64,23 +63,16 @@ class DspDialog(MaintenanceDialog):
         note = QLabel(tr('Applies to audio routed to the selected stereo output. Boosts add conservative automatic headroom and may lower loudness. Apply briefly reconnects the filter; bypass preserves the physical output and master volume.'))
         note.setWordWrap(True)
         self.body.addWidget(note)
-        self.password = QLineEdit()
-        self.password.setEchoMode(QLineEdit.EchoMode.Password)
-        admin = QFormLayout()
-        admin.addRow(tr('Pi sudo password (not saved)'), self.password)
-        self.body.addLayout(admin)
         row = QHBoxLayout()
-        self.install_button = QPushButton(tr('Install / repair equalizer…'))
         self.refresh_button = QPushButton(tr('Refresh now'))
         self.apply_button = QPushButton(tr('Apply equalizer'))
         self.bypass_button = QPushButton(tr('Bypass now'))
         self.close_button = QPushButton(tr('Close'))
-        for button in (self.install_button, self.refresh_button, self.apply_button, self.bypass_button, self.close_button):
+        for button in (self.refresh_button, self.apply_button, self.bypass_button, self.close_button):
             row.addWidget(button)
         self.body.addLayout(row)
         self.preset.currentIndexChanged.connect(self.choose_preset)
         self.preamp.valueChanged.connect(self.update_headroom)
-        self.install_button.clicked.connect(self.install)
         self.refresh_button.clicked.connect(self.refresh)
         self.apply_button.clicked.connect(self.apply)
         self.bypass_button.clicked.connect(lambda: self.start(lambda _: dsp.request(self.config, 'bypass'), self.show_status))
@@ -89,16 +81,15 @@ class DspDialog(MaintenanceDialog):
         self.controls()
 
     def controls(self):
-        if not hasattr(self, 'install_button'):
+        if not hasattr(self, 'apply_button'):
             return
         idle = self.worker is None
         supported = bool(self.snapshot and self.snapshot['supported'])
         ready = bool(idle and supported and self.snapshot['installed'])
         for widget in (self.enabled, self.output, self.preset, self.preamp, *self.sliders):
             widget.setEnabled(ready)
-        for widget in (self.refresh_button, self.close_button, self.password):
+        for widget in (self.refresh_button, self.close_button):
             widget.setEnabled(idle)
-        self.install_button.setEnabled(idle and supported)
         self.apply_button.setEnabled(ready and bool(self.output.currentData()))
         self.bypass_button.setEnabled(bool(idle and self.snapshot and self.snapshot['installed']))
 
@@ -155,7 +146,8 @@ class DspDialog(MaintenanceDialog):
             self.updating = False
         self.update_headroom()
         if not value['installed']:
-            text = tr('Install the equalizer controls first. Installation leaves EQ bypassed.')
+            text = (tr('Install the equalizer controls first. Installation leaves EQ bypassed.')
+                    + '\n' + tr('Maintenance') + ' → ' + tr('Check / repair Pi components…'))
         elif value['configuration_error']:
             text = tr('Saved EQ settings could not be read. Bypass is available; applying new settings replaces the invalid preferences.')
         elif value['active']:
@@ -176,6 +168,50 @@ class DspDialog(MaintenanceDialog):
         except ValueError as exc:
             self.progress(str(exc)); return
         self.start(lambda _: dsp.request(self.config, 'configure', settings), self.show_status)
+
+
+class DspInstallDialog(MaintenanceDialog):
+    """Administrator-only installation workflow, reached through Pi components."""
+    def __init__(self, config, parent=None):
+        super().__init__(config, parent)
+        self.setWindowTitle(tr('Install / repair equalizer…'))
+        self.resize(610, 260)
+        self.recheck = False
+        self.password = QLineEdit()
+        self.password.setEchoMode(QLineEdit.EchoMode.Password)
+        form = QFormLayout()
+        form.addRow(tr('Pi sudo password (not saved)'), self.password)
+        self.body.addLayout(form)
+        row = QHBoxLayout()
+        self.install_button = QPushButton(tr('Install / repair equalizer…'))
+        self.refresh_button = QPushButton(tr('Refresh now'))
+        self.close_button = QPushButton(tr('Close'))
+        for button in (self.install_button, self.refresh_button, self.close_button):
+            row.addWidget(button)
+        self.body.addLayout(row)
+        self.install_button.clicked.connect(self.install)
+        self.refresh_button.clicked.connect(self.refresh)
+        self.close_button.clicked.connect(self.reject)
+        self.controls()
+
+    def controls(self):
+        idle = self.worker is None
+        for widget in (self.password, self.refresh_button, self.close_button):
+            widget.setEnabled(idle)
+        self.install_button.setEnabled(bool(idle and self.snapshot and self.snapshot['supported']))
+
+    def refresh(self):
+        self.start(lambda _: dsp.request(self.config), self.show_status)
+
+    def show_status(self, value):
+        self.snapshot = value
+        if not value['supported']:
+            text = tr('This receiver does not have the supported PipeWire smart-filter components.')
+        elif not value['installed']:
+            text = tr('Install the equalizer controls first. Installation leaves EQ bypassed.')
+        else:
+            text = tr('Equalizer') + ': ' + tr(value['state'])
+        self.progress(text)
 
     def install(self):
         password = self.password.text()

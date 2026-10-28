@@ -112,9 +112,9 @@ Hardware and deployment caveats:
   DAC, memory capacity, thermal stability or audible playback. Test Spotify,
   Bluetooth, MPD and reboot persistence on each new deployment.
 
-## Set up a new Pi (0.9.0 preview)
+## Set up a new Pi (0.9.1 preview)
 
-The wizard is available in the **[0.9.0 preview release](https://github.com/richterrene/pi-audio-tray/releases/tag/v0.9.0)**
+The wizard is available in the **[0.9.1 preview release](https://github.com/richterrene/pi-audio-tray/releases/tag/v0.9.1)**
 for Linux, Windows and both Mac architectures. GitHub's latest stable release
 may be older and lack the wizard. **A complete installation on a spare blank Pi
 has not yet been tested.** Automated installer fixtures and native desktop
@@ -174,7 +174,7 @@ sudo privileges already granted by the OS. See the
 
 ## Features
 
-The **0.9.0 preview** adds per-Pi **Equalizer / DSP…** controls under Maintenance:
+The **0.9.1 preview** adds per-Pi **Equalizer…** controls beside **Master volume…** in the tray menu:
 10 fixed EQ bands, presets, explicit Apply and Bypass, and automatic headroom.
 It uses the existing PipeWire/WirePlumber stack; see [setup and limitations](docs/EQUALIZER.md).
 
@@ -293,7 +293,7 @@ local executable paths only, with no SSH credentials or Pi settings.
 
 ## Screenshots
 
-These screenshots show the current desktop UI (0.9.0), rendered from the actual
+These screenshots show the current desktop UI (0.9.1), rendered from the actual
 Linux/Qt widgets with **fictional demo connection details and music metadata**. No real
 account, device address, SSH key, or Soloist API key is shown. macOS uses its
 native window and menu-bar presentation. Windows uses its system tray; see the
@@ -378,12 +378,12 @@ closes only the tray application; **Shut down Pi…** powers off the receiver.
 ### Linux
 
 For the setup wizard, download the x86_64 AppImage from the
-[0.9.0 preview release](https://github.com/richterrene/pi-audio-tray/releases/tag/v0.9.0),
+[0.9.1 preview release](https://github.com/richterrene/pi-audio-tray/releases/tag/v0.9.1),
 make it executable, and launch it:
 
 ```sh
-chmod +x PiAudioTray-0.9.0-x86_64.AppImage
-./PiAudioTray-0.9.0-x86_64.AppImage --show
+chmod +x PiAudioTray-0.9.1-x86_64.AppImage
+./PiAudioTray-0.9.1-x86_64.AppImage --show
 ```
 
 Ubuntu's AppIndicator extension must be enabled for the tray icon. When no tray
@@ -400,8 +400,8 @@ Unknown host keys require explicit fingerprint approval; changed keys are reject
 
 ### Windows
 
-Download and fully extract `PiAudioTray-0.9.0-Windows-x86_64.zip` from the
-[preview release](https://github.com/richterrene/pi-audio-tray/releases/tag/v0.9.0), then run
+Download and fully extract `PiAudioTray-0.9.1-Windows-x86_64.zip` from the
+[preview release](https://github.com/richterrene/pi-audio-tray/releases/tag/v0.9.1), then run
 **Pi Audio Tray.exe** inside the extracted folder. Keep `_internal` beside it.
 No Python installation is needed. The build is unsigned; see [Windows setup and
 security](docs/WINDOWS.md). Receiver configuration and shutdown/pairing permissions
@@ -410,7 +410,7 @@ are the same as on Linux/macOS.
 ### macOS
 
 Download the ZIP matching your Mac's architecture from the
-[preview release](https://github.com/richterrene/pi-audio-tray/releases/tag/v0.9.0),
+[preview release](https://github.com/richterrene/pi-audio-tray/releases/tag/v0.9.1),
 extract it, and drag **Pi Audio
 Tray.app** into Applications. The app lives in the menu bar; **Open status** shows
 its window. Initial builds are ad-hoc signed, **not Developer ID signed or
