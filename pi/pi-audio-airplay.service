@@ -1,0 +1,16 @@
+[Unit]
+Description=Pi Audio classic AirPlay receiver
+Requires=pipewire-pulse.service
+After=pipewire-pulse.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/shairport-sync -c %h/.config/pi-audio-tray/airplay.conf
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+UMask=0077
+
+[Install]
+WantedBy=default.target

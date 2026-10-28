@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parent
 def prepare_source(work):
     source = work / 'src'
     source.mkdir()
-    for name in ('app.py', 'core.py', 'platform_support.py', 'i18n.py', 'profiles.py', 'profile_ui.py', 'music_ui.py', 'network_ui.py', 'ui_style.py', 'pi_music.py', 'pi_upnp.py', 'pi_helper.py', 'version.py', 'setup_ui.py', 'setup_plan.py', 'provision.py', 'LICENSE', 'THIRD_PARTY.md'):
+    for name in ('app.py', 'core.py', 'platform_support.py', 'i18n.py', 'profiles.py', 'profile_ui.py', 'music_ui.py', 'network_ui.py', 'ui_style.py', 'pi_music.py', 'pi_upnp.py', 'pi_helper.py', 'version.py', 'setup_ui.py', 'setup_plan.py', 'provision.py', 'audio.py', 'audio_ui.py', 'pi_audio.py', 'LICENSE', 'THIRD_PARTY.md'):
         shutil.copy2(ROOT / name, source / name)
     shutil.copytree(ROOT / 'pi', source / 'pi', ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
     shutil.copytree(ROOT / 'translations', source / 'translations')

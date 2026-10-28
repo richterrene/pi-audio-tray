@@ -34,6 +34,13 @@ def preflight(config):
 
 def install(config, plan, password, progress):
     plan = validate_plan(plan)
+    return administrator_install(config, plan, password, progress,
+                                 'setup-receiver.py', PI_FILES, TOP_FILES)
+
+
+def administrator_install(config, plan, password, progress, installer, pi_files, top_files,
+                          failure_log='/var/lib/pi-audio-setup/install.log'):
+    """Run a caller-selected, bundled installer; never accept filenames from the Pi/UI."""
     if '\n' in password or '\r' in password or len(password) > 1024:
         raise ValueError('Unsupported administrator password')
     client = connect(config)
@@ -42,13 +49,13 @@ def install(config, plan, password, progress):
         with client.open_sftp() as sftp:
             sftp.get_channel().settimeout(20)
             sftp.mkdir(stage, mode=0o700)
-            for name in (*PI_FILES, *TOP_FILES):
-                source = ROOT / ('pi/' + name if name in PI_FILES else name)
+            for name in (*pi_files, *top_files):
+                source = ROOT / ('pi/' + name if name in pi_files else name)
                 with sftp.file(stage + '/' + name, 'wx') as target:
                     target.write(source.read_bytes())
                 sftp.chmod(stage + '/' + name, 0o600)
         # No PTY: sudo cannot echo the secret. No secret is in argv, env, or log.
-        command = 'sudo -S -p "" -- /usr/bin/python3 -I ' + shlex.quote(stage + '/setup-receiver.py') + ' ' + shlex.quote(json.dumps(plan, separators=(',', ':')))
+        command = 'sudo -S -p "" -- /usr/bin/python3 -I ' + shlex.quote(stage + '/' + installer) + ' ' + shlex.quote(json.dumps(plan, separators=(',', ':')))
         channel = client.get_transport().open_session(timeout=10)
         try:
             channel.exec_command(command)
@@ -84,7 +91,7 @@ def install(config, plan, password, progress):
                     break
                 time.sleep(0.05)
             if channel.recv_exit_status() != 0 or not complete:
-                raise RuntimeError('Setup did not complete. Check administrator authentication and the root-private log /var/lib/pi-audio-setup/install.log. Do not reimage or remove the partial setup state.')
+                raise RuntimeError('Setup did not complete. Check administrator authentication and the root-private log ' + failure_log + '. Do not reimage or remove the partial setup state.')
         finally:
             channel.close()
     finally:
@@ -92,7 +99,7 @@ def install(config, plan, password, progress):
         try:
             with client.open_sftp() as sftp:
                 sftp.get_channel().settimeout(10)
-                for name in (*PI_FILES, *TOP_FILES):
+                for name in (*pi_files, *top_files):
                     try:
                         sftp.remove(stage + '/' + name)
                     except OSError:

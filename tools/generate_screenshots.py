@@ -20,6 +20,7 @@ from app import Settings, TrayApp
 from music_ui import MusicWindow
 from network_ui import NetworkWindow
 from setup_ui import SetupDialog
+from audio_ui import AudioDialog
 from profile_ui import ProfilesDialog
 import profiles
 from i18n import set_language
@@ -152,6 +153,15 @@ def main():
     app.processEvents()
     capture(setup, output / 'new-pi-setup.png')
     setup.hide()
+    audio = AudioDialog(window.config, window)
+    audio.show_status({'protocol': 1, 'installed': True, 'configured': True, 'name': 'Pi Audio',
+                       'state': 'active', 'enabled': True, 'pipewire': 'active',
+                       'version': '4.3.7-OpenSSL-Avahi-ALSA-pa'})
+    audio.controls()
+    audio.show()
+    app.processEvents()
+    capture(audio, output / 'audio-integrations.png')
+    audio.hide()
     print('Captured desktop and music windows with fictional data only.')
 
 

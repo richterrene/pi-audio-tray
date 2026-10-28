@@ -324,6 +324,7 @@ class TrayApp(QWidget):
         maintenance = self.menu.submenu(tr('Maintenance'), symbol('setup'))
         maintenance.addAction(tr('Refresh now'), self.refresh)
         maintenance.addAction(tr('Set up a new Pi…'), self.setup)
+        maintenance.addAction(tr('Audio integrations…'), self.audio_integrations)
         maintenance.addAction(tr('Update Pi helper…'), self.update_helper)
         soloist_menu = maintenance.submenu('Spotify Soloist')
         soloist_menu.addAction(tr('Set / replace API key…'), self.soloist_key)
@@ -725,6 +726,28 @@ class TrayApp(QWidget):
             self.update_polling()
             self.refresh()
 
+    def audio_integrations(self):
+        if not self.config['host'] or not self.config['username']:
+            self.settings()
+            return
+        if self.session or self.busy - {'poll'} or self.power_state:
+            plain_information(self, tr('Pi operation active'), tr('Finish the current Pi operation before setup.'))
+            return
+        from audio_ui import AudioDialog
+        self.busy.add('provision')
+        if self.music_window is not None:
+            self.music_window.hide()
+        self.timer.stop()
+        dialog = AudioDialog(self.config, self)
+        try:
+            QTimer.singleShot(0, dialog.refresh)
+            dialog.exec()
+        finally:
+            dialog.deleteLater()
+            self.busy.discard('provision')
+            self.update_polling()
+            self.refresh()
+
     def update_helper(self):
         if not self.config['host']:
             self.settings()
@@ -920,6 +943,14 @@ def main():
             assert (provision.ROOT / name).is_file(), name
         setup_check = SetupDialog({'host': '', 'username': ''})
         setup_check.deleteLater()
+        import audio
+        from audio_ui import AudioDialog
+        for name in audio.PI_FILES:
+            assert (provision.ROOT / 'pi' / name).is_file(), name
+        for name in audio.TOP_FILES:
+            assert (provision.ROOT / name).is_file(), name
+        audio_check = AudioDialog({})
+        audio_check.deleteLater()
         previous = os.environ.get('XDG_CONFIG_HOME')
         try:
             with tempfile.TemporaryDirectory(prefix='pi-audio-self-test-') as folder:
