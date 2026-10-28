@@ -107,9 +107,14 @@ handling easy to review. Follow [SECURITY.md](SECURITY.md) for vulnerabilities;
 public issues should contain a minimal redacted reproduction rather than real
 keys, passwords, cookies, complete configuration or private logs.
 
-The repository currently has no protected-branch rules. Maintainers should
-consider requiring the security check and applicable native tests, restricting
-force pushes, and obtaining a second review for privileged installer/auth changes
-as collaboration grows. This guide does not grant repository access or change
-that policy. Discussions and a formal multi-maintainer/release policy can be
-added when there is a need; they are not prerequisites for a focused first PR.
+The `main` branch is protected, including for administrators. Changes go through
+a pull request that is up to date with `main`, passes the `review`, `linux`,
+`windows`, `macos (macos-15, arm64)` and `macos (macos-15-intel, x86_64)` GitHub
+Actions checks, and resolves review conversations. Force pushes and branch
+deletion are blocked. Squash/rebase merges preserve linear history.
+
+Independent approval is currently optional so the sole maintainer can merge
+their own PRs after the checks pass. Obtain a second review for privileged
+installer/auth changes when another reviewer is available. This guide does not
+grant repository access. Discussions and a formal multi-maintainer/release policy
+can be added when needed; they are not prerequisites for a focused first PR.

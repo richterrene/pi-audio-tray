@@ -468,6 +468,10 @@ or remote command and do not change the web-login security boundary.
 Fork pull requests run read-only native tests without signing/Pi credentials;
 package builds remain manual/tag operations. There is no privileged
 `pull_request_target` workflow. Native package testing is still distinct from
-interactive validation, and the repository currently has no protected-branch
-rules. Maintainers should consider required checks and independent review for
-privileged/authentication changes; this review does not change repository policy.
+interactive validation. A subsequent 2026-10-28 policy update protects `main`,
+including administrators: up-to-date pull requests must pass the security and
+four native desktop checks and resolve review conversations. Required check
+sources are pinned to GitHub Actions. Force pushes/deletion are blocked and
+linear history is required. Independent approval remains optional for the sole
+maintainer; a second review for privileged/authentication changes is recommended
+when another reviewer is available. See CONTRIBUTING.md for the exact checks.
