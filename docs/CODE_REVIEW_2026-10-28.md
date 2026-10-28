@@ -55,7 +55,7 @@ build workflow was manual/tag-only. The follow-up adds:
   upload are skipped for PRs and remain manual/tag steps.
 - Automatically discovered language catalogs and regenerated fictional UI images.
 
-There are no protected-branch rules as of this review. Enabling required checks,
+At the time of the initial review, there were no protected-branch rules. Enabling required checks,
 restricting force pushes and obtaining a second review for privileged/auth changes
 are recommendations; repository access and protection policy were not changed.
 The project also lacks a formal multi-maintainer release/support policy. That can
@@ -86,3 +86,13 @@ hardware, macOS Developer ID/notarization, Windows signing and native-speaker
 proofreading remain the previously documented limits. Scans cover known
 advisories, not every possible dependency flaw. Initial translations and technical
 backend messages retain the scope described in `TRANSLATIONS.md`.
+
+
+## Subsequent protection policy update — 2026-10-28
+
+At the maintainer's request, `main` now requires an up-to-date PR, the security
+`review` check and all four native desktop checks from the GitHub Actions app,
+and resolved review conversations. Administrator enforcement is enabled, force
+pushes/deletion are blocked, and linear history is required. Independent approval
+is optional while there is only one maintainer. No actor bypass was configured.
+The exact check names and contributor workflow are in CONTRIBUTING.md.
