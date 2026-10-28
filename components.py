@@ -6,8 +6,8 @@ from core import connect, run
 import provision
 from setup_plan import validate_maintenance
 
-IDS = ('spotify', 'bluetooth', 'helpers', 'music', 'web', 'updates', 'cockpit', 'privacy', 'shutdown', 'airplay')
-ACTIONS = {'receiver', 'music', 'web', 'updates', 'cockpit', 'privacy', 'shutdown', 'audio'}
+IDS = ('spotify', 'bluetooth', 'helpers', 'music', 'web', 'updates', 'cockpit', 'privacy', 'shutdown', 'airplay', 'dsp')
+ACTIONS = {'receiver', 'music', 'web', 'updates', 'cockpit', 'privacy', 'shutdown', 'audio', 'dsp'}
 MAPPING = {name: 'receiver' if name in ('spotify', 'bluetooth', 'helpers') else 'audio' if name == 'airplay' else name for name in IDS}
 
 

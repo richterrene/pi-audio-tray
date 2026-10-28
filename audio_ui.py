@@ -20,7 +20,7 @@ class AudioDialog(QDialog):
         self.setWindowTitle(tr('Audio integrations'))
         self.resize(610, 430)
         layout = QVBoxLayout(self)
-        intro = QLabel(tr('AirPlay audio receiver. A separate password is required. Other audio sources may play at the same time.'))
+        intro = QLabel(tr('AirPlay audio receiver. A separate password is required. Source policy and equalizer controls are in Maintenance.'))
         intro.setWordWrap(True)
         layout.addWidget(intro)
         self.status_label = QLabel(tr('Not connected'))
@@ -58,7 +58,7 @@ class AudioDialog(QDialog):
             for button in controls:
                 row.addWidget(button)
             layout.addLayout(row)
-        note = QLabel(tr('AirPlay 2 compilation can take several minutes. DSP and Snapcast multiroom are not available yet.'))
+        note = QLabel(tr('AirPlay 2 compilation can take several minutes. Equalizer controls are in Maintenance; synchronized multiroom is planned.'))
         note.setWordWrap(True)
         layout.addWidget(note)
         self.install_button.clicked.connect(self.install)

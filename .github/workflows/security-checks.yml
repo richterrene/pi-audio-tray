@@ -31,7 +31,7 @@ jobs:
         if: always()
         run: |
           mkdir -p security-results
-          .audit/bin/bandit -r app.py core.py audio.py audio_ui.py pi_audio.py components.py component_ui.py maintenance_ui.py updates.py volume.py pi_policy.py setup_ui.py setup_plan.py provision.py platform_support.py i18n.py profiles.py profile_ui.py music_ui.py network_ui.py ui_style.py pi_music.py pi_upnp.py pi_helper.py pi tools/virtual packaging_support.py build_appimage.py build_macos.py build_windows.py -f json -o security-results/bandit.json --exit-zero
+          .audit/bin/bandit -r app.py core.py audio.py audio_ui.py pi_audio.py components.py component_ui.py maintenance_ui.py updates.py volume.py pi_policy.py dsp.py dsp_ui.py dsp_config.py pi_dsp.py setup_ui.py setup_plan.py provision.py platform_support.py i18n.py profiles.py profile_ui.py music_ui.py network_ui.py ui_style.py pi_music.py pi_upnp.py pi_helper.py pi tools/virtual tools/check_dsp_graph.py packaging_support.py build_appimage.py build_macos.py build_windows.py -f json -o security-results/bandit.json --exit-zero
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:

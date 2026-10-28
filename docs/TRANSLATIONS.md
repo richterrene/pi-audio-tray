@@ -58,7 +58,7 @@ the app; other Qt/native dialogs use the available Qt/OS translations.
 
 ## Scope and quality
 
-All 350 extracted desktop templates have entries in each initial language.
+All 376 extracted desktop templates have entries in each initial language.
 Initial translations are machine-assisted, with manual terminology corrections
 and German review. Other languages still need native-speaker proofreading;
 entry and placeholder checks establish coverage, not linguistic correctness.

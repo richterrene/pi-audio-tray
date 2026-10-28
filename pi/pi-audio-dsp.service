@@ -1,0 +1,22 @@
+[Unit]
+Description=Pi Audio stereo equalizer
+Requires=pipewire.service wireplumber.service
+After=pipewire.service wireplumber.service
+PartOf=pipewire.service wireplumber.service
+StartLimitIntervalSec=60
+StartLimitBurst=3
+ConditionPathExists=%h/.config/pi-audio-tray/dsp.conf
+
+[Service]
+ExecStart=/usr/bin/pipewire -c %h/.config/pi-audio-tray/dsp.conf
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=10
+TimeoutStopSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+UMask=0077
+LimitCORE=0
+
+[Install]
+WantedBy=default.target

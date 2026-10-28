@@ -2,7 +2,8 @@
 
 The 0.8.0 preview adds classic AirPlay and an AirPlay 2 installation option.
 It does not claim moOde/Volumio compatibility or full feature parity. System-wide
-DSP and synchronized Snapcast multiroom remain planned.
+The 0.9.0 preview adds optional fixed stereo EQ. Advanced room correction and
+synchronized Snapcast multiroom remain planned.
 
 ## 1. AirPlay receiver
 
@@ -28,8 +29,8 @@ The build needs at least 1 GiB free space and can take several minutes.
 AirPlay 2 uses native PipeWire and explicitly selects the AirPlay 2 service type;
 there is no silent fallback to classic mode if timing fails. It shares the normal
 audio account and default output with existing players. Shairport 5.6.2 supports
-password authentication in this mode; actual Apple-client authentication/playback
-still needs physical testing. This is audio receiving, not screen/video mirroring.
+password authentication in this mode; Apple-client password authentication and continuous
+audible playback have passed on the reference Pi 3 B+. This is audio receiving, not screen/video mirroring.
 
 NQPTP uses its own DynamicUser system service, with only CAP_NET_BIND_SERVICE,
 for UDP timing ports 319/320 and a localhost UDP control port 9000. The installer
@@ -80,20 +81,26 @@ Upstream: [Shairport Sync](https://github.com/mikebrady/shairport-sync),
 
 ## 2. Shared routing and DSP
 
-Target one explicit, reversible PipeWire graph shared by Soloist, MPD, Bluetooth
-and AirPlay. First ship bypass, bounded preamp/EQ settings and reliable restoration
-of the previous hardware output. Then evaluate CamillaDSP for convolution/room
-correction and more advanced routing.
+The optional [stereo equalizer](EQUALIZER.md) now uses a fixed PipeWire smart
+filter targeting a physical stereo output by stable name. Soloist, MPD, Bluetooth
+and AirPlay share that output path. Apply/Bypass never changes the hardware
+default or master gain. No additional DSP engine, plugin uploads or listeners
+are installed. Settings and startup are per receiver.
 
-[CamillaDSP](https://github.com/HEnquist/camilladsp) has multiple audio backends;
-verify features of the pinned release/build rather than assuming that upstream
-development documentation describes a distro binary.
+Synthetic null-output tests on the reference Pi 3 B+ passed at 44.1 and 48 kHz:
+−6.00 dB in both channels for a −6 dB/1 kHz test band, zero filter xrun counters,
+2.5–3% of one CPU core for the DSP process, stable-name target reconnection, and
+automatic direct routing after filter termination. These short isolated tests
+are not a latency guarantee or proof of every DAC's hotplug behavior. Physical
+output, boot persistence, source handovers and audible response must also be
+checked on each deployment. The live harness uses only its own null sink and
+synthetic audio; it never starts music on an amplifier.
 
-Acceptance requires no graph feedback loop, no double playback, output hotplug
-recovery, persistence, bounded gain/headroom, supported sample rates, and CPU/xrun
-measurements on the Pi 3 B+. A failed DSP process must offer a working bypass.
-DSP processing means no promise of bit-perfect output. Arbitrary executable
-filter/plugin uploads and a publicly exposed DSP control socket are out of scope.
+Convolution/room correction remains future work. Evaluate
+[CamillaDSP](https://github.com/HEnquist/camilladsp) separately, checking the
+features of its pinned build. DSP is not bit-perfect output; headroom can lower
+loudness. Arbitrary executable plugins and public DSP control sockets remain
+out of scope.
 
 ## 3. Synchronized multiroom
 

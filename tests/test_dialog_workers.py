@@ -15,6 +15,9 @@ import audio
 import components
 import updates
 import volume
+import dsp
+from dsp_ui import DspDialog
+from test_dsp import status as dsp_status
 from audio_ui import AudioDialog
 from component_ui import ComponentsDialog
 from maintenance_ui import PolicyDialog, UpdatesDialog, VolumeDialog
@@ -44,7 +47,8 @@ class DialogWorkers(unittest.TestCase):
                  (PolicyDialog, audio, 'policy_request', policy),
                  (UpdatesDialog, updates, 'check', update_status()),
                  (AudioDialog, audio, 'request', airplay_status()),
-                 (ComponentsDialog, components, 'check', inventory())]
+                 (ComponentsDialog, components, 'check', inventory()),
+                 (DspDialog, dsp, 'request', dsp_status())]
         for cls, module, method, value in cases:
             with self.subTest(dialog=cls.__name__), patch.object(module, method, return_value=value) as call:
                 dialog = cls({'host': 'audio-pi.local', 'username': 'audio'})
