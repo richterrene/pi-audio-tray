@@ -20,9 +20,17 @@ from app import Settings, TrayApp
 from music_ui import MusicWindow
 from network_ui import NetworkWindow
 from setup_ui import SetupDialog
+from profile_ui import ProfilesDialog
+import profiles
+from i18n import set_language
 
 
 def capture(widget, path):
+    widget.ensurePolished()
+    if widget.layout() is not None:
+        widget.layout().activate()
+    widget.resize(widget.size().expandedTo(widget.sizeHint()))
+    QApplication.processEvents()
     # Render at 2x without shrinking the offscreen screen's logical geometry.
     # Scaling the whole virtual screen can force menus into multiple columns.
     pixmap = QPixmap(widget.size() * 2)
@@ -36,6 +44,9 @@ def main():
     app = QApplication([])
     app.setStyle('Fusion')
     app.setStyleSheet('QWidget { font-size: 13px; } QPushButton { padding: 7px 12px; } QLineEdit, QSpinBox { padding: 5px; }')
+    set_language('en')
+    profiles.rename('default', 'Living room')
+    profiles.add('Study')
     window = TrayApp(app)
     window.timer.stop()
     window.clock.stop()
@@ -64,6 +75,20 @@ def main():
     app.processEvents()
     capture(settings, output / 'settings.png')
     settings.hide()
+    profile_dialog = ProfilesDialog(window)
+    profile_dialog.show()
+    app.processEvents()
+    capture(profile_dialog, output / 'pi-profiles.png')
+    profile_dialog.hide()
+    set_language('de')
+    with patch('app.autostart_enabled', return_value=False):
+        translated = Settings({**window.config, 'language': 'de'}, window)
+    translated.setMinimumWidth(590)
+    translated.show()
+    app.processEvents()
+    capture(translated, output / 'settings-german.png')
+    translated.hide()
+    set_language('en')
     window.menu.ensurePolished()
     window.menu.resize(window.menu.sizeHint())
     capture(window.menu, output / 'tray-menu.png')

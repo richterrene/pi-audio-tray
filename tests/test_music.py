@@ -73,6 +73,23 @@ class MusicWindowTests(unittest.TestCase):
 
 
 class MusicVisibility(MusicWindowTests):
+    def test_connection_reset_clears_previous_pi_data_without_new_commands(self):
+        self.window.library.addItem('Old Pi track')
+        self.window.queue.addItem('Old Pi queue')
+        self.window.path = 'Old Pi album'
+        self.window.busy = True
+        self.window.pending_requests = [({'action': 'play'}, {}, 0, False)]
+        self.window.page_contexts = {'browse': ('Old Pi album', 0)}
+        with patch('music_ui.music_request') as request:
+            self.window.reset_connection()
+        request.assert_not_called()
+        self.assertEqual(self.window.library.count(), 0)
+        self.assertEqual(self.window.queue.count(), 0)
+        self.assertEqual(self.window.path, '')
+        self.assertFalse(self.window.pending_requests)
+        self.assertFalse(self.window.page_contexts)
+        self.assertTrue(self.window.busy)  # The old worker must still complete safely.
+
     def test_hidden_window_does_not_request_status(self):
         with patch('music_ui.music_request') as request:
             self.window.refresh_status()

@@ -8,11 +8,12 @@ import threading
 import tempfile
 import time
 
+from i18n import tr, available_languages, set_language, translate_standard_buttons
 from PySide6.QtCore import QObject, QTimer, Qt, Signal, QEvent
 from PySide6.QtGui import QAction, QIcon, QPainter, QPixmap
 from PySide6.QtSvg import QSvgRenderer
-from PySide6.QtWidgets import (QApplication, QDialog, QDialogButtonBox, QFileDialog,
-    QCheckBox, QFormLayout, QFrame, QGridLayout, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QMenu, QMessageBox,
+from PySide6.QtWidgets import (QApplication, QDialog, QFileDialog,
+    QCheckBox, QComboBox, QFormLayout, QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QMenu,
     QPushButton, QSpinBox, QSystemTrayIcon, QVBoxLayout, QWidget)
 
 from core import (PairSession, UnknownHost, config_dir, disable_pairing,
@@ -20,12 +21,15 @@ from core import (PairSession, UnknownHost, config_dir, disable_pairing,
                   remove_soloist_key, update_soloist, trust_host, display_text, instance_lock_file, shutdown_pi)
 from music_ui import MusicWindow
 from version import VERSION
-from ui_style import STYLE, StableLabel, symbol
+from ui_style import STYLE, StableLabel, StatusIndicator, symbol, flag_icon
+from ui_style import LocalizedButtonBox as QDialogButtonBox, LocalizedMessageBox as QMessageBox, get_text
 from platform_support import lock_instance, autostart_enabled, set_autostart
+import profiles
 
 
 def plain_message(parent, icon_type, title, text, buttons, default):
     box = QMessageBox(icon_type, title, '', buttons, parent)
+    translate_standard_buttons(box)
     box.setTextFormat(Qt.TextFormat.PlainText)
     box.setText(''.join(c for c in str(text) if c == '\n' or c.isprintable())[:4096])
     box.setDefaultButton(default)
@@ -71,80 +75,100 @@ class Events(QObject):
 class Settings(QDialog):
     def __init__(self, config, parent):
         super().__init__(parent)
-        self.setWindowTitle('Connection settings')
+        self.setWindowTitle(tr('Connection settings'))
         self.setMinimumWidth(480)
         layout = QVBoxLayout(self)
-        note = QLabel('Settings stay on this computer. SSH keys are used in place;\n'
-                      'their contents are never copied to the Pi or the app.')
+        note = QLabel(tr('Settings stay on this computer. SSH keys are used in place;\n'
+                      'their contents are never copied to the Pi or the app.'))
+        note.setWordWrap(True)
         layout.addWidget(note)
         form = QFormLayout()
         self.fields = {}
-        for key, label, hint in [('host', 'Pi hostname / IP', 'audio-pi.local'),
-                                  ('username', 'SSH username', 'your Pi user'),
-                                  ('host_key_alias', 'Known-host alias (optional)', 'previous SSH hostname'),
-                                  ('key_file', 'SSH private key (optional)', '~/.ssh/id_ed25519'),
-                                  ('music_web_url', 'Music HTTPS URL (optional)', 'https://audio-pi.local:8443/')]:
+        language = QComboBox()
+        for code, name, country in available_languages():
+            flag = flag_icon(country)
+            language.addItem(flag, name + ' (' + code + ')', code)
+        selected = language.findData(config.get('language', 'en'))
+        language.setCurrentIndex(selected if selected >= 0 else language.findData('en'))
+        self.fields['language'] = language
+        form.addRow(tr('Language (restart required)'), language)
+        for key, label, hint in [('host', tr('Pi hostname / IP'), 'audio-pi.local'),
+                                  ('username', tr('SSH username'), tr('your Pi user')),
+                                  ('host_key_alias', tr('Known-host alias (optional)'), tr('previous SSH hostname')),
+                                  ('key_file', tr('SSH private key (optional)'), '~/.ssh/id_ed25519'),
+                                  ('music_web_url', tr('Music HTTPS URL (optional)'), 'https://audio-pi.local:8443/')]:
             entry = QLineEdit(config[key])
             entry.setPlaceholderText(hint)
             self.fields[key] = entry
             if key == 'key_file':
                 row = QHBoxLayout()
                 row.addWidget(entry)
-                button = QPushButton('Browse…')
+                button = QPushButton(tr('Browse…'))
                 button.clicked.connect(self.browse)
                 row.addWidget(button)
                 form.addRow(label, row)
             else:
                 form.addRow(label, entry)
-        for key, label, minimum, maximum in [('port', 'SSH port', 1, 65535),
-                                             ('poll_seconds', 'Refresh interval (seconds)', 5, 300)]:
+        for key, label, minimum, maximum in [('port', tr('SSH port'), 1, 65535),
+                                             ('poll_seconds', tr('Refresh interval (seconds)'), 5, 300)]:
             entry = QSpinBox()
             entry.setRange(minimum, maximum)
             entry.setValue(config[key])
             self.fields[key] = entry
             form.addRow(label, entry)
+        form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
+        for row in range(form.rowCount()):
+            item = form.itemAt(row, QFormLayout.ItemRole.LabelRole)
+            if item is not None and isinstance(item.widget(), QLabel):
+                item.widget().setWordWrap(True)
         layout.addLayout(form)
-        self.autostart = QCheckBox('Start Pi Audio Tray when I sign in')
-        self.autostart.setToolTip('Starts in the tray after login on this computer. No administrator password is needed.')
+        self.autostart = QCheckBox(tr('Start Pi Audio Tray when I sign in'))
+        self.autostart.setToolTip(tr('Starts in the tray after login on this computer. No administrator password is needed.'))
         try:
             self.autostart.setChecked(autostart_enabled())
         except (OSError, ValueError) as exc:
             self.autostart.setEnabled(False)
-            self.autostart.setToolTip('Cannot read autostart settings: ' + display_text(exc))
+            self.autostart.setToolTip(tr('Cannot read autostart settings: ') + display_text(exc))
         layout.addWidget(self.autostart)
-        login_note = QLabel('Applies after your next login. Keep the app in a permanent location.')
+        login_note = QLabel(tr('Applies after your next login. Keep the app in a permanent location.'))
+        login_note.setWordWrap(True)
         layout.addWidget(login_note)
         soloist_label = QLabel('Spotify Soloist')
         soloist_label.setStyleSheet('font-weight: 600; margin-top: 12px;')
         layout.addWidget(soloist_label)
-        layout.addWidget(QLabel('The API key is stored only on the configured Pi.'))
+        key_note = QLabel(tr('The API key is stored only on the configured Pi.'))
+        key_note.setWordWrap(True)
+        layout.addWidget(key_note)
         soloist_controls = QHBoxLayout()
-        key_button = QPushButton('Set / replace API key…')
+        key_button = QPushButton(tr('Set / replace API key…'))
         key_button.clicked.connect(lambda: parent.soloist_key(self))
-        remove_button = QPushButton('Remove API key…')
+        remove_button = QPushButton(tr('Remove API key…'))
         remove_button.clicked.connect(parent.remove_key)
         soloist_controls.addWidget(key_button)
         soloist_controls.addWidget(remove_button)
         layout.addLayout(soloist_controls)
-        layout.addWidget(QLabel('These actions use the saved connection. Save connection changes first.'))
+        connection_note = QLabel(tr('These actions use the saved connection. Save connection changes first.'))
+        connection_note.setWordWrap(True)
+        layout.addWidget(connection_note)
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
+        translate_standard_buttons(buttons)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
 
     def browse(self):
-        filename, _ = QFileDialog.getOpenFileName(self, 'Select private SSH key', str(Path.home() / '.ssh'))
+        filename, _ = QFileDialog.getOpenFileName(self, tr('Select private SSH key'), str(Path.home() / '.ssh'))
         if filename:
             self.fields['key_file'].setText(filename)
 
     def values(self):
-        return {key: value.value() if isinstance(value, QSpinBox) else value.text().strip()
+        return {key: value.currentData() if isinstance(value, QComboBox) else value.value() if isinstance(value, QSpinBox) else value.text().strip()
                 for key, value in self.fields.items()}
 
     def accept(self):
         if self.parentWidget().session or self.parentWidget().busy - {'poll'}:
-            plain_information(self, 'Pi operation in progress',
-                              'Wait for the current Pi operation before saving connection changes.')
+            plain_information(self, tr('Pi operation in progress'),
+                              tr('Wait for the current Pi operation before saving connection changes.'))
             return
         super().accept()
 
@@ -168,7 +192,7 @@ class TrayApp(QWidget):
         self.details_requested = False
         self.music_window = None
         self.generation = 0
-        self.setWindowTitle('Pi Audio Tray · ' + VERSION)
+        self.setWindowTitle(tr('Pi Audio Tray · ') + VERSION)
         self.setWindowIcon(icon())
         self.setMinimumWidth(780)
         self.setStyleSheet(STYLE)
@@ -185,26 +209,35 @@ class TrayApp(QWidget):
         title = QLabel('Pi Audio')
         title.setStyleSheet('font-size: 25px; font-weight: 600;')
         heading.addWidget(title)
-        subtitle = QLabel('Receiver control & system health')
+        subtitle = QLabel(tr('Receiver control & system health'))
         heading.addWidget(subtitle)
         header.addLayout(heading)
         header.addStretch()
         version = QLabel('v' + VERSION)
         header.addWidget(version)
         layout.addLayout(header)
+        profile_bar = QHBoxLayout()
+        profile_bar.addWidget(QLabel(tr('Active Pi')))
+        self.profile_combo = QComboBox()
+        self.profile_combo.currentIndexChanged.connect(self.profile_selected)
+        profile_bar.addWidget(self.profile_combo, 1)
+        self.manage_pi_button = QPushButton(tr('Manage Pis…'))
+        self.manage_pi_button.clicked.connect(self.manage_profiles)
+        profile_bar.addWidget(self.manage_pi_button)
+        layout.addLayout(profile_bar)
         self.rows = {}
         cards = QHBoxLayout()
         cards.setSpacing(14)
         groups = [
-            ('Receiver', 'receiver', [
+            (tr('Receiver'), 'receiver', [
                 ('pi', 'Raspberry Pi', 'receiver'), ('spotify', 'Spotify Connect', 'music'),
-                ('bluetooth', 'Bluetooth', 'bluetooth'), ('audio', 'Audio output', 'audio'),
-                ('devices', 'Devices', 'devices'), ('pairing', 'Pairing', 'pairing'),
-                ('soloist', 'Soloist key', 'key'), ('updates', 'Updates', 'refresh')]),
-            ('System', 'cpu', [
-                ('temperature', 'Temperature', 'temperature'), ('cpu', 'CPU usage', 'cpu'),
-                ('load', 'Load · 1 / 5 / 15', 'load'), ('memory', 'Memory', 'memory'),
-                ('disk', 'Root disk', 'disk'), ('uptime', 'Uptime', 'clock')])]
+                ('bluetooth', 'Bluetooth', 'bluetooth'), ('audio', tr('Audio output'), 'audio'),
+                ('devices', tr('Devices'), 'devices'), ('pairing', tr('Pairing'), 'pairing'),
+                ('soloist', tr('Soloist key'), 'key'), ('updates', tr('Updates'), 'refresh')]),
+            (tr('System'), 'cpu', [
+                ('temperature', tr('Temperature'), 'temperature'), ('cpu', tr('CPU usage'), 'cpu'),
+                ('load', tr('Load · 1 / 5 / 15'), 'load'), ('memory', tr('Memory'), 'memory'),
+                ('disk', tr('Root disk'), 'disk'), ('uptime', tr('Uptime'), 'clock')])]
         for heading_text, _heading_icon, fields in groups:
             card = QFrame()
             card.setObjectName('StatusCard')
@@ -234,69 +267,74 @@ class TrayApp(QWidget):
             section.addStretch(1)
             cards.addWidget(card, 1)
         layout.addLayout(cards)
-        self.notice = StableLabel('Configure your Pi to get started.', lines=3, padding=24)
-        self.notice.setObjectName('Notice')
-        self.notice.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        layout.addWidget(self.notice)
+        self.notice = StatusIndicator(tr('Configure your Pi to get started.'), self)
+        self.notice.clicked.connect(lambda: plain_information(self, tr('Receiver status details'), self.notice.text()))
         controls = QHBoxLayout()
-        self.pair_button = QPushButton('Enable pairing · 3 min')
+        self.pair_button = QPushButton(tr('Enable pairing · 3 min'))
         self.pair_button.setObjectName('Primary')
         self.pair_button.setIcon(symbol('bluetooth', '#ffffff'))
         self.pair_button.clicked.connect(self.start_pairing)
-        self.off_button = QPushButton('Disable pairing')
+        self.off_button = QPushButton(tr('Disable pairing'))
         self.off_button.setIcon(symbol('stop'))
         self.off_button.clicked.connect(self.stop_pairing)
         controls.addWidget(self.pair_button)
         controls.addWidget(self.off_button)
         layout.addLayout(controls)
         extras = QHBoxLayout()
-        for label, glyph, callback in [('Music…', 'music', self.open_music),
-                                       ('Refresh', 'refresh', self.refresh),
-                                       ('Settings…', 'settings', self.settings),
-                                       ('Set up Pi…', 'setup', self.setup)]:
+        for label, glyph, callback in [(tr('Music…'), 'music', self.open_music),
+                                       (tr('Refresh'), 'refresh', self.refresh),
+                                       (tr('Settings…'), 'settings', self.settings),
+                                       (tr('Set up Pi…'), 'setup', self.setup)]:
             button = QPushButton(label)
             button.setIcon(symbol(glyph))
             button.clicked.connect(callback)
             extras.addWidget(button)
         layout.addLayout(extras)
         soloist_controls = QHBoxLayout()
-        for label, glyph, callback in [('Soloist API key…', 'key', self.soloist_key),
-                                       ('Update Soloist', 'refresh', self.update_soloist)]:
+        for label, glyph, callback in [(tr('Soloist API key…'), 'key', self.soloist_key),
+                                       (tr('Update Soloist'), 'refresh', self.update_soloist)]:
             button = QPushButton(label)
             button.setIcon(symbol(glyph))
             button.clicked.connect(callback)
             soloist_controls.addWidget(button)
         layout.addLayout(soloist_controls)
+        footer = QHBoxLayout()
+        footer.addStretch()
+        footer.addWidget(self.notice)
+        layout.addLayout(footer)
 
         self.menu = QMenu()
         self.menu.setTitle('Pi Audio Tray')
         self.menu.aboutToShow.connect(lambda: self.set_menu_open(True))
         self.menu.aboutToHide.connect(lambda: self.set_menu_open(False))
+        self.profile_menu = self.menu.addMenu(tr('Switch Pi'))
+        self.menu.addAction(tr('Manage Pis…'), self.manage_profiles)
+        self.reload_profiles()
         self.menu_rows = {}
         for key in self.rows:
             item = self.menu.addAction('—')
             item.setEnabled(False)
             self.menu_rows[key] = item
         self.menu.addSeparator()
-        self.on_action = self.menu.addAction(symbol('bluetooth'), 'Enable pairing · 3 min', self.start_pairing)
-        self.off_action = self.menu.addAction(symbol('stop'), 'Disable pairing', self.stop_pairing)
+        self.on_action = self.menu.addAction(symbol('bluetooth'), tr('Enable pairing · 3 min'), self.start_pairing)
+        self.off_action = self.menu.addAction(symbol('stop'), tr('Disable pairing'), self.stop_pairing)
         self.menu.addSeparator()
-        self.menu.addAction(symbol('music'), 'Music…', self.open_music)
-        self.menu.addAction('Open status', self.open_window)
-        self.menu.addAction(symbol('refresh'), 'Refresh now', self.refresh)
-        self.menu.addAction(symbol('settings'), 'Settings…', self.settings)
-        self.menu.addAction('Set up a new Pi…', self.setup)
-        self.menu.addAction('Update Pi helper…', self.update_helper)
+        self.menu.addAction(symbol('music'), tr('Music…'), self.open_music)
+        self.menu.addAction(tr('Open status'), self.open_window)
+        self.menu.addAction(symbol('refresh'), tr('Refresh now'), self.refresh)
+        self.menu.addAction(symbol('settings'), tr('Settings…'), self.settings)
+        self.menu.addAction(tr('Set up a new Pi…'), self.setup)
+        self.menu.addAction(tr('Update Pi helper…'), self.update_helper)
         soloist_menu = self.menu.addMenu('Spotify Soloist')
-        soloist_menu.addAction('Set / replace API key…', self.soloist_key)
-        soloist_menu.addAction('Remove API key…', self.remove_key)
-        soloist_menu.addAction('Check for updates now', self.update_soloist)
+        soloist_menu.addAction(tr('Set / replace API key…'), self.soloist_key)
+        soloist_menu.addAction(tr('Remove API key…'), self.remove_key)
+        soloist_menu.addAction(tr('Check for updates now'), self.update_soloist)
         self.menu.addSeparator()
-        self.shutdown_action = self.menu.addAction(symbol('power'), 'Shut down Pi…', self.shutdown)
+        self.shutdown_action = self.menu.addAction(symbol('power'), tr('Shut down Pi…'), self.shutdown)
         self.menu.addSeparator()
-        version_action = self.menu.addAction('Version ' + VERSION)
+        version_action = self.menu.addAction(tr('Version ') + VERSION)
         version_action.setEnabled(False)
-        self.menu.addAction('Quit', self.quit)
+        self.menu.addAction(tr('Quit'), self.quit)
         self.tray = QSystemTrayIcon(icon(), self)
         self.tray.setContextMenu(self.menu)
         self.tray.setToolTip('Pi Audio Tray')
@@ -309,17 +347,18 @@ class TrayApp(QWidget):
         self.clock = QTimer(self)
         self.clock.timeout.connect(self.update_countdown)
         self.clock.start(1000)
-        self.render_offline('Not connected')
+        self.render_offline(tr('Not connected'))
         QTimer.singleShot(100, self.refresh if self.config['host'] else self.open_window)
 
     def job(self, kind, func):
         if kind in self.busy:
             return
         if kind not in ('poll', 'off') and self.busy - {'poll'}:
-            plain_information(self, 'Pi operation in progress',
-                              'Wait for the current Pi operation before starting another.')
+            plain_information(self, tr('Pi operation in progress'),
+                              tr('Wait for the current Pi operation before starting another.'))
             return
         self.busy.add(kind)
+        self.enable_controls()
         generation = self.generation
         def worker():
             try:
@@ -388,34 +427,39 @@ class TrayApp(QWidget):
             config, detailed = self.config.copy(), self.details_requested or self.details_needed()
             self.details_requested = False
             if detailed:
-                self.notice.setText('Refreshing receiver details…')
+                self.notice.setText(tr('Refreshing receiver details…'))
             self.job('poll', lambda: poll(config, detailed=detailed))
 
     def row(self, key, value):
-        labels = {'pi': 'Pi', 'spotify': 'Spotify', 'bluetooth': 'Bluetooth',
-                  'audio': 'BT audio', 'devices': 'Devices', 'pairing': 'Pairing',
-                  'soloist': 'Soloist', 'updates': 'Updates', 'temperature': 'Temperature',
-                  'cpu': 'CPU', 'load': 'Load', 'memory': 'Memory', 'disk': 'Disk', 'uptime': 'Uptime'}
+        labels = {'pi': 'Pi', 'spotify': tr('Spotify'), 'bluetooth': 'Bluetooth',
+                  'audio': tr('BT audio'), 'devices': tr('Devices'), 'pairing': tr('Pairing'),
+                  'soloist': 'Soloist', 'updates': tr('Updates'), 'temperature': tr('Temperature'),
+                  'cpu': 'CPU', 'load': tr('Load'), 'memory': tr('Memory'), 'disk': tr('Disk'), 'uptime': tr('Uptime')}
         self.rows[key].setText(value)
         self.menu_rows[key].setText(labels[key] + ': ' + value)
 
     def render_offline(self, message):
+        self.notice.set_state('error' if self.config['host'] else 'unknown')
         self.snapshot = None
         if self.power_state:
             self.power_state = 'disconnected'
-            message = ('Pi unreachable after shutdown request. Check its activity LED before removing power. '
-                       'Reconnect power to start it again.')
-        self.row('pi', 'Offline / unavailable')
+            message = (tr('Pi unreachable after shutdown request. Check its activity LED before removing power. '
+                       'Reconnect power to start it again.'))
+        self.row('pi', tr('Offline / unavailable'))
         for key in self.rows:
             if key == 'pi':
                 continue
-            self.row(key, 'Unknown')
+            self.row(key, tr('Unknown'))
         self.tray.setIcon(icon('#e07878'))
-        self.tray.setToolTip('Pi Audio Tray · unavailable')
+        self.tray.setToolTip(tr('Pi Audio Tray · unavailable'))
         self.notice.setText(message)
         self.enable_controls()
 
     def enable_controls(self):
+        can_switch = self.session is None and not self.busy - {'poll'} and self.power_state != 'requested'
+        self.profile_combo.setEnabled(can_switch)
+        self.profile_menu.setEnabled(can_switch)
+        self.manage_pi_button.setEnabled(can_switch)
         can_start = bool(self.snapshot) and self.session is None and not self.busy - {'poll'} and not self.power_state
         self.on_action.setEnabled(can_start)
         self.pair_button.setEnabled(can_start)
@@ -434,80 +478,84 @@ class TrayApp(QWidget):
             backend = data.get('spotify_backend', 'raspotify')
             audio_services = ('pipewire', 'wireplumber') if backend == 'soloist' else ('bluealsa', 'bluealsa-aplay')
             healthy = adapter.get('Powered') and all(services.get(s) == 'active' for s in (backend, 'bluetooth', *audio_services))
+            self.notice.set_state('ok' if healthy else 'warning')
             self.tray.setIcon(icon('#55d9ad' if healthy else '#e8b75f'))
-            self.tray.setToolTip('Pi Audio Tray · ' + ('services running' if healthy else 'check services'))
-            self.row('pi', 'Online · ' + self.config['host'])
+            self.tray.setToolTip(tr('Pi Audio Tray · ') + (tr('services running') if healthy else tr('check services')))
+            self.row('pi', tr('Online · ') + self.config['host'])
             if not data.get('_detailed', True):
                 if data.get('soloist', {}).get('update_failed'):
                     self.tray.setIcon(icon('#e8b75f'))
+                    self.notice.set_state('warning')
                 if self.power_state:
-                    self.notice.setText('Shutdown requested. Waiting for the Pi to disconnect. Reconnect power to start it again.')
+                    self.notice.setText(tr('Shutdown requested. Waiting for the Pi to disconnect. Reconnect power to start it again.'))
                 else:
-                    self.notice.setText('Background health checked ' + time.strftime('%H:%M:%S') + ' · Open the window or tray menu for details.')
+                    self.notice.setText(tr('Background health checked ') + time.strftime('%H:%M:%S') + tr(' · Open the window or tray menu for details.'))
                 self.enable_controls()
                 # The window/menu may have opened while the light poll was pending.
                 if self.details_requested or self.details_needed():
                     self.refresh()
                 return
             self.details_requested = False
-            self.row('spotify', services.get(backend, 'unknown') + ' · ' + backend.title())
-            self.row('bluetooth', 'Powered on' if adapter.get('Powered') else 'Powered off / unavailable')
-            self.row('audio', 'Ready' if all(services.get(s) == 'active' for s in audio_services) else 'Service stopped')
+            self.row('spotify', tr(services.get(backend, 'unknown')) + ' · ' + backend.title())
+            self.row('bluetooth', tr('Powered on') if adapter.get('Powered') else tr('Powered off / unavailable'))
+            self.row('audio', tr('Ready') if all(services.get(s) == 'active' for s in audio_services) else tr('Service stopped'))
             soloist = data.get('soloist', {})
             if backend == 'soloist':
-                key_state = 'Key configured' if soloist.get('key_configured') else 'API key needed'
+                key_state = tr('Key configured') if soloist.get('key_configured') else tr('API key needed')
                 days = soloist.get('days_remaining')
-                self.row('soloist', key_state + (f' · build valid {days} days' if days is not None else ''))
+                self.row('soloist', key_state + (tr(' · build valid {days} days', days=days) if days is not None else ''))
             else:
-                self.row('soloist', 'Not installed')
+                self.row('soloist', tr('Not installed'))
             if soloist.get('update_failed'):
-                self.row('updates', 'Last update failed — check the Pi')
+                self.notice.set_state('warning')
+                self.row('updates', tr('Last update failed — check the Pi'))
                 self.tray.setIcon(icon('#e8b75f'))
             else:
-                self.row('updates', 'Automatic checks enabled' if soloist.get('automatic_updates') else 'Not fully configured')
-            self.row('devices', ', '.join(d['name'] for d in data['devices']) or 'None')
-            self.row('pairing', 'Enabled' if adapter.get('Pairable') else 'Disabled')
+                self.row('updates', tr('Automatic checks enabled') if soloist.get('automatic_updates') else tr('Not fully configured'))
+            self.row('devices', ', '.join(d['name'] for d in data['devices']) or tr('None'))
+            self.row('pairing', tr('Enabled') if adapter.get('Pairable') else tr('Disabled'))
             stats = data.get('stats', {})
             temperature, cpu = stats.get('temperature_c'), stats.get('cpu_percent')
-            self.row('temperature', f'{temperature:.1f} °C' if temperature is not None else 'Unavailable')
+            self.row('temperature', f'{temperature:.1f} °C' if temperature is not None else tr('Unavailable'))
             window = stats.get('cpu_window_seconds')
-            self.row('cpu', (f'{cpu:.1f} %' + (f' · {window:.1f}s avg' if window else ''))
-                     if cpu is not None else 'Unavailable')
+            self.row('cpu', (f'{cpu:.1f} %' + (tr(' · {seconds}s avg', seconds=f'{window:.1f}') if window else ''))
+                     if cpu is not None else tr('Unavailable'))
             load = stats.get('load')
-            self.row('load', ' / '.join(f'{v:.2f}' for v in load) if load else 'Unavailable')
+            self.row('load', ' / '.join(f'{v:.2f}' for v in load) if load else tr('Unavailable'))
             for key, prefix in (('memory', 'memory'), ('disk', 'disk')):
                 total, used = stats.get(prefix + '_total'), stats.get(prefix + '_used')
                 self.row(key, f'{used / 2**30:.2f} / {total / 2**30:.2f} GiB · {used / total:.0%}'
-                         if total and used is not None else 'Unavailable')
+                         if total and used is not None else tr('Unavailable'))
             uptime = stats.get('uptime_seconds')
             if uptime is not None:
                 days, hours, minutes = uptime // 86400, uptime // 3600 % 24, uptime // 60 % 60
-                self.row('uptime', f'{days}d {hours}h {minutes}m')
+                self.row('uptime', tr('{days}d {hours}h {minutes}m', days=days, hours=hours, minutes=minutes))
             else:
-                self.row('uptime', 'Unavailable')
-            self.notice.setText('Updated ' + time.strftime('%H:%M:%S') + ' · Spotify status shows the service, not track playback.')
+                self.row('uptime', tr('Unavailable'))
+            self.notice.setText(tr('Updated ') + time.strftime('%H:%M:%S') + tr(' · Spotify status shows the service, not track playback.'))
             if self.power_state:
-                self.notice.setText('Shutdown requested. Waiting for the Pi to disconnect. Reconnect power to start it again.')
+                self.notice.setText(tr('Shutdown requested. Waiting for the Pi to disconnect. Reconnect power to start it again.'))
             self.update_countdown()
             self.enable_controls()
         elif kind == 'shutdown':
             self.power_state = 'requested'
-            self.notice.setText('Shutdown requested. Waiting for the Pi to disconnect. Reconnect power to start it again.')
+            self.notice.setText(tr('Shutdown requested. Waiting for the Pi to disconnect. Reconnect power to start it again.'))
             self.enable_controls()
             self.refresh()
         else:
             if kind == 'setup':
-                self.notice.setText('Pi helper installed. Checking connection…')
+                self.notice.setText(tr('Pi helper installed. Checking connection…'))
             self.refresh()
 
     def failed(self, kind, error):
         self.busy.discard(kind)
+        self.notice.set_state('error')
+        self.enable_controls()
         if isinstance(error, UnknownHost):
             # Never silently trust an unknown server or a changed key.
             self.timer.stop()
-            reply = plain_question(self, 'Verify the Pi SSH host key',
-                f'Host: {error.hostname}\n\n{error.fingerprint}\n\n'
-                'Compare this fingerprint with the Pi before trusting it.\nTrust this host key?',
+            reply = plain_question(self, tr('Verify the Pi SSH host key'),
+                tr('Host: {host}\n\n{fingerprint}\n\nCompare this fingerprint with the Pi before trusting it.\nTrust this host key?', host=error.hostname, fingerprint=error.fingerprint),
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No)
             if reply == QMessageBox.StandardButton.Yes:
@@ -521,7 +569,7 @@ class TrayApp(QWidget):
             self.render_offline(str(error))
         else:
             if kind == 'shutdown':
-                self.notice.setText('Shutdown was not confirmed. Refresh the Pi status before retrying.')
+                self.notice.setText(tr('Shutdown was not confirmed. Refresh the Pi status before retrying.'))
                 self.enable_controls()
             plain_warning(self, 'Pi Audio Tray', str(error))
 
@@ -542,41 +590,113 @@ class TrayApp(QWidget):
 
     def settings(self):
         if self.session or self.busy - {'poll'}:
-            plain_information(self, 'Pi operation in progress',
-                              'Finish pairing or the current Pi operation before changing the connection.')
+            plain_information(self, tr('Pi operation in progress'),
+                              tr('Finish pairing or the current Pi operation before changing the connection.'))
             return
         dialog = Settings(self.config, self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
+            language_before = self.config.get('language', 'en')
             config = dialog.values()
             if not config['host'] or not config['username']:
-                plain_warning(self, 'Settings', 'Enter a hostname and SSH username.')
+                plain_warning(self, tr('Settings'), tr('Enter a hostname and SSH username.'))
                 return
             try:
                 save_config(config)
             except (OSError, ValueError, TypeError) as exc:
-                plain_warning(self, 'Settings', display_text(exc))
+                plain_warning(self, tr('Settings'), display_text(exc))
                 return
             if dialog.autostart.isEnabled():
                 try:
                     set_autostart(dialog.autostart.isChecked())
                 except (OSError, ValueError) as exc:
-                    plain_warning(self, 'Autostart could not be changed', display_text(exc))
+                    plain_warning(self, tr('Autostart could not be changed'), display_text(exc))
             if self.music_window is not None:
                 self.music_window.hide()
+                self.music_window.reset_connection()
             self.config = config
             self.power_state = None
             self.generation += 1
             self.busy.clear()
-            self.render_offline('Connecting…')
+            self.render_offline(tr('Connecting…'))
             self.update_polling()
             self.refresh()
+            if config.get('language', 'en') != language_before:
+                plain_information(self, tr('Language saved'), tr('Restart Pi Audio Tray to apply the selected language.'))
+
+    def reload_profiles(self):
+        from PySide6.QtCore import QSignalBlocker
+        blocker = QSignalBlocker(self.profile_combo)
+        self.profile_combo.clear()
+        self.profile_menu.clear()
+        try:
+            data = profiles.load()
+            self.active_profile = data['active']
+            for row in data['profiles']:
+                self.profile_combo.addItem(row['name'], row['id'])
+                action = self.profile_menu.addAction(row['name'])
+                action.setCheckable(True)
+                action.setChecked(row['id'] == data['active'])
+                action.triggered.connect(lambda checked=False, identifier=row['id']: self.switch_profile(identifier))
+            self.profile_combo.setCurrentIndex(self.profile_combo.findData(data['active']))
+        except (OSError, ValueError, TypeError) as exc:
+            self.profile_combo.addItem(tr('Profiles unavailable'))
+            self.profile_combo.setToolTip(display_text(exc))
+        del blocker
+
+    def profile_selected(self, index):
+        identifier = self.profile_combo.itemData(index)
+        if identifier:
+            self.switch_profile(identifier)
+
+    def switch_profile(self, identifier):
+        if self.session or self.busy - {'poll'} or self.power_state == 'requested':
+            self.reload_profiles()
+            plain_information(self, tr('Pi operation in progress'), tr('Finish the current operation before switching Pis.'))
+            return
+        if identifier == getattr(self, 'active_profile', None):
+            self.reload_profiles()
+            return
+        try:
+            config = profiles.activate(identifier)
+        except (OSError, ValueError, TypeError) as exc:
+            self.reload_profiles()
+            plain_warning(self, tr('Pi profiles'), display_text(exc))
+            return
+        if self.music_window is not None:
+            self.music_window.hide()
+            self.music_window.reset_connection()
+        self.generation += 1
+        self.busy.clear()
+        self.snapshot = None
+        self.power_state = None
+        self.config = config
+        self.reload_profiles()
+        self.render_offline(tr('Connecting…'))
+        self.update_polling()
+        self.refresh()
+        if not config['host'] or not config['username']:
+            self.settings()
+
+    def manage_profiles(self):
+        if self.session or self.busy - {'poll'} or self.power_state == 'requested':
+            plain_information(self, tr('Pi operation in progress'), tr('Finish the current operation before switching Pis.'))
+            return
+        from profile_ui import ProfilesDialog
+        try:
+            dialog = ProfilesDialog(self)
+        except (OSError, ValueError, TypeError) as exc:
+            plain_warning(self, tr('Pi profiles'), display_text(exc))
+            return
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self.switch_profile(dialog.selected)
+        self.reload_profiles()
 
     def setup(self):
         if not self.config['host'] or not self.config['username']:
             self.settings()
             return
         if self.session or self.busy - {'poll'} or self.power_state:
-            plain_information(self, 'Pi operation active', 'Finish the current Pi operation before setup.')
+            plain_information(self, tr('Pi operation active'), tr('Finish the current Pi operation before setup.'))
             return
         from setup_ui import SetupDialog
         self.busy.add('provision')
@@ -599,55 +719,52 @@ class TrayApp(QWidget):
             self.settings()
             return
         if self.session:
-            plain_information(self, 'Pairing active', 'Disable pairing before updating the helper.')
+            plain_information(self, tr('Pairing active'), tr('Disable pairing before updating the helper.'))
             return
-        if plain_question(self, 'Set up Pi helper',
-            'Install the Bluetooth helper and Python D-Bus libraries on your Pi?\n\n'
+        if plain_question(self, tr('Set up Pi helper'),
+            tr('Install the Bluetooth helper and Python D-Bus libraries on your Pi?\n\n'
             'This uses SSH and requires passwordless sudo on the Pi.\n'
-            'Your audio services and their settings remain in place.') != QMessageBox.StandardButton.Yes:
+            'Your audio services and their settings remain in place.')) != QMessageBox.StandardButton.Yes:
             return
-        self.notice.setText('Installing helper on the Pi…')
+        self.notice.setText(tr('Installing helper on the Pi…'))
         config = self.config.copy()
         self.job('setup', lambda: install_helper(config))
 
     def soloist_key(self, parent=None):
-        key, accepted = QInputDialog.getText(parent or self, 'Spotify Soloist API key',
-            'Paste your personal Soloist API key.\nIt is sent directly to your Pi over SSH.',
+        key, accepted = get_text(parent or self, tr('Spotify Soloist API key'),
+            tr('Paste your personal Soloist API key.\nIt is sent directly to your Pi over SSH.'),
             QLineEdit.EchoMode.Password)
         if accepted and key.strip():
             config = self.config.copy()
             self.job('key', lambda: store_soloist_key(config, key.strip()))
 
     def remove_key(self):
-        if plain_question(self, 'Remove Soloist API key',
-            'Stop Soloist and remove its API key from the Pi?\n'
-            'This does not revoke the key at Spotify.') == QMessageBox.StandardButton.Yes:
+        if plain_question(self, tr('Remove Soloist API key'),
+            tr('Stop Soloist and remove its API key from the Pi?\n'
+            'This does not revoke the key at Spotify.')) == QMessageBox.StandardButton.Yes:
             config = self.config.copy()
             self.job('key', lambda: remove_soloist_key(config))
 
     def update_soloist(self):
-        self.notice.setText('Checking the official Soloist download for an update…')
+        self.notice.setText(tr('Checking the official Soloist download for an update…'))
         config = self.config.copy()
         self.job('update', lambda: update_soloist(config))
 
     def shutdown(self):
         if not self.snapshot or self.session or self.busy - {'poll'} or self.power_state:
-            plain_information(self, 'Pi shutdown unavailable',
-                              'Connect to the Pi and finish pairing or the current operation first.')
+            plain_information(self, tr('Pi shutdown unavailable'),
+                              tr('Connect to the Pi and finish pairing or the current operation first.'))
             return
         config, generation = self.config.copy(), self.generation
-        if plain_question(self, 'Shut down Pi?',
-            f"Shut down {config['host']}?\n\n"
-            'Audio playback and SSH connections will stop.\n'
-            'Wait for the activity LED to stop before unplugging.\n'
-            'You will need to reconnect power to start the Pi again.') != QMessageBox.StandardButton.Yes:
+        if plain_question(self, tr('Shut down Pi?'),
+            tr('Shut down {host}?\n\nAudio playback and SSH connections will stop.\nWait for the activity LED to stop before unplugging.\nYou will need to reconnect power to start the Pi again.', host=config['host'])) != QMessageBox.StandardButton.Yes:
             return
         if config != self.config or generation != self.generation:
-            plain_information(self, 'Connection changed', 'Review the current Pi connection before requesting shutdown.')
+            plain_information(self, tr('Connection changed'), tr('Review the current Pi connection before requesting shutdown.'))
             return
         if self.session or self.busy - {'poll'} or self.power_state:
             return
-        self.notice.setText('Requesting Pi shutdown…')
+        self.notice.setText(tr('Requesting Pi shutdown…'))
         self.job('shutdown', lambda: shutdown_pi(config))
         self.enable_controls()
 
@@ -655,7 +772,7 @@ class TrayApp(QWidget):
         if self.session or self.busy - {'poll'} or self.power_state:
             return
         self.session = PairSession(self.config, self.events.pairing.emit)
-        self.row('pairing', 'Starting…')
+        self.row('pairing', tr('Starting…'))
         self.enable_controls()
         threading.Thread(target=self.session.run, daemon=True).start()
 
@@ -674,21 +791,22 @@ class TrayApp(QWidget):
         kind = event['event']
         if kind == 'ready':
             self.expires = event['expires']
-            self.tray.showMessage('Bluetooth pairing enabled', 'Choose your Pi on the device you want to pair. The window closes in 3 minutes.')
+            self.tray.showMessage(tr('Bluetooth pairing enabled'), tr('Choose your Pi on the device you want to pair. The window closes in 3 minutes.'))
             self.refresh()
         elif kind == 'confirm':
             if len(self.dialogs) >= 8:
                 self.stop_pairing()
-                self.notice.setText('Too many pairing requests; closing pairing.')
+                self.notice.setText(tr('Too many pairing requests; closing pairing.'))
                 return
             session = self.session
             token = event['token']
-            text = f"Pair with {event['name']}?\n{event['address']}"
+            text = tr('Pair with {name}?\n{address}', name=event['name'], address=event['address'])
             if event.get('code'):
-                text += f"\n\nConfirm the same code on your device: {event['code']}"
-            text += '\n\nApproved devices will be trusted for future connections.'
-            dialog = QMessageBox(QMessageBox.Icon.Question, 'Bluetooth pairing request', text,
+                text += tr('\n\nConfirm the same code on your device: {code}', code=event['code'])
+            text += tr('\n\nApproved devices will be trusted for future connections.')
+            dialog = QMessageBox(QMessageBox.Icon.Question, tr('Bluetooth pairing request'), text,
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, self)
+            translate_standard_buttons(dialog)
             dialog.setDefaultButton(QMessageBox.StandardButton.No)
             dialog.setTextFormat(Qt.TextFormat.PlainText)
             self.dialogs[token] = dialog
@@ -708,10 +826,10 @@ class TrayApp(QWidget):
             if dialog:
                 dialog.reject()
         elif kind == 'display':
-            self.tray.showMessage('Bluetooth passkey', event['code'])
+            self.tray.showMessage(tr('Bluetooth passkey'), event['code'])
         elif kind == 'error':
             self.notice.setText(event['message'])
-            self.tray.showMessage('Pairing failed', event['message'], QSystemTrayIcon.MessageIcon.Warning)
+            self.tray.showMessage(tr('Pairing failed'), event['message'], QSystemTrayIcon.MessageIcon.Warning)
         elif kind == 'ended':
             self.session = None
             self.expires = 0
@@ -725,7 +843,7 @@ class TrayApp(QWidget):
 
     def update_countdown(self):
         if self.expires and self.session:
-            self.row('pairing', f'Enabled · {max(0, self.expires - int(time.time()))}s remaining')
+            self.row('pairing', tr('Enabled · {seconds}s remaining', seconds=max(0, self.expires - int(time.time()))))
 
     def quit(self):
         if self.music_window is not None:
@@ -751,24 +869,28 @@ def main():
         print(json.dumps(poll(load_config())))
         return 0
     app = QApplication(sys.argv)
+    set_language('en' if '--self-test' in sys.argv else load_config().get('language', 'en'))
     if '--soloist-key' in sys.argv:
-        key, accepted = QInputDialog.getText(None, 'Spotify Soloist — geschützte Schlüsseleingabe',
-            'Persönlichen Soloist-API-Schlüssel hier einfügen.\n'
-            'Er wird direkt per SSH auf dem Pi gespeichert, nicht im Chat oder Repository.',
+        key, accepted = get_text(None, tr('Spotify Soloist — secure key entry'),
+            tr('Paste your personal Soloist API key here.\n'
+            'It is stored directly on the Pi over SSH, not in chat or the repository.'),
             QLineEdit.EchoMode.Password)
         if not accepted or not key.strip():
             return 1
         try:
             store_soloist_key(load_config(), key.strip())
         except Exception as exc:
-            plain_warning(None, 'Soloist-Einrichtung', str(exc))
+            plain_warning(None, tr('Soloist setup'), str(exc))
             return 1
-        plain_information(None, 'Soloist-Einrichtung',
-            'Der Schlüssel wurde geschützt auf dem Pi gespeichert. Soloist wird gestartet.')
+        plain_information(None, tr('Soloist setup'),
+            tr('The key was saved privately on the Pi. Soloist is starting.'))
         return 0
     if '--self-test' in sys.argv:
         from PySide6.QtCore import qVersion
         assert not icon().isNull()
+        assert len(available_languages()) >= 19
+        for _, _, country in available_languages():
+            assert not flag_icon(country).isNull()
         import provision
         from setup_ui import SetupDialog
         for name in provision.PI_FILES:
@@ -782,6 +904,9 @@ def main():
             with tempfile.TemporaryDirectory(prefix='pi-audio-self-test-') as folder:
                 os.environ['XDG_CONFIG_HOME'] = folder
                 save_config(load_config())
+                from profile_ui import ProfilesDialog
+                profile_check = ProfilesDialog(None)
+                profile_check.deleteLater()
                 with instance_lock_file() as test_lock:
                     lock_instance(test_lock)
         finally:
@@ -798,13 +923,13 @@ def main():
     try:
         lock = instance_lock_file()
     except (OSError, ValueError) as exc:
-        plain_warning(None, 'Cannot secure local settings', str(exc))
+        plain_warning(None, tr('Cannot secure local settings'), str(exc))
         return 78
     try:
         lock_instance(lock)
     except BlockingIOError:
         if '--autostart' not in sys.argv:
-            plain_information(None, 'Pi Audio Tray', 'Pi Audio Tray is already running. Open it from the tray icon.')
+            plain_information(None, 'Pi Audio Tray', tr('Pi Audio Tray is already running. Open it from the tray icon.'))
         return 0
     # A manually opened newer version repairs an existing registration. A login
     # launch does not rewrite its own Run key, and never opts a user in.
@@ -813,7 +938,7 @@ def main():
             if autostart_enabled():
                 set_autostart(True)
         except (OSError, ValueError) as exc:
-            plain_warning(None, 'Autostart needs attention', display_text(exc))
+            plain_warning(None, tr('Autostart needs attention'), display_text(exc))
     app.setStyle('Fusion')
     app.setStyleSheet('''
         QWidget { font-size: 13px; }

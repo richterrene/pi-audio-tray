@@ -1,5 +1,6 @@
 """On-demand UPnP source management over the existing verified SSH connection."""
 import threading
+from i18n import tr
 from PySide6.QtCore import QObject, Qt, Signal
 from PySide6.QtWidgets import QDialog, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QPushButton, QVBoxLayout
 from core import display_text, music_request
@@ -12,10 +13,10 @@ class NetworkEvents(QObject):
 class NetworkWindow(QDialog):
     def __init__(self, parent):
         super().__init__(parent)
-        self.setWindowTitle('Pi Audio · Network music')
+        self.setWindowTitle(tr('Pi Audio · Network music'))
         self.resize(760, 560)
         self.server = None
-        self.history = [('0', 'Library')]
+        self.history = [('0', tr('Library'))]
         self.offset = 0
         self.more = False
         self.busy = False
@@ -24,8 +25,8 @@ class NetworkWindow(QDialog):
         self.events = NetworkEvents(self)
         self.events.finished.connect(self.operation_done)
         layout = QVBoxLayout(self)
-        note = QLabel('Discover UPnP/DLNA servers, then enable a trusted server to browse it.\n'
-                      'Tracks and albums join the same queue as USB music and the web player.')
+        note = QLabel(tr('Discover UPnP/DLNA servers, then enable a trusted server to browse it.\n'
+                      'Tracks and albums join the same queue as USB music and the web player.'))
         note.setTextFormat(Qt.TextFormat.PlainText)
         layout.addWidget(note)
         self.sources = QListWidget()
@@ -33,37 +34,48 @@ class NetworkWindow(QDialog):
         self.sources.itemDoubleClicked.connect(self.open_source)
         layout.addWidget(self.sources)
         bar = QHBoxLayout()
-        for title, callback in [('Discover servers', lambda: self.request({'action': 'network_discover'})),
-                                ('Enabled servers', lambda: self.request({'action': 'network_sources'})),
-                                ('Enable / reconnect', self.enable), ('Remove source', self.remove)]:
+        for title, callback in [(tr('Discover servers'), lambda: self.request({'action': 'network_discover'})),
+                                (tr('Enabled servers'), lambda: self.request({'action': 'network_sources'})),
+                                (tr('Enable / reconnect'), self.enable), (tr('Remove source'), self.remove)]:
             button = QPushButton(title)
             button.clicked.connect(callback)
             bar.addWidget(button)
         layout.addLayout(bar)
-        self.location = QLabel('Double-click an enabled server to browse.')
+        self.location = QLabel(tr('Double-click an enabled server to browse.'))
         self.location.setTextFormat(Qt.TextFormat.PlainText)
         layout.addWidget(self.location)
         self.items = QListWidget()
         self.items.itemDoubleClicked.connect(self.activate)
         layout.addWidget(self.items)
         bar = QHBoxLayout()
-        for title, callback in [('Up', self.up), ('Previous page', lambda: self.page(-100)),
-                                ('Next page', lambda: self.page(100)), ('Refresh', self.browse),
-                                ('Add to queue', lambda: self.add(False)), ('Play selected', lambda: self.add(True))]:
+        for title, callback in [(tr('Up'), self.up), (tr('Previous page'), lambda: self.page(-100)),
+                                (tr('Next page'), lambda: self.page(100)), (tr('Refresh'), self.browse),
+                                (tr('Add to queue'), lambda: self.add(False)), (tr('Play selected'), lambda: self.add(True))]:
             button = QPushButton(title)
             button.clicked.connect(callback)
             bar.addWidget(button)
         layout.addLayout(bar)
-        self.message = QLabel('Discovery runs only when requested. Servers must be awake and reachable from the Pi.')
+        self.message = QLabel(tr('Discovery runs only when requested. Servers must be awake and reachable from the Pi.'))
         self.message.setTextFormat(Qt.TextFormat.PlainText)
         self.message.setWordWrap(True)
         layout.addWidget(self.message)
+
+    def reset_connection(self):
+        self.hide()
+        self.pending.clear()
+        self.connection, self.server = None, None
+        self.history = [('0', tr('Library'))]
+        self.offset, self.more = 0, False
+        self.sources.clear()
+        self.items.clear()
+        self.location.setText(tr('Double-click an enabled server to browse.'))
+        self.message.setText(tr('Discovery runs only when requested. Servers must be awake and reachable from the Pi.'))
 
     def request(self, request):
         if not self.isVisible():
             return
         if len(self.pending) >= 16:
-            self.message.setText('Please wait for pending requests to finish.')
+            self.message.setText(tr('Please wait for pending requests to finish.'))
             return
         config = self.parent().config.copy()
         generation = getattr(self.parent(), 'generation', 0)
@@ -73,9 +85,9 @@ class NetworkWindow(QDialog):
             self.server = None
             self.sources.clear()
             self.items.clear()
-            self.location.setText('Select a source for this Pi connection.')
+            self.location.setText(tr('Select a source for this Pi connection.'))
             if request['action'] not in ('network_sources', 'network_discover'):
-                self.message.setText('Connection changed. Reload enabled servers first.')
+                self.message.setText(tr('Connection changed. Reload enabled servers first.'))
                 return
         self.pending.append((request.copy(), config, generation))
         self.start_pending()
@@ -91,7 +103,7 @@ class NetworkWindow(QDialog):
             if config != self.parent().config or generation != getattr(self.parent(), 'generation', 0):
                 continue
             self.busy = True
-            self.message.setText('Discovering media servers…' if request['action'] == 'network_discover' else 'Contacting Pi…')
+            self.message.setText(tr('Discovering media servers…') if request['action'] == 'network_discover' else tr('Contacting Pi…'))
             def work():
                 try:
                     result = music_request(config, request)
@@ -107,48 +119,48 @@ class NetworkWindow(QDialog):
             if config != self.parent().config or generation != getattr(self.parent(), 'generation', 0):
                 return
             if error:
-                self.message.setText('Network music: ' + display_text(error))
+                self.message.setText(tr('Network music: ') + display_text(error))
                 return
             action = request['action']
             if action in ('network_sources', 'network_discover'):
                 rows = result.get('sources')
                 if not isinstance(rows, list) or len(rows) > 32:
-                    raise ValueError('Invalid source list')
+                    raise ValueError(tr('Invalid source list'))
                 self.sources.clear()
                 for row in rows:
                     if not isinstance(row, dict) or not all(isinstance(row.get(k), str) for k in ('id', 'name', 'address')):
-                        raise ValueError('Invalid source')
+                        raise ValueError(tr('Invalid source'))
                     item = QListWidgetItem(('✓ ' if row.get('enabled') else '+ ') + display_text(row['name']) + ' · ' + display_text(row['address']))
                     item.setData(Qt.ItemDataRole.UserRole, row)
                     self.sources.addItem(item)
-                self.message.setText(f'{len(rows)} server(s). Select one, enable it, then double-click to browse.')
+                self.message.setText(tr('{count} server(s). Select one, enable it, then double-click to browse.', count=len(rows)))
             elif action == 'network_browse':
                 if not self.server or request['server'] != self.server['id'] or request['object'] != self.history[-1][0] or request['offset'] != self.offset:
                     return
                 rows = result.get('items')
                 if not isinstance(rows, list) or len(rows) > 100:
-                    raise ValueError('Invalid network music page')
+                    raise ValueError(tr('Invalid network music page'))
                 self.items.clear()
                 for row in rows:
                     if not isinstance(row, dict) or not isinstance(row.get('object'), str) or not isinstance(row.get('Title'), str):
-                        raise ValueError('Invalid network music entry')
-                    title = ('[Folder] ' if row.get('folder') else '') + display_text(row['Title'])
+                        raise ValueError(tr('Invalid network music entry'))
+                    title = (tr('[Folder] ') if row.get('folder') else '') + display_text(row['Title'])
                     if row.get('Artist'):
                         title += ' — ' + display_text(row['Artist'])
                     item = QListWidgetItem(title)
                     item.setData(Qt.ItemDataRole.UserRole, row)
                     self.items.addItem(item)
                 self.more = result.get('more') is True
-                self.location.setText(display_text(self.server['name']) + ' / ' + ' / '.join(display_text(x[1]) for x in self.history) + f' · {len(rows)} entries')
-                self.message.setText('Double-click a folder to browse or a track to play. Add an album or track to the shared queue.')
+                self.location.setText(display_text(self.server['name']) + ' / ' + ' / '.join(display_text(x[1]) for x in self.history) + tr(' · {count} entries', count=len(rows)))
+                self.message.setText(tr('Double-click a folder to browse or a track to play. Add an album or track to the shared queue.'))
             elif action in ('network_enable', 'network_remove'):
                 if action == 'network_remove' and self.server and self.server['id'] == request['server']:
                     self.server = None
                     self.items.clear()
-                    self.location.setText('Source removed. Already queued tracks remain in the queue.')
+                    self.location.setText(tr('Source removed. Already queued tracks remain in the queue.'))
                 self.request({'action': 'network_sources'})
             else:
-                self.message.setText('Added to the shared queue.' + (' Playback started.' if action == 'network_play' else ''))
+                self.message.setText(tr('Added to the shared queue.') + (tr(' Playback started.') if action == 'network_play' else ''))
         except (TypeError, ValueError, KeyError) as exc:
             self.message.setText(display_text(exc))
         finally:
@@ -172,10 +184,10 @@ class NetworkWindow(QDialog):
     def open_source(self, item):
         row = item.data(Qt.ItemDataRole.UserRole)
         if not row.get('enabled'):
-            self.message.setText('Enable this server first. Only enable media servers you trust.')
+            self.message.setText(tr('Enable this server first. Only enable media servers you trust.'))
             return
         self.server = row.copy()
-        self.history = [('0', 'Library')]
+        self.history = [('0', tr('Library'))]
         self.offset = 0
         self.browse()
 

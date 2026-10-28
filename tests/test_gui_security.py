@@ -90,6 +90,53 @@ class PairingDialogs(unittest.TestCase):
         message.assert_called_once()
         self.assertNotEqual(settings.result(), settings.DialogCode.Accepted)
 
+    def prepare_second_pi(self):
+        import core, profiles
+        first = {**self.window.config, 'host': 'first-pi.example', 'username': 'first'}
+        core.save_config(first)
+        identifier = profiles.add('Second Pi')
+        profiles.activate(identifier)
+        core.save_config({**first, 'host': 'second-pi.example', 'username': 'second'})
+        profiles.activate('default')
+        self.window.config = first
+        self.window.reload_profiles()
+        return identifier
+
+    def test_profile_switch_discards_old_requests_and_hides_music(self):
+        identifier = self.prepare_second_pi()
+        self.window.session = None
+        self.window.busy = {'poll'}
+        old_generation = self.window.generation
+        self.window.music_window = Mock()
+        with patch.object(self.window, 'refresh'):
+            self.window.switch_profile(identifier)
+        self.assertEqual(self.window.config['host'], 'second-pi.example')
+        self.assertEqual(self.window.generation, old_generation + 1)
+        self.assertIsNone(self.window.snapshot)
+        self.window.music_window.hide.assert_called_once()
+        with patch.object(self.window, 'done') as done:
+            self.window.job_done('poll', (old_generation, {'old': True}))
+        done.assert_not_called()
+
+    def test_profile_switch_is_blocked_during_pairing_or_mutations(self):
+        import profiles
+        identifier = self.prepare_second_pi()
+        for busy, session in ((set(), self.session), ({'key'}, None), ({'shutdown'}, None)):
+            self.window.busy, self.window.session = busy, session
+            with patch('app.plain_information'):
+                self.window.switch_profile(identifier)
+            self.assertEqual(profiles.load()['active'], 'default')
+            self.assertEqual(self.window.config['host'], 'first-pi.example')
+
+    def test_another_pi_can_be_selected_after_shutdown_disconnects(self):
+        identifier = self.prepare_second_pi()
+        self.window.session = None
+        self.window.power_state = 'disconnected'
+        with patch.object(self.window, 'refresh'):
+            self.window.switch_profile(identifier)
+        self.assertIsNone(self.window.power_state)
+        self.assertEqual(self.window.config['host'], 'second-pi.example')
+
     def test_settings_reads_os_autostart_without_changing_it(self):
         with patch('app.autostart_enabled', return_value=True), patch('app.set_autostart') as register:
             settings = Settings(self.window.config, self.window)
@@ -114,6 +161,23 @@ class PairingDialogs(unittest.TestCase):
         with patch('app.Settings', return_value=dialog), patch('app.set_autostart') as register:
             self.window.settings()
         register.assert_not_called()
+
+    def test_language_notification_cannot_accept_a_stale_connection_result(self):
+        self.window.session = None
+        self.window.busy = {'poll'}
+        old_generation = self.window.generation
+        dialog = Mock()
+        dialog.exec.return_value = QDialog.DialogCode.Accepted
+        dialog.values.return_value = {**self.window.config, 'host': 'new-pi.example', 'username': 'audio', 'language': 'de'}
+        dialog.autostart.isEnabled.return_value = False
+        def notification(*args):
+            self.assertGreater(self.window.generation, old_generation)
+            with patch.object(self.window, 'done') as done:
+                self.window.job_done('poll', (old_generation, {'stale': True}))
+            done.assert_not_called()
+        with patch('app.Settings', return_value=dialog), patch('app.save_config'), \
+             patch('app.plain_information', side_effect=notification), patch.object(self.window, 'refresh'):
+            self.window.settings()
 
     def test_pairing_cannot_start_during_helper_installation(self):
         self.window.session = None

@@ -1,9 +1,47 @@
 """Small vector symbols and stable, palette-aware desktop presentation."""
 import html
+from pathlib import Path
+import sys
 from PySide6.QtCore import QEvent, Qt
 from PySide6.QtGui import QIcon, QPainter, QPixmap, QPalette
 from PySide6.QtSvg import QSvgRenderer
-from PySide6.QtWidgets import QApplication, QLabel, QSizePolicy
+from PySide6.QtWidgets import (QApplication, QDialog, QDialogButtonBox, QInputDialog,
+    QLabel, QLineEdit, QMessageBox, QPushButton, QSizePolicy)
+from i18n import tr, translate_standard_buttons
+
+
+class LocalizedButtonBox(QDialogButtonBox):
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        if event.type() == QEvent.Type.LanguageChange:
+            translate_standard_buttons(self)
+
+
+class LocalizedMessageBox(QMessageBox):
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        if event.type() == QEvent.Type.LanguageChange:
+            translate_standard_buttons(self)
+
+
+class LocalizedInputDialog(QInputDialog):
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        if event.type() == QEvent.Type.LanguageChange:
+            self.setOkButtonText(tr('OK'))
+            self.setCancelButtonText(tr('Cancel'))
+
+
+def get_text(parent, title, label, echo=QLineEdit.EchoMode.Normal, text=''):
+    dialog = LocalizedInputDialog(parent)
+    dialog.setWindowTitle(title)
+    dialog.setLabelText(label)
+    dialog.setTextEchoMode(echo)
+    dialog.setTextValue(text)
+    dialog.setOkButtonText(tr('OK'))
+    dialog.setCancelButtonText(tr('Cancel'))
+    accepted = dialog.exec() == QDialog.DialogCode.Accepted
+    return dialog.textValue(), accepted
 
 PATHS = {
     'receiver': '<rect x="3" y="5" width="18" height="14" rx="3"/><path d="M7 15h.01M11 15h.01M15 9h3M15 12h3"/>',
@@ -25,6 +63,19 @@ PATHS = {
     'stop': '<rect x="5" y="5" width="14" height="14" rx="3"/>',
     'power': '<path d="M12 2v10M6 5a9 9 0 1012 0"/>',
 }
+
+
+def flag_icon(country):
+    root = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
+    renderer = QSvgRenderer(str(root / 'assets/flags' / (country + '.svg')))
+    if not renderer.isValid():
+        return QIcon()
+    image = QPixmap(48, 32)
+    image.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(image)
+    renderer.render(painter)
+    painter.end()
+    return QIcon(image)
 
 
 def symbol(name, color=None):
@@ -72,6 +123,33 @@ class StableLabel(QLabel):
         super().setText(text)
         self.setToolTip('<qt>' + html.escape(str(text)).replace('\n', '<br>') + '</qt>')
         self.setAccessibleDescription(str(text))
+
+
+class StatusIndicator(QPushButton):
+    """Fixed-size, non-animated status; full text is available on hover/click."""
+    def __init__(self, text='', parent=None):
+        super().__init__('●', parent)
+        self.setFixedSize(28, 28)
+        self.setAccessibleName(tr('Receiver status details'))
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.set_state('unknown')
+        self.setText(text)
+
+    def set_state(self, state):
+        if getattr(self, 'state', None) == state:
+            return
+        colors = {'ok': '#139b7d', 'warning': '#bf8b23', 'error': '#ce5353', 'unknown': '#8c97a8'}
+        self.setStyleSheet('QPushButton { border: none; padding: 0; font-size: 22px; color: '
+                          + colors.get(state, colors['unknown']) + '; } QPushButton:hover { background: palette(alternate-base); }')
+        self.state = state
+
+    def setText(self, text):
+        self._message = str(text)
+        self.setToolTip('<qt>' + html.escape(self._message).replace('\n', '<br>') + '</qt>')
+        self.setAccessibleDescription(self._message)
+
+    def text(self):
+        return self._message
 
 
 STYLE = '''

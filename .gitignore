@@ -6,6 +6,7 @@ dist/
 *.AppImage
 *.spec
 config.json
+profiles.json
 known_hosts
 *.pem
 id_*
