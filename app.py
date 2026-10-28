@@ -116,6 +116,11 @@ class Settings(QDialog):
             entry.setValue(config[key])
             self.fields[key] = entry
             form.addRow(label, entry)
+        form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
+        for row in range(form.rowCount()):
+            item = form.itemAt(row, QFormLayout.ItemRole.LabelRole)
+            if item is not None and isinstance(item.widget(), QLabel):
+                item.widget().setWordWrap(True)
         layout.addLayout(form)
         self.autostart = QCheckBox(tr('Start Pi Audio Tray when I sign in'))
         self.autostart.setToolTip(tr('Starts in the tray after login on this computer. No administrator password is needed.'))
@@ -607,6 +612,7 @@ class TrayApp(QWidget):
                     plain_warning(self, tr('Autostart could not be changed'), display_text(exc))
             if self.music_window is not None:
                 self.music_window.hide()
+                self.music_window.reset_connection()
             self.config = config
             self.power_state = None
             self.generation += 1
@@ -658,6 +664,7 @@ class TrayApp(QWidget):
             return
         if self.music_window is not None:
             self.music_window.hide()
+            self.music_window.reset_connection()
         self.generation += 1
         self.busy.clear()
         self.snapshot = None

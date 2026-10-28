@@ -88,6 +88,21 @@ class MusicWindow(QDialog):
         self.timer.setInterval(5000)
         self.timer.timeout.connect(self.refresh_status)
 
+    def reset_connection(self):
+        """Drop old library/queue data without destroying an in-flight worker."""
+        self.pending_requests.clear()
+        self.path, self.offset, self.queue_offset, self.more = '', 0, 0, False
+        self.page_contexts.clear()
+        self.library.clear()
+        self.queue.clear()
+        self.tabs.setCurrentIndex(0)
+        self.location.setText(tr('Library'))
+        self.now.setText(tr('Player not checked yet'))
+        self.message.setText(tr('Double-click a folder to browse, or a track to play it.'))
+        self.volume.setValue(0)
+        if self.network_window is not None:
+            self.network_window.reset_connection()
+
     def request(self, request, background=False):
         if not self.isVisible() or self.isMinimized():
             return

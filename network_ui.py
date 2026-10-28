@@ -60,6 +60,17 @@ class NetworkWindow(QDialog):
         self.message.setWordWrap(True)
         layout.addWidget(self.message)
 
+    def reset_connection(self):
+        self.hide()
+        self.pending.clear()
+        self.connection, self.server = None, None
+        self.history = [('0', tr('Library'))]
+        self.offset, self.more = 0, False
+        self.sources.clear()
+        self.items.clear()
+        self.location.setText(tr('Double-click an enabled server to browse.'))
+        self.message.setText(tr('Discovery runs only when requested. Servers must be awake and reachable from the Pi.'))
+
     def request(self, request):
         if not self.isVisible():
             return

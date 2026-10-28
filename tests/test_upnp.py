@@ -166,6 +166,22 @@ class NetworkUI(unittest.TestCase):
         self.window.deleteLater()
         self.parent.deleteLater()
 
+    def test_connection_reset_discards_old_sources_without_contacting_a_pi(self):
+        self.window.server = {'id': 'old'}
+        self.window.sources.addItem('Old server')
+        self.window.items.addItem('Old track')
+        self.window.pending = [({'action': 'network_play'}, {}, 0)]
+        self.window.busy = True
+        with patch('network_ui.music_request') as request:
+            self.window.reset_connection()
+        request.assert_not_called()
+        self.assertIsNone(self.window.server)
+        self.assertIsNone(self.window.connection)
+        self.assertEqual(self.window.items.count(), 0)
+        self.assertEqual(self.window.sources.count(), 0)
+        self.assertFalse(self.window.pending)
+        self.assertTrue(self.window.busy)
+
     def test_no_background_or_hidden_requests(self):
         self.window.hide()
         with patch('network_ui.music_request') as request:
