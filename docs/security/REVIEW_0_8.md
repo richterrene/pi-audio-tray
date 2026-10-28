@@ -67,3 +67,19 @@ as proof of safety. The full scan and exact dependency advisory audit are retain
 as CI security artifacts. The exact local dependency inventory also had no
 known advisories in pip-audit on the review date; results are point-in-time,
 not guarantees.
+
+## Physical installation follow-up (0.8.1)
+
+The first Pi deployment exposed a permissions defect missed by mocked installer
+fixtures: umask 0077 made newly created public binary/unit directories 0700.
+Compilation succeeded, but the normal audio account could not traverse them.
+Activation stopped; the orchestration restored the previous master output.
+
+Directory creation now applies explicit modes to each newly created directory,
+while retaining existing private ancestors and explicit private targets. A narrow
+public-directory repair handles the existing affected unit/binary prefixes. It
+rejects traversal, symlinks, unrelated private paths and non-root/writable paths.
+Real filesystem regressions exercise the private installer umask and distinguish
+public runtime directories from private state, in addition to mocked root stages.
+The source build is unchanged; this correction does not make private credentials
+or configuration public. Cross-source playback still requires separate tests.
