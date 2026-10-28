@@ -19,6 +19,44 @@ def node(serial, source, running=True, muted=False, identifier=None):
 
 
 class Arbitration(unittest.TestCase):
+    def test_soft_mute_does_not_become_a_recreated_players_user_mute(self):
+        streams = {10: {'mute': False, 'softMute': False}, 20: {'mute': False, 'softMute': False}}
+        persisted = {'spotify': False, 'mpd': False}
+        sources = {10: 'spotify', 20: 'mpd', 30: 'mpd'}
+        def command(*args, **kwargs):
+            self.assertEqual(args[:2], ('/usr/bin/pw-cli', 'set-param'))
+            identifier = int(args[2])
+            props = json.loads(args[4])
+            self.assertEqual(set(props), {'softMute'})
+            streams[identifier].update(props)
+            # The installed WirePlumber saves normal mute, not softMute.
+            persisted[sources[identifier]] = streams[identifier]['mute']
+            return True
+        def graph(*identifiers):
+            return {i: node(i, sources[i], muted=streams[i]['mute'] or streams[i]['softMute']) for i in identifiers}
+        engine = pi_policy.Arbiter(pi_policy.stream_mute, Mock())
+        with patch.object(pi_policy, 'run', side_effect=command):
+            engine.update(graph(10))
+            engine.update(graph(10, 20))
+            engine.update(graph(10, 20), preferred='spotify')
+            self.assertTrue(streams[20]['softMute'])
+            streams[30] = {'mute': persisted['mpd'], 'softMute': False}
+            result = engine.update(graph(10, 30))
+        self.assertEqual(result['winner'], 'mpd')
+        self.assertEqual(result['mute_control'], 'soft')
+        self.assertFalse(streams[30]['mute'])
+
+    def test_user_mute_and_soft_mute_both_exclude_unowned_streams(self):
+        for key in ('mute', 'softMute'):
+            obj = {'id': 5, 'type': 'PipeWire:Interface:Node',
+                   'info': {'state': 'running', 'props': {'object.serial': 55,
+                    'media.class': 'Stream/Output/Audio', 'application.name': 'Spotify'},
+                    'params': {'Props': [{key: True}]}}}
+            mute = Mock()
+            engine = pi_policy.Arbiter(mute, Mock())
+            self.assertFalse(engine.update(pi_policy.nodes([obj]))['playing'])
+            mute.assert_not_called()
+
     def test_new_source_mutes_and_pauses_old_without_changing_volume(self):
         mute, pause = Mock(return_value=True), Mock(return_value=True)
         engine = pi_policy.Arbiter(mute, pause)
@@ -78,8 +116,9 @@ class Arbitration(unittest.TestCase):
 
     def test_graph_recognition_ignores_hardware_sink_and_uses_stream_serial(self):
         def obj(identifier, media, app, name):
-            return {'id': identifier, 'info': {'state': 'running', 'props': {'object.serial': identifier + 100, 'media.class': media, 'application.name': app, 'node.name': name}, 'params': {'Props': [{'mute': False}]}}}
-        found = pi_policy.nodes([obj(1, 'Audio/Sink', 'Spotify', 'hardware'), obj(2, 'Stream/Output/Audio', 'Spotify', 'spotify'), obj(3, 'Stream/Output/Audio', 'Music Player Daemon', 'mpd.test')])
+            return {'id': identifier, 'type': 'PipeWire:Interface:Node', 'info': {'state': 'running', 'props': {'object.serial': identifier + 100, 'media.class': media, 'application.name': app, 'node.name': name}, 'params': {'Props': [{'mute': False}]}}}
+        client = {**obj(4, 'Stream/Output/Audio', 'Spotify', 'spotify'), 'type': 'PipeWire:Interface:Client'}
+        found = pi_policy.nodes([obj(1, 'Audio/Sink', 'Spotify', 'hardware'), obj(2, 'Stream/Output/Audio', 'Spotify', 'spotify'), obj(3, 'Stream/Output/Audio', 'Music Player Daemon', 'mpd.test'), client])
         self.assertEqual(set(found), {102, 103})
 
     def test_play_event_can_reselect_existing_running_muted_spotify_node(self):
@@ -107,6 +146,28 @@ class Arbitration(unittest.TestCase):
 
 @unittest.skipIf(sys.platform == 'win32', 'POSIX receiver private files')
 class PrivatePolicy(unittest.TestCase):
+    def test_restore_soft_mute_preserves_normal_user_mute_and_supports_legacy_state(self):
+        with tempfile.TemporaryDirectory() as folder, patch.object(pi_policy, 'STATE', Path(folder).resolve() / 'state.json'):
+            for control in ('soft', None):
+                saved = {'cookie': 10, 'muted': [{'id': 10, 'serial': 100}]}
+                if control: saved['mute_control'] = control
+                pi_policy.write_private(pi_policy.STATE, saved)
+                with patch.object(pi_policy, 'graph_snapshot', return_value=(10, {100: node(100, 'mpd', muted=True, identifier=10)})), patch.object(pi_policy, 'run', return_value=True) as run, patch.object(pi_policy, 'stream_mute', return_value=True) as soft:
+                    self.assertTrue(pi_policy.restore())
+                if control:
+                    soft.assert_called_once_with(10, False)
+                    run.assert_not_called()
+                else:
+                    run.assert_called_once_with('/usr/bin/wpctl', 'set-mute', '10', '0')
+                    soft.assert_not_called()
+
+    def test_unknown_control_never_clears_user_mutes(self):
+        with tempfile.TemporaryDirectory() as folder, patch.object(pi_policy, 'STATE', Path(folder).resolve() / 'state.json'):
+            pi_policy.write_private(pi_policy.STATE, {'mute_control': 'unknown', 'muted': [{'id': 10, 'serial': 100}]})
+            with patch.object(pi_policy, 'graph_snapshot') as graph, self.assertRaises(ValueError):
+                pi_policy.restore()
+            graph.assert_not_called()
+
     def test_default_is_mix_and_settings_are_private(self):
         with tempfile.TemporaryDirectory() as folder, patch.object(pi_policy, 'CONFIG', Path(folder).resolve() / 'config/policy.json'):
             self.assertEqual(pi_policy.settings(), {'exclusive': False})

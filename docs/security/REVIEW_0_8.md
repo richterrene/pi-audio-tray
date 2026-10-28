@@ -83,3 +83,20 @@ Real filesystem regressions exercise the private installer umask and distinguish
 public runtime directories from private state, in addition to mocked root stages.
 The source build is unchanged; this correction does not make private credentials
 or configuration public. Cross-source playback still requires separate tests.
+
+## Physical handover follow-up (0.8.2)
+
+AirPlay audio and AirPlay-to-Spotify handover were confirmed on the physical Pi.
+A subsequent Spotify/MPD test found an inherited normal mute on a replacement MPD
+stream, while the old serial was no longer owned by the policy. WirePlumber's
+installed `node/state-stream.lua` stores normal `mute`, volume and channel values.
+
+The policy now uses the separate PipeWire `softMute` property, which that
+WirePlumber implementation does not save as the user's player preference. Real
+paused-stream checks confirmed softMute toggles independently of normal mute.
+Recovery state distinguishes new soft mutes from legacy normal mutes, retaining
+server-cookie/serial/id guards. Unknown formats fail closed. Only actual Node
+objects are considered; client objects with copied media properties are ignored.
+Tests cover stream recreation, user mute preservation and both recovery formats.
+The updater does not clear unowned normal mutes indiscriminately; a known legacy
+policy-generated mute may need a deliberate one-time correction.
