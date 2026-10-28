@@ -1,8 +1,124 @@
-"""Private local storage and single-instance locking on desktop platforms."""
+"""Private local storage, single-instance locking and opt-in login autostart."""
 import errno
 import functools
 import os
 import stat
+import plistlib
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+
+
+AUTOSTART_LABEL = 'org.piaudiotray.desktop'
+RUN_KEY = r'Software\Microsoft\Windows\CurrentVersion\Run'
+RUN_NAME = 'Pi Audio Tray'
+
+
+def autostart_path():
+    if sys.platform == 'darwin':
+        return Path.home() / 'Library/LaunchAgents' / (AUTOSTART_LABEL + '.plist')
+    if sys.platform.startswith('linux'):
+        root = Path(os.environ.get('XDG_CONFIG_HOME') or Path.home() / '.config')
+        if not root.is_absolute():
+            raise ValueError('XDG_CONFIG_HOME must be an absolute path')
+        return root / 'autostart/pi-audio-tray.desktop'
+    raise OSError('Autostart is unavailable on this platform')
+
+
+def autostart_enabled():
+    """Read OS registration rather than a potentially stale app preference."""
+    if sys.platform == 'win32':
+        import winreg
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY) as key:
+                value, kind = winreg.QueryValueEx(key, RUN_NAME)
+                return kind == winreg.REG_SZ and bool(value)
+        except FileNotFoundError:
+            return False
+    path = autostart_path()
+    reject_link(path, missing_ok=True)
+    try:
+        info = path.stat()
+        if not stat.S_ISREG(info.st_mode) or info.st_size > 16384:
+            raise ValueError('Autostart entry must be a small regular file')
+        data = path.read_bytes()
+    except FileNotFoundError:
+        return False
+    if sys.platform == 'darwin':
+        config = plistlib.loads(data)
+        if not isinstance(config, dict):
+            raise ValueError('Invalid autostart property list')
+        return config.get('Label') == AUTOSTART_LABEL and bool(config.get('RunAtLoad'))
+    lines = data.decode('utf-8').splitlines()
+    return '[Desktop Entry]' in lines and 'Hidden=true' not in lines and any(line.startswith('Exec=') for line in lines)
+
+
+def autostart_command():
+    """Use persistent external executable paths, never a mounted AppImage path."""
+    if sys.platform.startswith('linux') and os.environ.get('APPIMAGE'):
+        command = [os.environ['APPIMAGE']]
+    elif getattr(sys, 'frozen', False):
+        command = [sys.executable]
+    else:
+        command = [sys.executable, str(Path(__file__).resolve().with_name('app.py'))]
+    for argument in command:
+        if not Path(argument).is_absolute() or any(c in argument for c in '\r\n\0'):
+            raise ValueError('Autostart requires absolute executable paths without control characters')
+        if not Path(argument).is_file():
+            raise ValueError('Move the application to a permanent location before enabling autostart')
+    if sys.platform == 'darwin' and any('/AppTranslocation/' in arg or arg.startswith('/Volumes/') for arg in command):
+        raise ValueError('Move the app into Applications and reopen it before enabling autostart')
+    return command + ['--autostart']
+
+
+def _desktop_argument(argument):
+    # Desktop Entry escaping has two layers: string-value and Exec quoting.
+    argument = argument.replace('%', '%%')
+    argument = ''.join('\\' + c if c in '\\"`$' else c for c in argument)
+    return ('"' + argument + '"').replace('\\', '\\\\')
+
+
+def set_autostart(enabled):
+    """Change only this account's app entry. Never launch, stop or elevate."""
+    command = autostart_command() if enabled else None
+    if sys.platform == 'win32':
+        import winreg
+        if enabled:
+            value = subprocess.list2cmdline(command)
+            if len(value) > 260:
+                raise ValueError('Application path exceeds Windows login command limit; move it to a shorter path')
+            with winreg.CreateKeyEx(winreg.HKEY_CURRENT_USER, RUN_KEY, 0, winreg.KEY_SET_VALUE) as key:
+                winreg.SetValueEx(key, RUN_NAME, 0, winreg.REG_SZ, value)
+        else:
+            try:
+                with winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY, 0, winreg.KEY_SET_VALUE) as key:
+                    winreg.DeleteValue(key, RUN_NAME)
+            except FileNotFoundError:
+                pass
+        return
+    path = autostart_path()
+    reject_link(path.parent, missing_ok=True)
+    reject_link(path, missing_ok=True)
+    if not enabled:
+        path.unlink(missing_ok=True)
+        return
+    if sys.platform == 'darwin':
+        contents = plistlib.dumps({'Label': AUTOSTART_LABEL, 'ProgramArguments': command,
+                                  'RunAtLoad': True, 'LimitLoadToSessionType': 'Aqua'})
+    else:
+        contents = ('[Desktop Entry]\nType=Application\nName=Pi Audio Tray\n'
+                    'Comment=Monitor and control your Pi audio receiver\n'
+                    'Exec=' + ' '.join(_desktop_argument(arg) for arg in command) + '\n'
+                    'Icon=pi-audio-tray\nTerminal=false\n').encode('utf-8')
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, temporary = tempfile.mkstemp(prefix='.pi-audio-autostart-', dir=path.parent)
+    try:
+        with os.fdopen(fd, 'wb') as output:
+            output.write(contents)
+        os.replace(temporary, path)
+    finally:
+        Path(temporary).unlink(missing_ok=True)
 
 
 def reject_link(path, missing_ok=False):

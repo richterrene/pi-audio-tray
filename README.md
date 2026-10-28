@@ -106,9 +106,9 @@ Hardware and deployment caveats:
   DAC, memory capacity, thermal stability or audible playback. Test Spotify,
   Bluetooth, MPD and reboot persistence on each new deployment.
 
-## Set up a new Pi (0.7.1 preview)
+## Set up a new Pi (0.7.2 preview)
 
-The wizard is available in the **[0.7.1 preview release](https://github.com/richterrene/pi-audio-tray/releases/tag/v0.7.1)**
+The wizard is available in the **[0.7.2 preview release](https://github.com/richterrene/pi-audio-tray/releases/tag/v0.7.2)**
 for Linux, Windows and both Mac architectures. GitHub's latest stable release
 may be older and lack the wizard. **A complete installation on a spare blank Pi
 has not yet been tested.** Automated installer fixtures and native desktop
@@ -213,9 +213,33 @@ privately on the Pi; no historical time series is stored.
 Spotify status is the **service status**, not currently playing tracks. Bluetooth
 device status indicates a connection, not proof of current audio playback.
 
+## Start automatically at login
+
+In **Settings…**, enable **Start Pi Audio Tray when I sign in** and click
+**Save**. Turn it off and save to remove the registration. It is off by default,
+starts in the tray/menu bar, and applies to the current desktop account after
+its next login, rather than running a system service before login. If a system
+tray is unavailable, the status window opens instead.
+
+No administrator rights are required. Linux uses
+`$XDG_CONFIG_HOME/autostart/pi-audio-tray.desktop` (normally
+`~/.config/autostart/`); macOS uses
+`~/Library/LaunchAgents/org.piaudiotray.desktop.plist`; Windows uses the
+`Pi Audio Tray` value under `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`.
+Operating-system startup/background-item controls may additionally block launch.
+The checkbox reports the app registration, not those external overrides.
+
+Keep the AppImage or fully extracted Windows folder in a permanent location.
+On macOS, move the app into Applications and reopen it first; temporary
+App Translocation and mounted-volume paths are rejected. After moving or
+updating a versioned package, open the new version manually to refresh an
+existing enabled registration, or enable it again in Settings. Removing the
+registration does not stop a currently running app. The registration contains
+local executable paths only, with no SSH credentials or Pi settings.
+
 ## Screenshots
 
-These screenshots show the current desktop UI (0.7.1), rendered from the actual
+These screenshots show the current desktop UI (0.7.2), rendered from the actual
 Linux/Qt widgets with **fictional demo connection details and music metadata**. No real
 account, device address, SSH key, or Soloist API key is shown. macOS uses its
 native window and menu-bar presentation. Windows uses its system tray; see the
@@ -280,12 +304,12 @@ closes only the tray application; **Shut down Pi…** powers off the receiver.
 ### Linux
 
 For the setup wizard, download the x86_64 AppImage from the
-[0.7.1 preview release](https://github.com/richterrene/pi-audio-tray/releases/tag/v0.7.1),
+[0.7.2 preview release](https://github.com/richterrene/pi-audio-tray/releases/tag/v0.7.2),
 make it executable, and launch it:
 
 ```sh
-chmod +x PiAudioTray-0.7.1-x86_64.AppImage
-./PiAudioTray-0.7.1-x86_64.AppImage --show
+chmod +x PiAudioTray-0.7.2-x86_64.AppImage
+./PiAudioTray-0.7.2-x86_64.AppImage --show
 ```
 
 Ubuntu's AppIndicator extension must be enabled for the tray icon. When no tray
@@ -302,8 +326,8 @@ Unknown host keys require explicit fingerprint approval; changed keys are reject
 
 ### Windows
 
-Download and fully extract `PiAudioTray-0.7.1-Windows-x86_64.zip` from the
-[preview release](https://github.com/richterrene/pi-audio-tray/releases/tag/v0.7.1), then run
+Download and fully extract `PiAudioTray-0.7.2-Windows-x86_64.zip` from the
+[preview release](https://github.com/richterrene/pi-audio-tray/releases/tag/v0.7.2), then run
 **Pi Audio Tray.exe** inside the extracted folder. Keep `_internal` beside it.
 No Python installation is needed. The build is unsigned; see [Windows setup and
 security](docs/WINDOWS.md). Receiver configuration and shutdown/pairing permissions
@@ -312,7 +336,7 @@ are the same as on Linux/macOS.
 ### macOS
 
 Download the ZIP matching your Mac's architecture from the
-[preview release](https://github.com/richterrene/pi-audio-tray/releases/tag/v0.7.1),
+[preview release](https://github.com/richterrene/pi-audio-tray/releases/tag/v0.7.2),
 extract it, and drag **Pi Audio
 Tray.app** into Applications. The app lives in the menu bar; **Open status** shows
 its window. Initial builds are ad-hoc signed, **not Developer ID signed or

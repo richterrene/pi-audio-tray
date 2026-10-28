@@ -5,8 +5,10 @@
 The Windows x64 portable ZIP targets Windows 11. Extract **the entire ZIP** to a
 folder you control, then run `Pi Audio Tray/Pi Audio Tray.exe`. Keep the adjacent
 `_internal` folder intact. Python and Qt are bundled; administrator access is not
-needed for normal desktop operation. There is no installer or automatic startup
-registration. You can create a normal shortcut to the executable.
+needed for normal desktop operation. There is no installer. Optional login
+autostart is available in Settings (off by default); it registers only this
+user's HKCU Run value. Keep the extracted folder in a permanent location.
+You can also create a normal shortcut to the executable.
 
 Native builds, regression tests, Windows ACL/locking tests and the packaged
 self-test run on a Windows Server 2022 x64 GitHub runner. Interactive Windows 11

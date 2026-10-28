@@ -12,7 +12,7 @@ from PySide6.QtCore import QObject, QTimer, Qt, Signal, QEvent
 from PySide6.QtGui import QAction, QIcon, QPainter, QPixmap
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (QApplication, QDialog, QDialogButtonBox, QFileDialog,
-    QFormLayout, QFrame, QGridLayout, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QMenu, QMessageBox,
+    QCheckBox, QFormLayout, QFrame, QGridLayout, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QMenu, QMessageBox,
     QPushButton, QSpinBox, QSystemTrayIcon, QVBoxLayout, QWidget)
 
 from core import (PairSession, UnknownHost, config_dir, disable_pairing,
@@ -21,7 +21,7 @@ from core import (PairSession, UnknownHost, config_dir, disable_pairing,
 from music_ui import MusicWindow
 from version import VERSION
 from ui_style import STYLE, StableLabel, symbol
-from platform_support import lock_instance
+from platform_support import lock_instance, autostart_enabled, set_autostart
 
 
 def plain_message(parent, icon_type, title, text, buttons, default):
@@ -104,6 +104,16 @@ class Settings(QDialog):
             self.fields[key] = entry
             form.addRow(label, entry)
         layout.addLayout(form)
+        self.autostart = QCheckBox('Start Pi Audio Tray when I sign in')
+        self.autostart.setToolTip('Starts in the tray after login on this computer. No administrator password is needed.')
+        try:
+            self.autostart.setChecked(autostart_enabled())
+        except (OSError, ValueError) as exc:
+            self.autostart.setEnabled(False)
+            self.autostart.setToolTip('Cannot read autostart settings: ' + display_text(exc))
+        layout.addWidget(self.autostart)
+        login_note = QLabel('Applies after your next login. Keep the app in a permanent location.')
+        layout.addWidget(login_note)
         soloist_label = QLabel('Spotify Soloist')
         soloist_label.setStyleSheet('font-weight: 600; margin-top: 12px;')
         layout.addWidget(soloist_label)
@@ -546,6 +556,11 @@ class TrayApp(QWidget):
             except (OSError, ValueError, TypeError) as exc:
                 plain_warning(self, 'Settings', display_text(exc))
                 return
+            if dialog.autostart.isEnabled():
+                try:
+                    set_autostart(dialog.autostart.isChecked())
+                except (OSError, ValueError) as exc:
+                    plain_warning(self, 'Autostart could not be changed', display_text(exc))
             if self.music_window is not None:
                 self.music_window.hide()
             self.config = config
@@ -788,8 +803,17 @@ def main():
     try:
         lock_instance(lock)
     except BlockingIOError:
-        plain_information(None, 'Pi Audio Tray', 'Pi Audio Tray is already running. Open it from the tray icon.')
+        if '--autostart' not in sys.argv:
+            plain_information(None, 'Pi Audio Tray', 'Pi Audio Tray is already running. Open it from the tray icon.')
         return 0
+    # A manually opened newer version repairs an existing registration. A login
+    # launch does not rewrite its own Run key, and never opts a user in.
+    if '--autostart' not in sys.argv:
+        try:
+            if autostart_enabled():
+                set_autostart(True)
+        except (OSError, ValueError) as exc:
+            plain_warning(None, 'Autostart needs attention', display_text(exc))
     app.setStyle('Fusion')
     app.setStyleSheet('''
         QWidget { font-size: 13px; }

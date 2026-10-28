@@ -57,7 +57,8 @@ def main():
     output = ROOT / 'assets/screenshots'
     output.mkdir(parents=True, exist_ok=True)
     capture(window, output / 'status.png')
-    settings = Settings(window.config, window)
+    with patch('app.autostart_enabled', return_value=False):
+        settings = Settings(window.config, window)
     settings.setMinimumWidth(590)
     settings.show()
     app.processEvents()

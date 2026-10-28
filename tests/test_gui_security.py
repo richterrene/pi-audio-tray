@@ -6,7 +6,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QApplication, QMessageBox
+from PySide6.QtWidgets import QApplication, QDialog, QMessageBox
 from app import TrayApp, Settings
 
 
@@ -89,6 +89,31 @@ class PairingDialogs(unittest.TestCase):
             settings.accept()
         message.assert_called_once()
         self.assertNotEqual(settings.result(), settings.DialogCode.Accepted)
+
+    def test_settings_reads_os_autostart_without_changing_it(self):
+        with patch('app.autostart_enabled', return_value=True), patch('app.set_autostart') as register:
+            settings = Settings(self.window.config, self.window)
+            self.assertTrue(settings.autostart.isChecked())
+            settings.reject()
+        register.assert_not_called()
+
+    def test_autostart_saved_only_on_save_and_errors_are_visible(self):
+        self.window.session = None
+        dialog = Mock()
+        dialog.exec.return_value = QDialog.DialogCode.Accepted
+        dialog.values.return_value = {**self.window.config, 'host': 'audio-pi.example', 'username': 'audio'}
+        dialog.autostart.isEnabled.return_value = True
+        dialog.autostart.isChecked.return_value = True
+        with patch('app.Settings', return_value=dialog), patch('app.save_config'), \
+             patch('app.set_autostart', side_effect=OSError('Registration is read-only')) as register, \
+             patch('app.plain_warning') as warning, patch.object(self.window, 'refresh'):
+            self.window.settings()
+            register.assert_called_once_with(True)
+            self.assertEqual(warning.call_args.args[1], 'Autostart could not be changed')
+        dialog.exec.return_value = QDialog.DialogCode.Rejected
+        with patch('app.Settings', return_value=dialog), patch('app.set_autostart') as register:
+            self.window.settings()
+        register.assert_not_called()
 
     def test_pairing_cannot_start_during_helper_installation(self):
         self.window.session = None

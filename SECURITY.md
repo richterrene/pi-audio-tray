@@ -401,3 +401,26 @@ notifications can continue until its connection closes. The optional myMPD PIN
 and trusted-local-user loopback bypass are separate, unchanged boundaries. Cookie
 theft by a compromised browser/OS or root remains outside this protection.
 See [deployment, expiry and rollback](docs/LOCAL_MUSIC.md#upgrade-an-existing-web-player-to-remembered-browser-login).
+
+
+## Desktop login autostart
+
+Autostart is opt-in and limited to the current account. Settings writes only the
+app's named XDG desktop entry, macOS LaunchAgent, or Windows HKCU Run value;
+disabling removes only that entry. No elevation, scheduled system task,
+background listener, shell command, credential, or remote Pi change is involved.
+Executable arguments are serialized as Desktop Entry arguments, a plist array,
+or a Windows command line, and launches omit `--show`. AppImage registration
+uses the outer APPIMAGE path rather than its temporary mount. Invalid/control-
+character paths and temporary macOS bundle locations are refused; registration
+files are atomically replaced with owner-only permissions, and symbolic links
+or reparse points at the entry/parent are rejected. Local account compromise can
+still modify that account's startup entries; this is not a security boundary
+against the same user. OS-level disabled startup items are not detected.
+
+Opening a newer version manually refreshes an already enabled entry. Login
+launches do not rewrite it, and neither normal launch nor installation enables
+an absent registration. A moved/deleted executable can prevent launch until the
+user opens the app at its new location and saves the option again. Native login
+sessions on Windows/macOS still need manual end-to-end validation; automated
+checks cover registration roundtrips and packaged startup smoke tests.
