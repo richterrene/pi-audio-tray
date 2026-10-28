@@ -82,6 +82,7 @@ def get_text(parent, title, label, echo=QLineEdit.EchoMode.Normal, text=''):
     return dialog.textValue(), accepted
 
 PATHS = {
+    'equalizer': '<path d="M6 3v5m0 4v9M12 3v10m0 4v4M18 3v2m0 4v12M3 8h6v4H3zM9 13h6v4H9zM15 5h6v4h-6z"/>',
     'receiver': '<rect x="3" y="5" width="18" height="14" rx="3"/><path d="M7 15h.01M11 15h.01M15 9h3M15 12h3"/>',
     'music': '<path d="M9 18V5l11-2v13M9 8l11-2"/><ellipse cx="6" cy="18" rx="3" ry="3"/><ellipse cx="17" cy="16" rx="3" ry="3"/>',
     'bluetooth': '<path d="M7 7l10 10-5 4V3l5 4L7 17"/>',

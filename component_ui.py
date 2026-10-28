@@ -17,7 +17,7 @@ def labels():
             'helpers': tr('Monitoring and pairing helpers'), 'music': 'MPD / USB / UPnP',
             'web': tr('HTTPS web player'), 'updates': tr('Automatic updates'),
             'cockpit': 'Cockpit', 'privacy': tr('Process privacy (hidepid=2)'),
-            'shutdown': tr('Tray shutdown permission'), 'airplay': 'AirPlay', 'dsp': tr('Equalizer / DSP')}
+            'shutdown': tr('Tray shutdown permission'), 'airplay': 'AirPlay', 'dsp': tr('Equalizer')}
 
 
 class ComponentsDialog(QDialog):
@@ -63,7 +63,7 @@ class ComponentsDialog(QDialog):
         self.audio_button = QPushButton(tr('Audio integrations…'))
         self.policy_button = QPushButton(tr('Playback source policy…'))
         self.updates_button = QPushButton(tr('System updates…'))
-        self.dsp_button = QPushButton(tr('Equalizer / DSP…'))
+        self.dsp_button = QPushButton(tr('Install / repair equalizer…'))
         self.close_button = QPushButton(tr('Close'))
         for button in (self.check_button, self.repair_button, self.audio_button, self.close_button):
             row.addWidget(button)
@@ -233,8 +233,8 @@ class ComponentsDialog(QDialog):
     def maintenance(self, kind):
         from maintenance_ui import PolicyDialog, UpdatesDialog
         from PySide6.QtCore import QTimer
-        from dsp_ui import DspDialog
-        dialog = {'policy': PolicyDialog, 'updates': UpdatesDialog, 'dsp': DspDialog}[kind](self.config, self)
+        from dsp_ui import DspInstallDialog
+        dialog = {'policy': PolicyDialog, 'updates': UpdatesDialog, 'dsp': DspInstallDialog}[kind](self.config, self)
         QTimer.singleShot(0, dialog.refresh)
         dialog.exec()
         dialog.deleteLater()

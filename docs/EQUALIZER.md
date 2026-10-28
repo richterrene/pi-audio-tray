@@ -1,14 +1,16 @@
-# Per-Pi stereo equalizer (0.9.0 preview)
+# Per-Pi stereo equalizer (0.9.1 preview)
 
-Open **Maintenance → Equalizer / DSP…** for the selected receiver. This is an
+Open **Equalizer…**, directly beside **Master volume…** in the tray menu, for the selected receiver. This is an
 optional add-on for an existing managed Debian/Raspberry Pi OS 13 ARM64 receiver
 with PipeWire 1.4 and WirePlumber 0.5. It is not an ALSA/BlueALSA EQ and is not
 installed by the fresh-Pi wizard. A core receiver installation comes first.
 
-1. Refresh the status and review the discovered physical stereo outputs.
-2. Enter the Pi sudo password in the masked field and choose **Install / repair
-   equalizer…**. Review the confirmation. Installation leaves EQ bypassed and
-   existing players running; no runtime sudo rules are added.
+1. For first installation or repair, open **Maintenance → Check / repair Pi
+   components… → Install / repair equalizer…**. Enter the Pi sudo password in
+   that separate dialog's masked field and review the confirmation. Installation
+   leaves EQ bypassed and existing players running; no runtime sudo rules are added.
+2. Open **Equalizer…** from the tray and refresh the discovered physical outputs.
+   The playback window contains no administrator password or installation controls.
 3. Choose the output actually used by your players. Keep your amplifier at a
    comfortable level for the first test. Enable EQ, choose **Flat**, and Apply.
 4. Select a preset or adjust the ten bands and preamp, then Apply again. Slider
@@ -18,6 +20,8 @@ installed by the fresh-Pi wizard. A core receiver installation comes first.
    running on the Pi. Reopening/Refresh reads the Pi's saved state.
 
 ![Equalizer controls with fictional output data](../assets/screenshots/equalizer.png)
+
+![Separate installation controls in Pi components](../assets/screenshots/equalizer-setup.png)
 
 The controls and saved settings belong to the selected Pi profile/SSH account.
 Switching profiles does not copy EQ curves between receivers. Independent Pis

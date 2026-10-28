@@ -108,7 +108,7 @@ def inventory():
     if airplay_binary and not rows[-1]['configured']:
         rows[-1]['managed'] = False
         rows[-1]['details'] += '; existing unowned binary requires manual integration'
-    row('dsp', files=(base + 'pi-dsp', base + 'dsp_config.py', '/usr/local/lib/systemd/user/pi-audio-dsp.service'), user_units=('pi-audio-dsp.service',), action='dsp', extra='Optional; bypass is the default. Use Equalizer / DSP for settings and installation')
+    row('dsp', files=(base + 'pi-dsp', base + 'dsp_config.py', '/usr/local/lib/systemd/user/pi-audio-dsp.service'), user_units=('pi-audio-dsp.service',), action='dsp', extra='Optional; bypass is the default. Install through Pi components; adjust playback through Equalizer')
     fstab = Path('/etc/fstab').read_text()
     match = re.search(r'^UUID=([A-Fa-f0-9]{4}-[A-Fa-f0-9]{4})\s+/srv/pi-audio-music\s+', fstab, re.MULTILINE)
     hostname = ''

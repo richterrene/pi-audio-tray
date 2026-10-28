@@ -308,6 +308,7 @@ class TrayApp(QWidget):
         self.menu.aboutToHide.connect(lambda: self.set_menu_open(False))
         self.menu.addAction(tr('Open status'), self.open_window)
         self.menu.addAction(symbol('audio'), tr('Master volume…'), lambda: self.receiver_dialog('volume'))
+        self.menu.addAction(symbol('equalizer'), tr('Equalizer…'), lambda: self.receiver_dialog('dsp'))
         self.menu.addAction(symbol('music'), tr('Music…'), self.open_music)
         self.menu.addSeparator()
         self.menu_rows = {}
@@ -329,7 +330,6 @@ class TrayApp(QWidget):
         maintenance.addAction(tr('Playback source policy…'), lambda: self.receiver_dialog('policy'))
         maintenance.addAction(tr('System updates…'), lambda: self.receiver_dialog('updates'))
         maintenance.addAction(tr('Audio integrations…'), self.audio_integrations)
-        maintenance.addAction(tr('Equalizer / DSP…'), lambda: self.receiver_dialog('dsp'))
         maintenance.addAction(tr('Update Pi helper…'), self.update_helper)
         soloist_menu = maintenance.submenu('Spotify Soloist')
         soloist_menu.addAction(tr('Set / replace API key…'), self.soloist_key)
@@ -338,7 +338,6 @@ class TrayApp(QWidget):
         version_action = maintenance.addAction(tr('Version ') + VERSION)
         version_action.setEnabled(False)
         self.shutdown_action = self.menu.addAction(symbol('power'), tr('Shut down Pi…'), self.shutdown)
-        self.menu.addSeparator()
         self.menu.addAction(tr('Quit'), self.quit)
         self.tray = QSystemTrayIcon(icon(), self)
         self.tray.setContextMenu(self.menu)
@@ -970,12 +969,12 @@ def main():
         component_check.deleteLater()
         from maintenance_ui import PolicyDialog, UpdatesDialog, VolumeDialog
         import dsp
-        from dsp_ui import DspDialog
+        from dsp_ui import DspDialog, DspInstallDialog
         for name in dsp.PI_FILES:
             assert (provision.ROOT / 'pi' / name).is_file(), name
         for name in dsp.TOP_FILES:
             assert (provision.ROOT / name).is_file(), name
-        for cls in (PolicyDialog, UpdatesDialog, VolumeDialog, DspDialog):
+        for cls in (PolicyDialog, UpdatesDialog, VolumeDialog, DspDialog, DspInstallDialog):
             check = cls({'host': '', 'username': ''})
             check.deleteLater()
         previous = os.environ.get('XDG_CONFIG_HOME')
