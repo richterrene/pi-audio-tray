@@ -1,4 +1,4 @@
-# Per-Pi stereo equalizer (0.9.1 preview)
+# Per-Pi stereo equalizer (0.9.2 preview)
 
 Open **Equalizer…**, directly beside **Master volume…** in the tray menu, for the selected receiver. This is an
 optional add-on for an existing managed Debian/Raspberry Pi OS 13 ARM64 receiver
@@ -65,6 +65,16 @@ account's `~/.config/pi-audio-tray/`. Enabling also enables the user service
 makes its audio session available without SSH login. Applying changes restarts
 only this filter, briefly reconnecting streams. Existing players are not
 restarted. Repair leaves the installed filter bypassed; Apply enables it again.
+
+From 0.9.2, the Pi source-policy helper distinguishes these routing transitions
+from a new playback request, so Apply/enable/bypass does not let an already-muted
+AirPlay stream take over and pause Spotify. Existing deployments need the updated
+Pi policy helper (core receiver repair deploys it); updating the desktop alone
+does not replace root-owned Pi files. During EQ operations and a two-second
+settling window, graph-only resumes do not change the selected source. Observed
+Spotify/Bluetooth play events still take priority. If a graph-only sender is
+started during that short window, pause/play it again after routing settles.
+
 
 Missing targets are shown as unavailable. Other outputs are not used as a
 fallback for the filter. Reconnecting a target with the same stable name lets

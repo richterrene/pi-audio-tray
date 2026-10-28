@@ -95,3 +95,13 @@ upgrade, inspect its stream in `wpctl status` and deliberately clear that specif
 normal mute once with `wpctl set-mute ID 0` as the audio account. Keep the
 source-policy service running and use the current stream id, not a stale id from
 a previous session. Future policy mutes use the separate soft-mute control.
+
+### Equalizer routing transitions
+
+The 0.9.2 helper observes the existing private DSP operation lock and filter-node
+identities. During an EQ change and a two-second monotonic-clock settling window,
+it preserves the selected source instead of treating graph reconnection as a
+fresh play command. It continues to enforce owned soft mutes and honors explicit
+Spotify/BlueZ play events. Graph-only senders starting during that short window
+may need pause/play after it ends. No new root permission, listener, persistent
+lease or credential is introduced. A crashed EQ operation releases its OS lock.

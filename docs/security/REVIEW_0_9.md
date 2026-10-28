@@ -94,3 +94,22 @@ confirmation and credential clearing remain. No receiver helper, startup setting
 EQ curve or runtime privilege changes are needed for this desktop update. Real
 Qt worker/close regressions include both dialogs, and the compact-menu limit is
 retained. Screenshots and all language catalogs follow the new navigation.
+
+## 0.9.2 EQ/source-policy interaction
+
+A physical Spotify reproduction showed that enabling Flat EQ could wake an
+existing policy-muted AirPlay stream in the audio graph. The arbiter mistook the
+rewiring for new playback, selected AirPlay and paused Spotify. The EQ service
+had not failed. Earlier synthetic EQ tests did not run this concurrent-source
+scenario and therefore missed the interaction.
+
+The normal-user policy helper now observes the existing private DSP lock (with
+nofollow/nonblocking opens, owner/mode/regular-file checks) and changes in the two
+fixed filter-node identities. It suppresses graph-only source promotion during
+rewiring and a bounded two-second settling period; explicit observed Spotify or
+BlueZ play events remain effective. It keeps mute enforcement and ownership
+checks active. Same-account users already control this audio session; the guard
+is coordination, not a security boundary. No extra runtime privilege or port is
+added. Regressions cover the Spotify/AirPlay rewire sequence, explicit takeover,
+lock release, filter restart/removal and expiry. Full suite: 285 tests passed
+with three existing skips. Focused static review found no high/medium findings.

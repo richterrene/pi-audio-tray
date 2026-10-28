@@ -46,6 +46,25 @@ class Arbitration(unittest.TestCase):
         self.assertEqual(result['mute_control'], 'soft')
         self.assertFalse(streams[30]['mute'])
 
+    def test_eq_reconnection_keeps_spotify_and_explicit_play_can_still_switch(self):
+        mute, pause = Mock(return_value=True), Mock(return_value=True)
+        engine = pi_policy.Arbiter(mute, pause)
+        engine.update({10: node(10, 'airplay')})
+        engine.update({10: node(10, 'airplay'), 20: node(20, 'spotify')})
+        pause.reset_mock()
+        engine.update({10: node(10, 'airplay', running=False, muted=True),
+                       20: node(20, 'spotify', running=False)}, routing=True)
+        state = engine.update({10: node(10, 'airplay', muted=True),
+                               20: node(20, 'spotify')}, routing=True)
+        self.assertEqual(state['winner'], 'spotify')
+        self.assertTrue(state['playing'])
+        pause.assert_not_called()
+        state = engine.update({10: node(10, 'airplay', muted=True),
+                               20: node(20, 'spotify'), 30: node(30, 'bluetooth:00_11_22_33_44_55')},
+                              preferred='bluetooth:00_11_22_33_44_55', routing=True)
+        self.assertEqual(state['winner'], 'bluetooth:00_11_22_33_44_55')
+        pause.assert_any_call('spotify')
+
     def test_user_mute_and_soft_mute_both_exclude_unowned_streams(self):
         for key in ('mute', 'softMute'):
             obj = {'id': 5, 'type': 'PipeWire:Interface:Node',
@@ -146,6 +165,31 @@ class Arbitration(unittest.TestCase):
 
 @unittest.skipIf(sys.platform == 'win32', 'POSIX receiver private files')
 class PrivatePolicy(unittest.TestCase):
+    def test_routing_guard_covers_private_lock_and_filter_changes_then_expires(self):
+        import fcntl
+        with tempfile.TemporaryDirectory() as folder, patch.object(pi_policy, 'CONFIG', Path(folder)/'source-policy.json'):
+            path = Path(folder)/'dsp.lock'
+            path.touch(mode=0o600)
+            guard = pi_policy.RoutingGuard()
+            def graph(serial):
+                return [{'type': 'PipeWire:Interface:Node', 'info': {'props': {
+                    'node.name': 'pi_audio.dsp.input', 'object.serial': serial}}}]
+            with path.open('rb') as lock, patch.object(pi_policy.time, 'monotonic', return_value=10):
+                fcntl.flock(lock, fcntl.LOCK_EX)
+                self.assertTrue(guard.active([]))
+            with patch.object(pi_policy.time, 'monotonic', return_value=13):
+                self.assertFalse(guard.active([]))
+                self.assertTrue(guard.active(graph(1)))
+            with patch.object(pi_policy.time, 'monotonic', return_value=16):
+                self.assertFalse(guard.active(graph(1)))
+                self.assertTrue(guard.active(graph(2)))
+            with patch.object(pi_policy.time, 'monotonic', return_value=19):
+                self.assertFalse(guard.active(graph(2)))
+                self.assertTrue(guard.active([]))
+            path.unlink();path.symlink_to(Path(folder)/'absent')
+            with patch.object(pi_policy.time, 'monotonic', return_value=22):
+                self.assertFalse(guard.active([]))
+
     def test_restore_soft_mute_preserves_normal_user_mute_and_supports_legacy_state(self):
         with tempfile.TemporaryDirectory() as folder, patch.object(pi_policy, 'STATE', Path(folder).resolve() / 'state.json'):
             for control in ('soft', None):
