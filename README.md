@@ -376,8 +376,8 @@ For the setup wizard, download the x86_64 AppImage from the
 make it executable, and launch it:
 
 ```sh
-chmod +x PiAudioTray-0.8.2-x86_64.AppImage
-./PiAudioTray-0.8.2-x86_64.AppImage --show
+chmod +x PiAudioTray-0.8.3-x86_64.AppImage
+./PiAudioTray-0.8.3-x86_64.AppImage --show
 ```
 
 Ubuntu's AppIndicator extension must be enabled for the tray icon. When no tray
@@ -394,7 +394,7 @@ Unknown host keys require explicit fingerprint approval; changed keys are reject
 
 ### Windows
 
-Download and fully extract `PiAudioTray-0.8.2-Windows-x86_64.zip` from the
+Download and fully extract `PiAudioTray-0.8.3-Windows-x86_64.zip` from the
 [preview release](https://github.com/richterrene/pi-audio-tray/releases/tag/v0.8.0), then run
 **Pi Audio Tray.exe** inside the extracted folder. Keep `_internal` beside it.
 No Python installation is needed. The build is unsigned; see [Windows setup and

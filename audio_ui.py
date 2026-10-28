@@ -89,7 +89,7 @@ class AudioDialog(QDialog):
         worker.progress.connect(self.message)
         worker.result.connect(callback)
         worker.failed.connect(self.failure)
-        worker.finished.connect(self.finished)
+        worker.finished.connect(self.finished_task)
         worker.start()
 
     def message(self, text):
@@ -100,7 +100,7 @@ class AudioDialog(QDialog):
         self.snapshot = None
         self.message(tr('Audio operation failed. If the helper is not installed, use Install AirPlay. Check the Pi service journal for details.') + '\n' + str(exc))
 
-    def finished(self):
+    def finished_task(self):
         worker, self.worker = self.worker, None
         worker.deleteLater()
         self.controls()

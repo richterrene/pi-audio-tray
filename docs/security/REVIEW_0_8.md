@@ -100,3 +100,21 @@ objects are considered; client objects with copied media properties are ignored.
 Tests cover stream recreation, user mute preservation and both recovery formats.
 The updater does not clear unowned normal mutes indiscriminately; a known legacy
 policy-generated mute may need a deliberate one-time correction.
+
+## Qt worker lifecycle follow-up (0.8.3)
+
+The master-volume dialog exposed a Qt signal-name collision. A Python completion
+method named `finished` shadowed QDialog's native `finished(int)` signal; connecting
+QThread's zero-argument `finished()` signal therefore failed before the request
+started, leaving the close guard busy. The blocked modal also held the main
+window's maintenance guard. The same pattern affected component, AirPlay,
+source-policy and update dialogs.
+
+Completion handlers now have a distinct `finished_task` name, preserving Qt's
+native dialog signal. Regressions start actual QThreads, exercise successful and
+failed requests, drain accepted volume commands before Close/X, and ensure the
+status window can subsequently hide to the tray. A live Pi test read the volume,
+wrote the same level and closed successfully; the user also confirmed volume
+changes and both close controls. No Pi helper or runtime privilege changes were
+needed. This closes a test coverage gap: calling UI callbacks directly had not
+exercised Qt's worker-signal wiring.
