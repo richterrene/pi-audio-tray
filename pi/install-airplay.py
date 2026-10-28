@@ -113,6 +113,7 @@ def main():
             receiver.write('/usr/local/lib/pi-audio-tray/pi-audio', (snapshot / 'pi_audio.py').read_text(), 0o755)
             receiver.write('/usr/local/lib/pi-audio-tray/pi_policy.py', (snapshot / 'pi_policy.py').read_text(), 0o755)
             receiver.write('/etc/pi-audio-tray/airplay-mode', mode + '\n')
+            receiver.public_dir(unit.parent)
             receiver.write(unit, unit_text)
             receiver.run('/usr/bin/systemctl', 'daemon-reload')
             receiver.run(*usercmd, '/usr/bin/systemctl', '--user', 'daemon-reload')

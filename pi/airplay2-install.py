@@ -79,7 +79,7 @@ def prepare(receiver, snapshot, state):
     script = '/usr/local/lib/pi-audio-tray/airplay-build'
     receiver.write(script, (snapshot / 'airplay-build.py').read_text(), 0o755)
     destination = Path('/usr/local/lib/pi-audio-tray/airplay2') / builder.BUILD_ID
-    receiver.safe_dir(destination)
+    receiver.public_dir(destination)
     with tempfile.TemporaryDirectory(prefix='pi-audio-build-', dir='/var/tmp') as folder:
         os.chown(folder, user.pw_uid, user.pw_gid)
         receiver.run('/usr/sbin/runuser', '-u', BUILD_USER, '--', '/usr/bin/env', '-i',

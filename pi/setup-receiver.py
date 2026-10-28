@@ -40,13 +40,35 @@ def safe_dir(path, mode=None):
     path = Path(path)
     if any(p.is_symlink() for p in (path, *path.parents)):
         raise ValueError('Symbolic-link installation paths are unsupported')
-    path.mkdir(parents=True, exist_ok=True, mode=mode or 0o755)
     for p in (path, *path.parents):
-        st = p.stat()
-        if st.st_uid != 0 or st.st_mode & 0o022:
+        if p.exists() and (p.stat().st_uid != 0 or p.stat().st_mode & 0o022):
             raise ValueError('Root installation paths must be administrator-owned')
+    missing = []
+    parent = path
+    while not parent.exists():
+        missing.append(parent)
+        parent = parent.parent
+    for directory in reversed(missing):
+        requested = mode if directory == path and mode is not None else 0o755
+        directory.mkdir(mode=requested)
+        # A private installer umask must not make public unit/binary directories
+        # inaccessible. Existing private ancestors are deliberately untouched.
+        os.chmod(directory, requested)
     if mode is not None:
         os.chmod(path, mode)
+    return path
+
+
+def public_dir(path):
+    path = Path(path)
+    if not path.is_absolute() or '..' in path.parts:
+        raise ValueError('Unsupported public installation directory')
+    roots = (Path('/usr/local/lib/pi-audio-tray'), Path('/usr/local/lib/systemd'))
+    root = next((base for base in roots if path.is_relative_to(base)), None)
+    if root is None:
+        raise ValueError('Unsupported public installation directory')
+    for directory in reversed((path, *[p for p in path.parents if p.is_relative_to(root)])):
+        safe_dir(directory, 0o755)
     return path
 
 
@@ -232,6 +254,7 @@ def main():
                 install(name, '/etc/systemd/system/' + name)
             user('install', '-d', '-m', '700', str(home / '.config/soloist'))
             userfile('soloist.service', home / '.config/systemd/user/soloist.service')
+            public_dir('/usr/local/lib/systemd/user')
             install('pi-audio-policy.service', '/usr/local/lib/systemd/user/pi-audio-policy.service')
             userfile('50-audio-receiver.conf', home / '.config/wireplumber/wireplumber.conf.d/50-audio-receiver.conf')
             run('usermod', '-aG', 'audio,bluetooth', account.pw_name)
