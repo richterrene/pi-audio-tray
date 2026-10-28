@@ -111,7 +111,7 @@ class DialogWorkers(unittest.TestCase):
             window.config.update(host='audio-pi.local', username='audio')
             def reopen():
                 dialog = window.receiver_window
-                if dialog is None or dialog.worker is not None:
+                if dialog is None or dialog.worker is not None or dialog.snapshot is None:
                     QTimer.singleShot(5, reopen)
                     return
                 window.receiver_dialog('dsp')
@@ -124,10 +124,27 @@ class DialogWorkers(unittest.TestCase):
             failsafe.start(2000)
             window.receiver_dialog('dsp')
             failsafe.stop()
+            if results != [True] or request.call_count != 1 or message.called:
+                print('EQ reopen diagnostics:', {'results': results, 'requests': request.call_count,
+                      'messages': message.call_count, 'busy': sorted(window.busy)}, flush=True)
             self.assertEqual(results, [True])
             self.assertIsNone(window.receiver_window)
             self.assertNotIn('provision', window.busy)
             request.assert_called_once(); message.assert_not_called()
+            window.timer.stop(); window.clock.stop(); window.tray.hide(); window.deleteLater()
+
+    def test_closing_before_initial_read_does_not_start_a_late_request(self):
+        from app import TrayApp
+        with tempfile.TemporaryDirectory() as folder, patch.dict(os.environ, {'XDG_CONFIG_HOME': folder}), patch.object(TrayApp, 'refresh'), patch.object(dsp, 'request') as request:
+            window = TrayApp(self.app)
+            window.timer.stop(); window.clock.stop()
+            window.config.update(host='audio-pi.local', username='audio')
+            with patch.object(DspDialog, 'exec', return_value=0):
+                window.receiver_dialog('dsp')
+            self.app.processEvents()
+            request.assert_not_called()
+            self.assertNotIn('provision', window.busy)
+            self.assertIsNone(window.receiver_window)
             window.timer.stop(); window.clock.stop(); window.tray.hide(); window.deleteLater()
 
     def test_failed_dialog_construction_releases_the_operation_guard(self):
@@ -154,7 +171,7 @@ class DialogWorkers(unittest.TestCase):
                 if completed:
                     return
                 dialog = next((d for d in window.findChildren(VolumeDialog) if d.isVisible()), None)
-                if dialog is None or dialog.worker is not None:
+                if dialog is None or dialog.worker is not None or dialog.snapshot is None:
                     QTimer.singleShot(5, close_when_ready)
                 else:
                     dialog.close_button.click()

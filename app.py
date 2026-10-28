@@ -761,7 +761,10 @@ class TrayApp(QWidget):
         try:
             dialog = {'audio': AudioDialog, 'components': ComponentsDialog, 'policy': PolicyDialog, 'updates': UpdatesDialog, 'volume': VolumeDialog, 'dsp': DspDialog}[kind](self.config, self)
             self.receiver_window = dialog
-            QTimer.singleShot(0, dialog.check if kind == 'components' else dialog.refresh)
+            def initial_read():
+                if self.receiver_window is dialog:
+                    (dialog.check if kind == 'components' else dialog.refresh)()
+            QTimer.singleShot(0, initial_read)
             dialog.exec()
         finally:
             self.receiver_window = None

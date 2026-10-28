@@ -146,3 +146,9 @@ isolated null output: at 63 Hz the predicted net response was −0.758 dB, and
 both stereo channels measured −0.76 dB at 44.1/48 kHz input, with zero filter
 xrun counters and successful target/process recovery. No speaker or microphone
 was used for that test.
+
+Native dialog tests now wait for the initial snapshot before closing and use
+the production tray application's last-window-close policy. A related early-
+close regression verifies that a queued initial read cannot start after its
+view has closed; the controller checks its active dialog reference before
+issuing that request. Final local suite: 290 tests passed (3 existing skips).
