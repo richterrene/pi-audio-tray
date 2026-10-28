@@ -36,8 +36,19 @@ Warm, Bass lift, Speech and Soft treble. Custom settings are supported within
 these bounds. This is basic EQ, not a convolution engine, room measurement tool,
 dynamic compressor or calibrated speaker protection.
 
-Positive gains add automatic attenuation equal to their sum, in addition to the
-manual preamp. The displayed effective preamp makes this explicit. Boost-heavy
+From 0.9.2, positive gains add attenuation based on an upper bound of the
+combined fixed filter response, in addition to the manual preamp. Each frequency
+interval uses the maximum response of each positive peaking section (endpoints
+and its centre when included); summing those maxima bounds the continuous
+cascade, rather than merely sampling its peak. Cut sections cannot increase
+that bound. A small numerical margin is added and the result is rounded upwards
+to whole dB, capped at the previous sum-of-boosts bound. For example, +4/+6 dB
+in the two lowest bands now needs 8 dB rather than 10 dB; all ten bands at +6
+need 12 dB rather than 60 dB. These values describe this fixed 48 kHz, Q=1 graph.
+Existing receivers need **Install / repair equalizer…** once to deploy the updated
+fixed graph module; installation leaves EQ bypassed, retaining the saved curve.
+Older modules remain readable and the app shows their actual legacy headroom
+with an upgrade hint. The displayed effective preamp makes this explicit. Boost-heavy
 curves can sound quieter; the physical master volume is independent. Flat at
 0 dB has no intentional gain change. Do not compensate by blindly increasing an
 amplifier: bypassing an attenuated curve can increase perceived loudness.

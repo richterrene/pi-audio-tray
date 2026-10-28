@@ -53,7 +53,8 @@ def cpu_ticks(pid):
     return int(fields[11]) + int(fields[12])
 
 
-def probe(module):
+def probe(module, gains=None, tone=1000, expected_gain=-6):
+    requested_gains = None if gains is None else tuple(gains)
     prefix = 'pi_audio_probe_' + uuid.uuid4().hex
     target = prefix + '.target'
     original = command('/usr/bin/wpctl', 'inspect', '@DEFAULT_AUDIO_SINK@').splitlines()[0]
@@ -85,14 +86,17 @@ def probe(module):
             measurements = []
             for rate in rates:
                 source = directory / ('sine-' + str(rate) + '.wav')
-                samples = array.array('h', (round(.12 * 32767 * math.sin(2 * math.pi * 1000 * i / rate))
+                samples = array.array('h', (round(.12 * 32767 * math.sin(2 * math.pi * tone * i / rate))
                                            for i in range(rate * 16) for channel in range(2)))
                 if sys.byteorder != 'little': samples.byteswap()
                 with wave.open(str(source), 'wb') as output:
                     output.setnchannels(2); output.setsampwidth(2); output.setframerate(rate)
                     output.writeframes(samples.tobytes())
                 settings = {'enabled': True, 'target': target, 'gains': [0] * 10, 'preamp': 0}
-                settings['gains'][5] = -6
+                if requested_gains is None:
+                    settings['gains'][5] = -6
+                else:
+                    settings['gains'] = list(requested_gains)
                 config = json.loads(module.configuration(settings))
                 args = config['context.modules'][-1]['args']
                 for key, suffix in (('capture.props', '.input'), ('playback.props', '.output')):
@@ -161,7 +165,7 @@ def probe(module):
                     if len(samples) != 48000: raise RuntimeError('Synthetic capture incomplete')
                     rms = math.sqrt(statistics.fmean(x*x for x in samples))
                     gain = 20 * math.log10(rms / (.12 * 32767 / math.sqrt(2))) if rms else -999
-                    if not -6.6 < gain < -5.4:
+                    if abs(gain - expected_gain) > .6:
                         raise RuntimeError('Measured stereo EQ response is incorrect')
                     gains.append(round(gain, 2))
                 # Inspect only this probe's filter counters, never report other

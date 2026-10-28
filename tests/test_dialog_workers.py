@@ -101,6 +101,46 @@ class DialogWorkers(unittest.TestCase):
             self.wait_for(lambda: not dialog.isVisible())
             dialog.deleteLater()
 
+    def test_repeated_tray_action_raises_the_existing_eq_without_duplicate_request(self):
+        from app import TrayApp
+        results = []
+        with tempfile.TemporaryDirectory() as folder, patch.dict(os.environ, {'XDG_CONFIG_HOME': folder}), patch.object(TrayApp, 'refresh'), patch.object(dsp, 'request', return_value=dsp_status()) as request, patch('app.plain_information') as message:
+            window = TrayApp(self.app)
+            window.timer.stop(); window.clock.stop()
+            window.config.update(host='audio-pi.local', username='audio')
+            def reopen():
+                dialog = window.receiver_window
+                if dialog is None or dialog.worker is not None:
+                    QTimer.singleShot(5, reopen)
+                    return
+                window.receiver_dialog('dsp')
+                results.append(window.receiver_window is dialog)
+                dialog.close_button.click()
+            QTimer.singleShot(5, reopen)
+            failsafe = QTimer(window)
+            failsafe.setSingleShot(True)
+            failsafe.timeout.connect(lambda: window.receiver_window.done(0) if window.receiver_window else None)
+            failsafe.start(2000)
+            window.receiver_dialog('dsp')
+            failsafe.stop()
+            self.assertEqual(results, [True])
+            self.assertIsNone(window.receiver_window)
+            self.assertNotIn('provision', window.busy)
+            request.assert_called_once(); message.assert_not_called()
+            window.timer.stop(); window.clock.stop(); window.tray.hide(); window.deleteLater()
+
+    def test_failed_dialog_construction_releases_the_operation_guard(self):
+        from app import TrayApp
+        with tempfile.TemporaryDirectory() as folder, patch.dict(os.environ, {'XDG_CONFIG_HOME': folder}), patch.object(TrayApp, 'refresh'):
+            window = TrayApp(self.app)
+            window.timer.stop(); window.clock.stop()
+            window.config.update(host='audio-pi.local', username='audio')
+            with patch('dsp_ui.DspDialog', side_effect=RuntimeError('Fixture constructor failure')):
+                with self.assertRaises(RuntimeError): window.receiver_dialog('dsp')
+            self.assertNotIn('provision', window.busy)
+            self.assertIsNone(window.receiver_window)
+            window.timer.stop(); window.clock.stop(); window.tray.hide(); window.deleteLater()
+
     def test_status_window_can_hide_to_tray_after_volume_dialog_closes(self):
         from app import TrayApp
         with tempfile.TemporaryDirectory() as folder, patch.dict(os.environ, {'XDG_CONFIG_HOME': folder}), patch.object(TrayApp, 'refresh'), patch.object(volume, 'request', return_value=volume_status()), patch.object(QSystemTrayIcon, 'isSystemTrayAvailable', return_value=True):

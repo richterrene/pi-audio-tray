@@ -191,6 +191,7 @@ class TrayApp(QWidget):
         self.power_state = None
         self.details_requested = False
         self.music_window = None
+        self.receiver_window = None
         self.generation = 0
         self.setWindowTitle(tr('Pi Audio Tray · ') + VERSION)
         self.setWindowIcon(icon())
@@ -737,6 +738,11 @@ class TrayApp(QWidget):
         self.receiver_dialog('components')
 
     def receiver_dialog(self, kind):
+        if self.receiver_window is not None:
+            self.receiver_window.showNormal()
+            self.receiver_window.raise_()
+            self.receiver_window.activateWindow()
+            return
         if not self.config['host'] or not self.config['username']:
             self.settings()
             return
@@ -751,12 +757,16 @@ class TrayApp(QWidget):
         if self.music_window is not None:
             self.music_window.hide()
         self.timer.stop()
-        dialog = {'audio': AudioDialog, 'components': ComponentsDialog, 'policy': PolicyDialog, 'updates': UpdatesDialog, 'volume': VolumeDialog, 'dsp': DspDialog}[kind](self.config, self)
+        dialog = None
         try:
+            dialog = {'audio': AudioDialog, 'components': ComponentsDialog, 'policy': PolicyDialog, 'updates': UpdatesDialog, 'volume': VolumeDialog, 'dsp': DspDialog}[kind](self.config, self)
+            self.receiver_window = dialog
             QTimer.singleShot(0, dialog.check if kind == 'components' else dialog.refresh)
             dialog.exec()
         finally:
-            dialog.deleteLater()
+            self.receiver_window = None
+            if dialog is not None:
+                dialog.deleteLater()
             self.busy.discard('provision')
             self.update_polling()
             self.refresh()

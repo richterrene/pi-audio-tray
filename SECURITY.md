@@ -24,7 +24,8 @@ default output are not changed.
 
 The filter is an unprivileged process in the existing audio session, not an
 isolation boundary against the same account or root. Conservative automatic
-attenuation compensates the sum of positive gains; a final sample clamp is a
+attenuation uses a continuous response upper bound for the fixed graph (legacy
+modules use the sum of positive gains); a final sample clamp is a
 safeguard, not a loudspeaker limiter or a calibrated loudness guarantee. Apply
 reconnects the filter and can briefly interrupt audio. No new cloud dependency,
 port or executable download is introduced. No independent security audit is
