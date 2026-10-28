@@ -23,6 +23,14 @@ uses the existing audio output and can mix with other sources. There is no sourc
 arbitration, DSP, multiroom security guarantee or AirPlay 2 claim in this stage.
 See [scope, diagnostics and pending hardware tests](docs/AUDIO_ROADMAP.md).
 
+The initial AirPlay review (2026-10-28) passed 208 local regression tests with
+three existing skips. CI's dependency audit found no known advisories. Static
+analysis reported five low-severity findings in the new receiver code: two
+subprocess imports (B404) and three subprocess calls (B603). These execute fixed
+programs/allowlisted service actions as argument arrays, without a shell. No
+medium/high findings were reported in the new audio modules. This is source/test
+evidence, not an independent audit or physical playback certification.
+
 This is experimental software for a trusted home-network receiver. The desktop
 app and Pi helper have not undergone an independent security audit.
 
