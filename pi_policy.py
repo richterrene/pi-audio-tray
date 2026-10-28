@@ -62,10 +62,19 @@ def run(*args, timeout=4):
     return result.returncode == 0
 
 
+def stream_mute(identifier, muted):
+    if type(identifier) is not int or not 0 < identifier < 2**31 or type(muted) is not bool:
+        raise ValueError('Invalid stream mute')
+    # WirePlumber remembers ordinary mute as the user's player preference.
+    # softMute is separate and is not stored by its stream-restore policy.
+    return run('/usr/bin/pw-cli', 'set-param', str(identifier), 'Props',
+               json.dumps({'softMute': muted}, separators=(',', ':')))
+
+
 def nodes(objects):
     result = {}
     for item in objects:
-        if not isinstance(item, dict): continue
+        if not isinstance(item, dict) or item.get('type') != 'PipeWire:Interface:Node': continue
         info = item.get('info') or {}
         if not isinstance(info, dict): continue
         props = info.get('props') or {}
@@ -86,7 +95,7 @@ def nodes(objects):
         if not source:
             continue
         values = (info.get('params') or {}).get('Props', [])
-        muted = next((value['mute'] for value in values if type(value.get('mute')) is bool), False)
+        muted = any(value.get('mute') is True or value.get('softMute') is True for value in values)
         result[serial] = {'id': identifier, 'serial': serial, 'source': source,
                           'running': info.get('state') == 'running', 'muted': muted}
         if len(result) > 128: raise ValueError('Too many managed audio streams')
@@ -171,7 +180,7 @@ class Arbiter:
             for source in losers: self.stop(source)
         self.previous = {serial: node.copy() for serial, node in current.items()}
         return {'muted': [{'serial': serial, 'id': identifier} for serial, identifier in sorted(self.owned.items())],
-                'winner': self.winner or '', 'playing': any(node['running'] and node['source'] == self.winner for node in current.values()), 'degraded': self.degraded}
+                'mute_control': 'soft', 'winner': self.winner or '', 'playing': any(node['running'] and node['source'] == self.winner for node in current.values()), 'degraded': self.degraded}
 
 
 def graph_snapshot():
@@ -309,6 +318,8 @@ def restore():
     if not saved.get('muted'):
         STATE.unlink(missing_ok=True)
         return True
+    if saved.get('mute_control') not in (None, 'soft'):
+        raise ValueError('Unsupported policy mute control')
     cookie, current = graph_snapshot()
     if saved.get('cookie') is None or saved.get('cookie') != cookie:
         STATE.unlink(missing_ok=True)
@@ -318,7 +329,11 @@ def restore():
         if isinstance(item, dict) and type(item.get('serial')) is int and type(item.get('id')) is int:
             node = current.get(item['serial'])
             if node and node['id'] == item['id']:
-                if not run('/usr/bin/wpctl', 'set-mute', str(node['id']), '0'): remaining.append(item)
+                # Retain recovery compatibility with the original policy's
+                # ordinary mutes; new state restores only softMute.
+                restored = (stream_mute(node['id'], False) if saved.get('mute_control') == 'soft'
+                            else run('/usr/bin/wpctl', 'set-mute', str(node['id']), '0'))
+                if not restored: remaining.append(item)
     if remaining:
         write_private(STATE, {**saved, 'muted': remaining, 'degraded': True})
         return False
@@ -329,7 +344,7 @@ def restore():
 def serve():
     if not settings()['exclusive']: return
     if not restore(): raise RuntimeError('Could not restore previous stream mutes')
-    arbiter = Arbiter(lambda identifier, muted: run('/usr/bin/wpctl', 'set-mute', str(identifier), '1' if muted else '0'), pause)
+    arbiter = Arbiter(stream_mute, pause)
     trace = SpotifyTrace()
     bluetooth = BluetoothEvents()
     playback = {}

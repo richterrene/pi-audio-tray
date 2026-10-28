@@ -30,8 +30,11 @@ do not treat an active service alone as proof of exclusivity. The initial releas
 still needs physical cross-source testing, particularly with Bluetooth/AirPlay
 senders. DSP and synchronized multiroom are separate planned features.
 
-Only per-stream mutes are managed; hardware/master volume is not changed by the
-policy. Preexisting user mutes are not claimed. Policy-owned mutes are recorded in
+Only per-stream soft mutes are managed; normal user mute and hardware/master
+volume are not changed by the policy. WirePlumber can remember ordinary mute
+as a player preference and restore it on a new stream. The policy uses the
+separate `softMute` control, which the supported WirePlumber stream-restore
+implementation does not persist. Preexisting user mutes are not claimed. Policy-owned mutes are recorded in
 a private runtime file and restored on exit/disable, guarded by PipeWire's server
 cookie plus stream serial/id so a restarted server or recycled id cannot unmute
 another stream. While the policy owns a stream mute, it controls that mute until
@@ -77,3 +80,18 @@ is not replaced by this control.
 
 The Soloist launcher now uses `--initial-volume 100`; `--cache-size 100` is a
 separate cache limit. Its initial volume setting does not set master/hardware gain.
+
+## Upgrading the 0.8.0/0.8.1 preview policy
+
+Install/repair the core receiver to deploy 0.8.2's nonpersistent soft-mute policy.
+The old daemon is stopped before replacement so it can restore mutes it still
+owns. New recovery state identifies soft mutes explicitly; legacy state retains
+its original guarded normal-mute recovery. Unknown control formats fail closed.
+
+A normal player mute already inherited by a replacement stream from the old
+policy may no longer have provable ownership. The updater does not blanket-unmute
+players or discard saved user preferences. If such a player stays silent after
+upgrade, inspect its stream in `wpctl status` and deliberately clear that specific
+normal mute once with `wpctl set-mute ID 0` as the audio account. Keep the
+source-policy service running and use the current stream id, not a stale id from
+a previous session. Future policy mutes use the separate soft-mute control.
