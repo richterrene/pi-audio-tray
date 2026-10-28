@@ -96,7 +96,11 @@ class DspDialog(MaintenanceDialog):
     def update_headroom(self):
         for slider, label in zip(self.sliders, self.levels):
             label.setText(f'{slider.value():+d} dB' if slider.value() else '0 dB')
-        protection = sum(max(0, s.value()) for s in self.sliders)
+        protection = dsp_config.headroom({'enabled': False, 'target': 'preview',
+            'gains': [s.value() for s in self.sliders], 'preamp': self.preamp.value()})
+        self.show_headroom(protection)
+
+    def show_headroom(self, protection):
         self.headroom.setText(tr('Automatic headroom: −{gain} dB · Effective preamp: {preamp} dB',
                                  gain=protection, preamp=self.preamp.value() - protection))
 
@@ -158,6 +162,9 @@ class DspDialog(MaintenanceDialog):
             text = tr('Equalizer bypassed. Playback uses the normal output path.')
         if not value['supported']:
             text = tr('This receiver does not have the supported PipeWire smart-filter components.')
+        if saved and value['headroom_db'] != dsp_config.headroom(saved):
+            self.show_headroom(value['headroom_db'])
+            text += '\n' + tr('Update the Pi equalizer through Pi components to use the improved headroom calculation.')
         self.progress(text)
 
     def apply(self):

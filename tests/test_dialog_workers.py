@@ -31,6 +31,7 @@ class DialogWorkers(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
+        cls.app.setQuitOnLastWindowClosed(False)  # Match the production tray lifecycle.
 
     def wait_for(self, predicate):
         deadline = time.monotonic() + 3
@@ -101,6 +102,63 @@ class DialogWorkers(unittest.TestCase):
             self.wait_for(lambda: not dialog.isVisible())
             dialog.deleteLater()
 
+    def test_repeated_tray_action_raises_the_existing_eq_without_duplicate_request(self):
+        from app import TrayApp
+        results = []
+        with tempfile.TemporaryDirectory() as folder, patch.dict(os.environ, {'XDG_CONFIG_HOME': folder}), patch.object(TrayApp, 'refresh'), patch.object(dsp, 'request', return_value=dsp_status()) as request, patch('app.plain_information') as message:
+            window = TrayApp(self.app)
+            window.timer.stop(); window.clock.stop()
+            window.config.update(host='audio-pi.local', username='audio')
+            def reopen():
+                dialog = window.receiver_window
+                if dialog is None or dialog.worker is not None or dialog.snapshot is None:
+                    QTimer.singleShot(5, reopen)
+                    return
+                window.receiver_dialog('dsp')
+                results.append(window.receiver_window is dialog)
+                dialog.close_button.click()
+            QTimer.singleShot(5, reopen)
+            failsafe = QTimer(window)
+            failsafe.setSingleShot(True)
+            failsafe.timeout.connect(lambda: window.receiver_window.done(0) if window.receiver_window else None)
+            failsafe.start(2000)
+            window.receiver_dialog('dsp')
+            failsafe.stop()
+            if results != [True] or request.call_count != 1 or message.called:
+                print('EQ reopen diagnostics:', {'results': results, 'requests': request.call_count,
+                      'messages': message.call_count, 'busy': sorted(window.busy)}, flush=True)
+            self.assertEqual(results, [True])
+            self.assertIsNone(window.receiver_window)
+            self.assertNotIn('provision', window.busy)
+            request.assert_called_once(); message.assert_not_called()
+            window.timer.stop(); window.clock.stop(); window.tray.hide(); window.deleteLater()
+
+    def test_closing_before_initial_read_does_not_start_a_late_request(self):
+        from app import TrayApp
+        with tempfile.TemporaryDirectory() as folder, patch.dict(os.environ, {'XDG_CONFIG_HOME': folder}), patch.object(TrayApp, 'refresh'), patch.object(dsp, 'request') as request:
+            window = TrayApp(self.app)
+            window.timer.stop(); window.clock.stop()
+            window.config.update(host='audio-pi.local', username='audio')
+            with patch.object(DspDialog, 'exec', return_value=0):
+                window.receiver_dialog('dsp')
+            self.app.processEvents()
+            request.assert_not_called()
+            self.assertNotIn('provision', window.busy)
+            self.assertIsNone(window.receiver_window)
+            window.timer.stop(); window.clock.stop(); window.tray.hide(); window.deleteLater()
+
+    def test_failed_dialog_construction_releases_the_operation_guard(self):
+        from app import TrayApp
+        with tempfile.TemporaryDirectory() as folder, patch.dict(os.environ, {'XDG_CONFIG_HOME': folder}), patch.object(TrayApp, 'refresh'):
+            window = TrayApp(self.app)
+            window.timer.stop(); window.clock.stop()
+            window.config.update(host='audio-pi.local', username='audio')
+            with patch('dsp_ui.DspDialog', side_effect=RuntimeError('Fixture constructor failure')):
+                with self.assertRaises(RuntimeError): window.receiver_dialog('dsp')
+            self.assertNotIn('provision', window.busy)
+            self.assertIsNone(window.receiver_window)
+            window.timer.stop(); window.clock.stop(); window.tray.hide(); window.deleteLater()
+
     def test_status_window_can_hide_to_tray_after_volume_dialog_closes(self):
         from app import TrayApp
         with tempfile.TemporaryDirectory() as folder, patch.dict(os.environ, {'XDG_CONFIG_HOME': folder}), patch.object(TrayApp, 'refresh'), patch.object(volume, 'request', return_value=volume_status()), patch.object(QSystemTrayIcon, 'isSystemTrayAvailable', return_value=True):
@@ -113,7 +171,7 @@ class DialogWorkers(unittest.TestCase):
                 if completed:
                     return
                 dialog = next((d for d in window.findChildren(VolumeDialog) if d.isVisible()), None)
-                if dialog is None or dialog.worker is not None:
+                if dialog is None or dialog.worker is not None or dialog.snapshot is None:
                     QTimer.singleShot(5, close_when_ready)
                 else:
                     dialog.close_button.click()

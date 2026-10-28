@@ -48,13 +48,47 @@ class GraphPlan(unittest.TestCase):
         self.assertEqual(args['audio.rate'],48000)
         self.assertEqual(value['context.modules'][-1]['args']['filter.graph']['nodes'][-1]['control'], {'Min':-1.0,'Max':1.0})
 
-    def test_headroom_compensates_all_positive_gains_and_preamp_only_attenuates(self):
+    def test_headroom_bounds_the_response_and_preamp_only_attenuates(self):
         value=settings(gains=[6,-6,3,0,0,0,0,0,0,0],preamp=-2)
-        self.assertEqual(config.headroom(value),9)
+        self.assertEqual(config.headroom(value),7)
         graph=json.loads(config.configuration(value))['context.modules'][-1]['args']['filter.graph']
-        self.assertAlmostEqual(graph['nodes'][0]['control']['Mult'],10**(-11/20))
+        self.assertAlmostEqual(graph['nodes'][0]['control']['Mult'],10**(-9/20))
         self.assertEqual(json.loads(config.configuration(settings()))['context.modules'][-1]['args']['filter.graph']['nodes'][0]['control']['Mult'],1)
         for preset in config.PRESETS.values(): config.validate(settings(gains=list(preset)))
+
+    def test_continuous_headroom_bound_covers_independent_dense_cascade_response(self):
+        import cmath
+        import math
+        import random
+        rng = random.Random(42)
+        curves = [[4, 6]+[0]*8, [6]*10, [0]*10, [-6]*10]
+        curves += [[rng.randint(-6, 6) for _ in range(10)] for _ in range(12)]
+        frequencies = [0, 24000, *config.FREQUENCIES, *[20*2**(i/128) for i in range(1310) if 20*2**(i/128)<24000]]
+        for gains in curves:
+            bound = config.headroom(settings(gains=gains))
+            self.assertLessEqual(bound, sum(max(0, g) for g in gains))
+            peak = 0
+            for frequency in frequencies:
+                z = cmath.exp(-2j*math.pi*frequency/48000)
+                response = 1
+                for centre, gain in zip(config.FREQUENCIES, gains):
+                    a = 10**(gain/40)
+                    w = 2*math.pi*centre/48000
+                    alpha = math.sin(w)/2
+                    b = (1+alpha*a, -2*math.cos(w), 1-alpha*a)
+                    denominator = (1+alpha/a, -2*math.cos(w), 1-alpha/a)
+                    response *= (b[0]+b[1]*z+b[2]*z*z)/(denominator[0]+denominator[1]*z+denominator[2]*z*z)
+                peak = max(peak, 20*math.log10(abs(response)))
+            self.assertLessEqual(peak, bound+1e-6)
+        self.assertEqual(config.headroom(settings(gains=[4,6]+[0]*8)),8)
+        self.assertEqual(config.headroom(settings(gains=[6]*10)),12)
+
+    def test_legacy_receiver_headroom_remains_readable_until_module_upgrade(self):
+        curve = settings(gains=[4,6]+[0]*8)
+        for headroom in (8, 10):
+            dsp.validate_status(status(settings=curve, headroom_db=headroom))
+        with self.assertRaises(ValueError):
+            dsp.validate_status(status(settings=curve, headroom_db=7))
 
     def test_status_schema_rejects_contradictions_and_unsafe_output_data(self):
         self.assertEqual(dsp.validate_status(status()),status())

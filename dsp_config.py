@@ -1,5 +1,7 @@
 """Fixed stereo EQ graph and bounded, data-only receiver settings."""
 import json
+import math
+from functools import lru_cache
 import re
 
 FREQUENCIES = (31.5, 63, 125, 250, 500, 1000, 2000, 4000, 8000, 16000)
@@ -29,10 +31,42 @@ def validate(value):
     return {**value, 'gains': value['gains'].copy()}
 
 
+SAMPLE_RATE = 48000
+# Partition the whole Nyquist interval. Each peaking section is monotonic on
+# either side of its centre, so interval maxima bound the continuous response;
+# this is not just a sampled-peak estimate. Cut sections never increase gain.
+_RESPONSE_POINTS = tuple(sorted({0.0, SAMPLE_RATE / 2, *FREQUENCIES,
+    *(20 * 2 ** (i / 48) for i in range(500) if 20 * 2 ** (i / 48) < SAMPLE_RATE / 2)}))
+
+
+@lru_cache(maxsize=256)
+def _headroom(gains):
+    positive = sum(max(0, gain) for gain in gains)
+    if positive == 0:
+        return 0
+    upper = [0.0] * (len(_RESPONSE_POINTS) - 1)
+    for centre, gain in zip(FREQUENCIES, gains):
+        if gain <= 0:
+            continue
+        w0 = 2 * math.pi * centre / SAMPLE_RATE
+        alpha, cosine, amplitude = math.sin(w0) / 2, math.cos(w0), 10 ** (gain / 40)
+        values = []
+        for frequency in _RESPONSE_POINTS:
+            w = 2 * math.pi * frequency / SAMPLE_RATE
+            delta, sine = math.cos(w) - cosine, math.sin(w)
+            numerator = delta * delta + (alpha * amplitude * sine) ** 2
+            denominator = delta * delta + (alpha / amplitude * sine) ** 2
+            values.append(10 * math.log10(numerator / denominator))
+        for i, (low, high) in enumerate(zip(_RESPONSE_POINTS, _RESPONSE_POINTS[1:])):
+            upper[i] += max(values[i], values[i + 1], gain if low <= centre <= high else 0.0)
+    # Round upwards with a small implementation/roundoff margin, never attenuate
+    # more than the previous sum-of-boosts bound. The sample clamp remains.
+    return min(positive, math.ceil(max(upper) + 0.1))
+
+
 def headroom(value):
-    """Conservative cascade bound: compensate the sum of positive band gains."""
-    value = validate(value)
-    return sum(max(0, x) for x in value['gains'])
+    """Continuous interval upper bound for the fixed 48 kHz, Q=1 cascade."""
+    return _headroom(tuple(validate(value)['gains']))
 
 
 def configuration(value, *, bypass=None):
@@ -49,11 +83,11 @@ def configuration(value, *, bypass=None):
     graph = {'nodes': nodes,
              'links': [{'output': a + ':Out', 'input': b + ':In'} for a, b in zip(names, names[1:])],
              'inputs': ['preamp:In'], 'outputs': ['guard:Out']}
-    common = {'audio.position': ['FL', 'FR'], 'audio.channels': 2, 'audio.rate': 48000,
+    common = {'audio.position': ['FL', 'FR'], 'audio.channels': 2, 'audio.rate': SAMPLE_RATE,
               'node.link-group': 'pi_audio.dsp', 'state.restore-props': False,
               'state.default-volume': 1.0}
     args = {'node.description': 'Pi Audio Equalizer', 'media.name': 'Pi Audio Equalizer',
-            'audio.channels': 2, 'audio.position': ['FL', 'FR'], 'audio.rate': 48000,
+            'audio.channels': 2, 'audio.position': ['FL', 'FR'], 'audio.rate': SAMPLE_RATE,
             'filter.graph': graph,
             'capture.props': {**common, 'node.name': INPUT, 'media.class': 'Audio/Sink',
                 'node.virtual': True, 'priority.session': -10000,

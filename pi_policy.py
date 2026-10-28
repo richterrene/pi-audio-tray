@@ -137,6 +137,46 @@ def pause(source):
     return False
 
 
+class RoutingGuard:
+    """Distinguish our filter rewiring from a listener starting another source."""
+    def __init__(self):
+        self.filters = None
+        self.until = 0
+
+    def active(self, objects):
+        now = time.monotonic()
+        filters = []
+        for item in objects:
+            if not isinstance(item, dict) or item.get('type') != 'PipeWire:Interface:Node':
+                continue
+            info = item.get('info') or {}
+            props = info.get('props') if isinstance(info, dict) else None
+            if not isinstance(props, dict): continue
+            name, serial = props.get('node.name'), props.get('object.serial')
+            if name in ('pi_audio.dsp.input', 'pi_audio.dsp.output') and type(serial) is int and 0 < serial < 2**63:
+                filters.append((name, serial))
+        filters = tuple(sorted(filters))
+        if self.filters is not None and filters != self.filters:
+            self.until = now + 2
+        self.filters = filters
+        # Configure/bypass already hold this private normal-user lock. The graph
+        # fingerprint also covers service restart/crash outside those commands.
+        path = CONFIG.with_name('dsp.lock')
+        try:
+            import fcntl
+            fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+            with os.fdopen(fd, 'rb') as lock:
+                info = os.fstat(lock.fileno())
+                if stat.S_ISREG(info.st_mode) and info.st_uid == os.getuid() and not info.st_mode & 0o077:
+                    try:
+                        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    except BlockingIOError:
+                        self.until = now + 2
+        except OSError:
+            pass  # Missing/unsafe lock never grants access or disables policy.
+        return now < self.until
+
+
 class Arbiter:
     def __init__(self, mute, stop):
         self.mute, self.stop = mute, stop
@@ -146,7 +186,7 @@ class Arbiter:
         self.degraded = False
         self.unmuting = set()
 
-    def update(self, current, preferred=None):
+    def update(self, current, preferred=None, routing=False):
         self.owned = {serial: value for serial, value in self.owned.items() if serial in current}
         self.unmuting.intersection_update(current)
         fresh = [node for serial, node in current.items() if node['running'] and
@@ -154,6 +194,8 @@ class Arbiter:
                  (not self.previous.get(serial, {}).get('running') or
                   (self.previous.get(serial, {}).get('muted') and not node['muted'] and serial not in self.owned and serial not in self.unmuting))]
         self.unmuting = {serial for serial in self.unmuting if current[serial]['muted']}
+        if routing:
+            fresh = []  # Graph resume is not a fresh play command during EQ rewiring.
         if fresh:
             self.winner = max(fresh, key=lambda node: node['serial'])['source']
         elif not self.initialized:
@@ -345,6 +387,7 @@ def serve():
     if not settings()['exclusive']: return
     if not restore(): raise RuntimeError('Could not restore previous stream mutes')
     arbiter = Arbiter(stream_mute, pause)
+    routing = RoutingGuard()
     trace = SpotifyTrace()
     bluetooth = BluetoothEvents()
     playback = {}
@@ -386,7 +429,7 @@ def serve():
                 current = nodes(objects.values())
                 for node in current.values():
                     if playback.get(node['source']) is False: node['running'] = False
-                value = arbiter.update(current, preferred)
+                value = arbiter.update(current, preferred, routing.active(objects.values()))
                 value['cookie'] = next((item.get('info', {}).get('cookie') for item in objects.values() if item.get('type') == 'PipeWire:Interface:Core'), None)
                 if preferred and any(node['running'] and node['source'] == preferred for node in current.values()): preferred = None
                 if value != previous: write_private(STATE, value); previous = value
@@ -415,7 +458,7 @@ def serve():
                 current = nodes(objects.values())
                 for node in current.values():
                     if playback.get(node['source']) is False: node['running'] = False
-                value = arbiter.update(current, preferred)
+                value = arbiter.update(current, preferred, routing.active(objects.values()))
                 value['cookie'] = next((item.get('info', {}).get('cookie') for item in objects.values() if item.get('type') == 'PipeWire:Interface:Core'), None)
                 if preferred and any(node['running'] and node['source'] == preferred for node in current.values()): preferred = None
                 if value != previous:

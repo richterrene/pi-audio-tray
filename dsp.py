@@ -19,7 +19,10 @@ def validate_status(value):
     if any(type(value[k]) is not bool for k in ('installed', 'supported', 'configuration_error', 'target_available', 'active', 'processing')) or not isinstance(value['state'], str) or value['state'] not in STATES:
         raise ValueError('Invalid equalizer state')
     settings = dsp_config.validate(value['settings']) if value['settings'] is not None else None
-    if type(value['headroom_db']) is not int or value['headroom_db'] != (dsp_config.headroom(settings) if settings else 0):
+    # Older receivers use the sum-of-boosts algorithm until their fixed module
+    # is repaired. Accept that exact legacy bound without weakening other data.
+    valid_headroom = {0} if settings is None else {dsp_config.headroom(settings), sum(max(0, x) for x in settings['gains'])}
+    if type(value['headroom_db']) is not int or value['headroom_db'] not in valid_headroom:
         raise ValueError('Invalid headroom')
     if not isinstance(value['outputs'], list) or len(value['outputs']) > 32:
         raise ValueError('Invalid output list')

@@ -94,3 +94,61 @@ confirmation and credential clearing remain. No receiver helper, startup setting
 EQ curve or runtime privilege changes are needed for this desktop update. Real
 Qt worker/close regressions include both dialogs, and the compact-menu limit is
 retained. Screenshots and all language catalogs follow the new navigation.
+
+## 0.9.2 EQ/source-policy interaction
+
+A physical Spotify reproduction showed that enabling Flat EQ could wake an
+existing policy-muted AirPlay stream in the audio graph. The arbiter mistook the
+rewiring for new playback, selected AirPlay and paused Spotify. The EQ service
+had not failed. Earlier synthetic EQ tests did not run this concurrent-source
+scenario and therefore missed the interaction.
+
+The normal-user policy helper now observes the existing private DSP lock (with
+nofollow/nonblocking opens, owner/mode/regular-file checks) and changes in the two
+fixed filter-node identities. It suppresses graph-only source promotion during
+rewiring and a bounded two-second settling period; explicit observed Spotify or
+BlueZ play events remain effective. It keeps mute enforcement and ownership
+checks active. Same-account users already control this audio session; the guard
+is coordination, not a security boundary. No extra runtime privilege or port is
+added. Regressions cover the Spotify/AirPlay rewire sequence, explicit takeover,
+lock release, filter restart/removal and expiry. Full suite: 285 tests passed
+with three existing skips. Focused static review found no high/medium findings.
+
+A related desktop issue surfaced during validation: selecting a tray control
+while its modal view was already open showed the generic operation warning.
+Receiver dialogs are now tracked and raised/restored on repeated tray actions,
+without starting duplicate requests. Construction is inside the cleanup guard,
+so an exception cannot strand the provision flag. Real nested-event-loop and
+constructor-failure regressions pass; the full suite now has 287 tests. The
+physical policy replay also passed: Spotify remained playing and selected
+through Flat enable, a frequency cut and restoration of the original EQ state.
+
+The reported volume drop was separately traced to the original sum-of-positive-
+gains preamp rule: +4/+6 dB bass boosts caused −10 dB global attenuation while
+master/player volumes remained at 100%. The revised fixed 48 kHz/Q=1 module
+bounds each positive peaking section over continuous frequency intervals using
+its endpoint/centre extrema, sums those bounds and adds numerical margin before
+rounding upwards. Cut sections do not raise gain; attenuation is capped by the
+previous valid sum bound, so no curve gets extra attenuation. It yields 8 dB for
+that bass curve and 12 dB for ten +6 dB bands. Independent complex-coefficient
+dense-response tests verify the bound; this is not just a sampled-peak estimate.
+The final clamp remains. It is not a transient limiter, calibrated loudness
+normalizer or speaker protection guarantee. Existing modules' exact legacy
+headroom remains accepted and displayed with an upgrade hint, until the fixed
+Pi graph module is installed/repaired. No runtime root permission is added.
+
+Coefficient reference: [PipeWire 1.4.2 peaking implementation](https://github.com/PipeWire/pipewire/blob/1.4.2/spa/plugins/audioconvert/biquad.c),
+[filter-chain coefficient use](https://github.com/PipeWire/pipewire/blob/1.4.2/spa/plugins/filter-graph/builtin_plugin.c).
+
+The expanded suite passed 289 tests with three existing skips; all 19 catalogs
+cover 377 templates. The revised bass curve was also measured on the Pi's
+isolated null output: at 63 Hz the predicted net response was −0.758 dB, and
+both stereo channels measured −0.76 dB at 44.1/48 kHz input, with zero filter
+xrun counters and successful target/process recovery. No speaker or microphone
+was used for that test.
+
+Native dialog tests now wait for the initial snapshot before closing and use
+the production tray application's last-window-close policy. A related early-
+close regression verifies that a queued initial read cannot start after its
+view has closed; the controller checks its active dialog reference before
+issuing that request. Final local suite: 290 tests passed (3 existing skips).
