@@ -90,6 +90,68 @@ class PairingDialogs(unittest.TestCase):
         message.assert_called_once()
         self.assertNotEqual(settings.result(), settings.DialogCode.Accepted)
 
+    def test_preferences_can_be_saved_before_configuring_a_pi(self):
+        self.window.session = None
+        dialog = Mock()
+        dialog.exec.return_value = QDialog.DialogCode.Accepted
+        dialog.values.return_value = {**self.window.config, 'host': '', 'username': '', 'language': 'de'}
+        dialog.autostart.isEnabled.return_value = False
+        with patch('app.Settings', return_value=dialog), patch('app.save_config') as save, \
+             patch('app.plain_information'), patch('app.plain_warning') as warning:
+            self.window.settings()
+        save.assert_called_once()
+        warning.assert_not_called()
+        self.assertEqual(self.window.config['language'], 'de')
+
+    def test_presentation_preferences_do_not_reset_music_or_inflight_polls(self):
+        self.window.session = None
+        self.window.busy = {'poll'}
+        self.window.music_window = Mock()
+        generation = self.window.generation
+        dialog = Mock()
+        dialog.exec.return_value = QDialog.DialogCode.Accepted
+        dialog.values.return_value = {**self.window.config, 'poll_seconds': 30}
+        dialog.autostart.isEnabled.return_value = False
+        with patch('app.Settings', return_value=dialog), patch('app.save_config'), patch('app.set_autostart'):
+            self.window.settings()
+        self.window.music_window.hide.assert_not_called()
+        self.window.music_window.reset_connection.assert_not_called()
+        self.assertEqual(self.window.generation, generation)
+        self.assertIn('poll', self.window.busy)
+
+    def test_quit_cannot_interrupt_a_root_setup_operation(self):
+        for busy in ('provision', 'setup'):
+            self.window.busy = {busy}
+            with patch('app.plain_information') as message, patch.object(self.app, 'quit') as quit_app:
+                self.window.quit()
+            message.assert_called_once()
+            quit_app.assert_not_called()
+
+    def test_close_without_a_tray_cannot_bypass_the_setup_quit_guard(self):
+        self.window.busy = {'provision'}
+        event = Mock()
+        with patch('app.QSystemTrayIcon.isSystemTrayAvailable', return_value=False), patch('app.plain_information'):
+            self.window.closeEvent(event)
+        event.ignore.assert_called_once()
+
+    def test_compact_menu_contains_only_service_status_and_keeps_system_stats_in_window(self):
+        self.assertEqual(set(self.window.menu_rows), {'pi', 'spotify', 'bluetooth', 'pairing'})
+        self.assertTrue({'cpu', 'temperature', 'memory', 'load', 'disk', 'uptime'} <= self.window.rows.keys())
+        self.assertLessEqual(len(self.window.menu.actions()), 16)
+
+    def test_service_status_rows_are_legible_actions_that_open_full_details(self):
+        self.assertTrue(self.window.menu_rows['spotify'].isEnabled())
+        self.window.menu_rows['spotify'].trigger()
+        self.assertTrue(self.window.isVisible())
+
+    def test_light_health_response_updates_the_compact_menu_without_cpu_samples(self):
+        health = {'_detailed': False, 'services': {'soloist': 'active', 'bluetooth': 'active', 'pipewire': 'active', 'wireplumber': 'active'},
+                  'adapter': {'Powered': True, 'Pairable': False}, 'devices': [], 'soloist': {}, 'spotify_backend': 'soloist'}
+        self.window.done('poll', health)
+        self.assertIn('active', self.window.menu_rows['spotify'].text())
+        self.assertIn('Powered on', self.window.menu_rows['bluetooth'].text())
+        self.assertIn('Disabled', self.window.menu_rows['pairing'].text())
+
     def prepare_second_pi(self):
         import core, profiles
         first = {**self.window.config, 'host': 'first-pi.example', 'username': 'first'}
@@ -212,13 +274,13 @@ class PairingDialogs(unittest.TestCase):
             self.window.update_polling()
         self.assertEqual(self.window.timer.interval(),60000)
 
-    def test_open_menu_requests_details_and_visible_menu_uses_foreground_interval(self):
+    def test_compact_menu_requests_health_without_enabling_detailed_polling(self):
         with patch.object(self.window,'isVisible',return_value=False), \
              patch.object(self.window.menu,'isVisible',return_value=True), patch.object(self.window,'refresh') as refresh:
             self.window.set_menu_open(True)
-            refresh.assert_called_once_with(force_details=True)
-            self.assertTrue(self.window.details_needed())
-            self.assertEqual(self.window.timer.interval(),10000)
+            refresh.assert_called_once_with()
+            self.assertFalse(self.window.details_needed())
+            self.assertEqual(self.window.timer.interval(),60000)
         with patch.object(self.window,'isVisible',return_value=False), patch.object(self.window.menu,'isVisible',return_value=False):
             self.window.set_menu_open(False)
             self.assertFalse(self.window.details_needed())
@@ -231,7 +293,7 @@ class PairingDialogs(unittest.TestCase):
              patch.object(self.window,'job') as job, patch('app.poll') as poll:
             self.window.set_menu_open(True)
             job.call_args.args[1]()
-            self.assertTrue(poll.call_args.kwargs['detailed'])
+            self.assertFalse(poll.call_args.kwargs['detailed'])
             self.window.refresh()
             job.call_args.args[1]()
             self.assertFalse(poll.call_args.kwargs['detailed'])

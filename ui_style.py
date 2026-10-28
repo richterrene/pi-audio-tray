@@ -3,11 +3,49 @@ import html
 from pathlib import Path
 import sys
 from PySide6.QtCore import QEvent, Qt
-from PySide6.QtGui import QIcon, QPainter, QPixmap, QPalette
+from PySide6.QtGui import QCursor, QGuiApplication, QIcon, QPainter, QPixmap, QPalette
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (QApplication, QDialog, QDialogButtonBox, QInputDialog,
-    QLabel, QLineEdit, QMessageBox, QPushButton, QSizePolicy)
+    QLabel, QLineEdit, QMenu, QMessageBox, QProxyStyle, QPushButton, QSizePolicy, QStyle, QStyleFactory)
 from i18n import tr, translate_standard_buttons
+
+
+def plain_tooltip(text):
+    return '<qt>' + html.escape(str(text)).replace('\n', '<br>') + '</qt>'
+
+
+class ScrollableMenuStyle(QProxyStyle):
+    def styleHint(self, hint, option=None, widget=None, returnData=None):
+        if hint == QStyle.StyleHint.SH_Menu_Scrollable:
+            return 1
+        return super().styleHint(hint, option, widget, returnData)
+
+
+class ScreenMenu(QMenu):
+    """Compact menus also remain usable on small/high-DPI work areas."""
+    def __init__(self, title='', parent=None):
+        super().__init__(title, parent)
+        # Own a fresh style, never QApplication's shared style object.
+        self._scroll_style = ScrollableMenuStyle(QStyleFactory.create('Fusion'))
+        self._scroll_style.setParent(self)
+        self.setStyle(self._scroll_style)
+        self.setToolTipsVisible(True)
+        self.aboutToShow.connect(self.fit_to_screen)
+        self.fit_to_screen()
+
+    def fit_to_screen(self):
+        screen = QGuiApplication.screenAt(QCursor.pos()) or self.screen() or QGuiApplication.primaryScreen()
+        if screen is not None:
+            area = screen.availableGeometry()
+            self.setMaximumHeight(max(1, area.height() - 24))
+            self.setMaximumWidth(max(1, area.width() - 24))
+
+    def submenu(self, title, icon=None):
+        menu = ScreenMenu(title, self)
+        if icon is not None:
+            menu.setIcon(icon)
+        self.addMenu(menu)
+        return menu
 
 
 class LocalizedButtonBox(QDialogButtonBox):
@@ -121,7 +159,7 @@ class StableLabel(QLabel):
 
     def setText(self, text):
         super().setText(text)
-        self.setToolTip('<qt>' + html.escape(str(text)).replace('\n', '<br>') + '</qt>')
+        self.setToolTip(plain_tooltip(text))
         self.setAccessibleDescription(str(text))
 
 
@@ -145,7 +183,7 @@ class StatusIndicator(QPushButton):
 
     def setText(self, text):
         self._message = str(text)
-        self.setToolTip('<qt>' + html.escape(self._message).replace('\n', '<br>') + '</qt>')
+        self.setToolTip(plain_tooltip(self._message))
         self.setAccessibleDescription(self._message)
 
     def text(self):

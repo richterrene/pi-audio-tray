@@ -407,7 +407,8 @@ See [deployment, expiry and rollback](docs/LOCAL_MUSIC.md#upgrade-an-existing-we
 
 Autostart is opt-in and limited to the current account. Settings writes only the
 app's named XDG desktop entry, macOS LaunchAgent, or Windows HKCU Run value;
-disabling removes only that entry. No elevation, scheduled system task,
+disabling affects only that app registration. Linux retains a disabled user
+override when a lower-priority system entry would otherwise become active. No elevation, scheduled system task,
 background listener, shell command, credential, or remote Pi change is involved.
 Executable arguments are serialized as Desktop Entry arguments, a plist array,
 or a Windows command line, and launches omit `--show`. AppImage registration
@@ -451,3 +452,22 @@ user data rather than translation keys. The compact status LED escapes tooltip
 markup and retains an accessible description and a click-to-open plain-text
 message. Routine polling does not animate it. Pairing approval and mutation
 failure dialogs remain explicit.
+
+
+## Desktop follow-up review (2026-10-28)
+
+The [code/contribution review](docs/CODE_REVIEW_2026-10-28.md) records fixes for
+configuration migration failure, root-setup exit guards, explicit command
+lifecycle and screen-bounded menus. Presentation preferences no longer act as a
+receiver identity change. Closing a music view drops reads but preserves accepted
+commands; switching connections still invalidates unsent commands and old replies.
+Linux autostart disablement masks a lower-priority system entry where necessary.
+Qt tooltips escape profile/status markup. These changes add no Pi sudo permission
+or remote command and do not change the web-login security boundary.
+
+Fork pull requests run read-only native tests without signing/Pi credentials;
+package builds remain manual/tag operations. There is no privileged
+`pull_request_target` workflow. Native package testing is still distinct from
+interactive validation, and the repository currently has no protected-branch
+rules. Maintainers should consider required checks and independent review for
+privileged/authentication changes; this review does not change repository policy.

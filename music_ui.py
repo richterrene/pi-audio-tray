@@ -6,7 +6,9 @@ from PySide6.QtCore import QObject, Qt, QTimer, Signal, QUrl, QSignalBlocker
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (QDialog, QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
                                QPushButton, QSpinBox, QTabWidget, QVBoxLayout)
-from core import display_text, music_request, music_web_url
+from core import connection_key, display_text, music_request, music_web_url
+
+READ_ACTIONS = frozenset(('browse', 'queue', 'status'))
 
 
 class MusicEvents(QObject):
@@ -23,6 +25,7 @@ class MusicWindow(QDialog):
         self.pending_requests = []
         self.active_background = False
         self.page_contexts = {}
+        self.page_more = {}
         self.events = MusicEvents(self)
         self.events.finished.connect(self.operation_done)
         layout = QVBoxLayout(self)
@@ -93,6 +96,7 @@ class MusicWindow(QDialog):
         self.pending_requests.clear()
         self.path, self.offset, self.queue_offset, self.more = '', 0, 0, False
         self.page_contexts.clear()
+        self.page_more.clear()
         self.library.clear()
         self.queue.clear()
         self.tabs.setCurrentIndex(0)
@@ -111,9 +115,9 @@ class MusicWindow(QDialog):
         request = request.copy()
         action = request.get('action')
         # Coalesce obsolete page reads/volume edits while retaining user commands.
-        if action in ('browse', 'queue', 'status'):
+        if action in READ_ACTIONS:
             self.pending_requests = [job for job in self.pending_requests
-                                     if job[0].get('action') not in ('browse', 'queue', 'status')]
+                                     if job[0].get('action') not in READ_ACTIONS]
         elif action == 'volume':
             self.pending_requests = [job for job in self.pending_requests if job[0].get('action') != 'volume']
         if len(self.pending_requests) >= 32:
@@ -128,14 +132,13 @@ class MusicWindow(QDialog):
         if self.busy:
             return
         if not self.isVisible() or self.isMinimized():
-            self.pending_requests.clear()
-            return
+            self.pending_requests = [job for job in self.pending_requests if job[0].get('action') not in READ_ACTIONS]
         while self.pending_requests:
             # Playback commands take priority over queued navigation reads.
             index = next((i for i, job in enumerate(self.pending_requests)
-                          if job[0].get('action') not in ('browse', 'queue', 'status')), 0)
+                          if job[0].get('action') not in READ_ACTIONS), 0)
             request, config, generation, background = self.pending_requests.pop(index)
-            if config != self.parent().config or generation != getattr(self.parent(), 'generation', 0):
+            if connection_key(config) != connection_key(self.parent().config) or generation != getattr(self.parent(), 'generation', 0):
                 continue
             self.busy, self.active_background = True, background
             def work():
@@ -161,7 +164,7 @@ class MusicWindow(QDialog):
 
     def apply_result(self, payload, error, background=False):
         request, result, status, config, *generation = payload
-        if config != self.parent().config or (generation and generation[0] != getattr(self.parent(), 'generation', 0)):
+        if connection_key(config) != connection_key(self.parent().config) or (generation and generation[0] != getattr(self.parent(), 'generation', 0)):
             return
         if error:
             self.message.setText(tr('Music unavailable: ') + display_text(error) +
@@ -204,13 +207,14 @@ class MusicWindow(QDialog):
             self.update_items(widget, items, preserve)
             self.page_contexts[action] = context
             self.more = result.get('more') is True
+            self.page_more[action] = (context, self.more)
             count = tr('entries {first}–{last}', first=request.get('offset', 0) + 1, last=request.get('offset', 0) + len(items)) if items else tr('No entries')
             self.location.setText((tr('Library / ') + self.path if action == 'browse' else tr('Queue')) + ' · ' + count)
             if not background:
                 self.message.setText(tr('Double-click a folder to browse, or a track to play it.') +
                                      (tr(' More entries on the next page.') if self.more else ''))
         elif action != 'status':
-            self.message.setText(tr('Player updated.'))
+            self.message.setText(tr('USB rescan requested. Refresh the library after the scan finishes.') if action == 'update' else tr('Player updated.'))
             self.reload_page()
 
     @staticmethod
@@ -253,8 +257,11 @@ class MusicWindow(QDialog):
 
     def reload_page(self, *args, background=False):
         if self.tabs.currentIndex() == 0:
+            context = (self.path, self.offset)
+            self.more = self.page_more.get('browse', (None, False)) == (context, True)
             self.request({'action': 'browse', 'path': self.path, 'offset': self.offset}, background=background)
         else:
+            self.more = self.page_more.get('queue', (None, False)) == ((self.queue_offset,), True)
             self.request({'action': 'queue', 'offset': self.queue_offset}, background=background)
 
     def refresh_status(self):
@@ -320,7 +327,7 @@ class MusicWindow(QDialog):
         self.reload_page()
 
     def hideEvent(self, event):
-        self.pending_requests.clear()
+        self.pending_requests = [job for job in self.pending_requests if job[0].get('action') not in READ_ACTIONS]
         self.timer.stop()
         if self.network_window is not None:
             self.network_window.hide()

@@ -30,8 +30,8 @@ OS emoji fonts.
 4. Add a simple self-contained `assets/flags/COUNTRY.svg` (no external references)
    and review its license. Existing flags can be reused. Keep native names short.
 5. Run `python tools/check_translations.py` and
-   `python -m unittest discover -s tests -v`. Update the approved-language/flag
-   coverage fixture in `tests/test_i18n.py` when adding another shipped language.
+   `python -m unittest discover -s tests -v`. The tests automatically check every discovered catalog and flag; no language
+   registry or test-code edit is needed for an additional language.
 6. Launch the app in that language and check Settings, status, music, profiles,
    setup, confirmations and tooltip text. Check native menu behavior on each
    desktop platform where possible. Submit corrections as a normal pull request.
@@ -58,7 +58,7 @@ the app; other Qt/native dialogs use the available Qt/OS translations.
 
 ## Scope and quality
 
-All 280 extracted desktop templates have entries in each initial language.
+All 283 extracted desktop templates have entries in each initial language.
 Initial translations are machine-assisted, with manual terminology corrections
 and German review. Other languages still need native-speaker proofreading;
 entry and placeholder checks establish coverage, not linguistic correctness.

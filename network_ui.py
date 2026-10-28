@@ -3,7 +3,9 @@ import threading
 from i18n import tr
 from PySide6.QtCore import QObject, Qt, Signal
 from PySide6.QtWidgets import QDialog, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QPushButton, QVBoxLayout
-from core import display_text, music_request
+from core import connection_key, display_text, music_request
+
+READ_ACTIONS = frozenset(('network_sources', 'network_discover', 'network_browse'))
 
 
 class NetworkEvents(QObject):
@@ -72,15 +74,15 @@ class NetworkWindow(QDialog):
         self.message.setText(tr('Discovery runs only when requested. Servers must be awake and reachable from the Pi.'))
 
     def request(self, request):
-        if not self.isVisible():
+        if not self.isVisible() or self.isMinimized():
             return
         if len(self.pending) >= 16:
             self.message.setText(tr('Please wait for pending requests to finish.'))
             return
         config = self.parent().config.copy()
         generation = getattr(self.parent(), 'generation', 0)
-        if self.connection != (config, generation):
-            self.connection = (config.copy(), generation)
+        if self.connection != (connection_key(config), generation):
+            self.connection = (connection_key(config), generation)
             self.pending.clear()
             self.server = None
             self.sources.clear()
@@ -95,12 +97,11 @@ class NetworkWindow(QDialog):
     def start_pending(self):
         if self.busy:
             return
-        if not self.isVisible():
-            self.pending.clear()
-            return
+        if not self.isVisible() or self.isMinimized():
+            self.pending = [job for job in self.pending if job[0].get('action') not in READ_ACTIONS]
         while self.pending:
             request, config, generation = self.pending.pop(0)
-            if config != self.parent().config or generation != getattr(self.parent(), 'generation', 0):
+            if connection_key(config) != connection_key(self.parent().config) or generation != getattr(self.parent(), 'generation', 0):
                 continue
             self.busy = True
             self.message.setText(tr('Discovering media servers…') if request['action'] == 'network_discover' else tr('Contacting Pi…'))
@@ -116,7 +117,7 @@ class NetworkWindow(QDialog):
     def operation_done(self, payload, error):
         request, config, generation, result = payload
         try:
-            if config != self.parent().config or generation != getattr(self.parent(), 'generation', 0):
+            if connection_key(config) != connection_key(self.parent().config) or generation != getattr(self.parent(), 'generation', 0):
                 return
             if error:
                 self.message.setText(tr('Network music: ') + display_text(error))
@@ -193,6 +194,7 @@ class NetworkWindow(QDialog):
 
     def browse(self):
         if self.server:
+            self.more = False
             self.request({'action': 'network_browse', 'server': self.server['id'], 'object': self.history[-1][0], 'offset': self.offset})
 
     def activate(self, item):
@@ -227,5 +229,5 @@ class NetworkWindow(QDialog):
         self.request({'action': 'network_sources'})
 
     def hideEvent(self, event):
-        self.pending.clear()
+        self.pending = [job for job in self.pending if job[0].get('action') not in READ_ACTIONS]
         super().hideEvent(event)

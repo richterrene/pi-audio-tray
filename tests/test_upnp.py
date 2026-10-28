@@ -189,6 +189,29 @@ class NetworkUI(unittest.TestCase):
             request.assert_not_called()
         self.assertFalse(self.window.pending)
 
+    def test_hiding_finishes_an_accepted_network_play_without_extra_discovery(self):
+        from core import connection_key
+        self.window.connection = (connection_key(self.parent.config), 0)
+        self.window.busy = True
+        self.window.request({'action': 'network_play', 'server': 'a' * 32, 'object': 'track'})
+        self.window.request({'action': 'network_browse', 'server': 'a' * 32, 'object': '0'})
+        self.window.hide()
+        jobs = []
+        with patch('network_ui.threading.Thread', side_effect=lambda **kw: Mock(start=lambda: jobs.append(kw['target']))), \
+             patch('network_ui.music_request', return_value={'ok': True}) as remote:
+            self.window.busy = False
+            self.window.start_pending()
+            self.assertEqual(len(jobs), 1)
+            jobs[0]()
+        self.assertEqual([call.args[1]['action'] for call in remote.call_args_list], ['network_play'])
+
+    def test_new_folder_cannot_reuse_the_previous_folders_more_pages_flag(self):
+        self.window.server = {'id': 'a' * 32}
+        self.window.more = True
+        with patch.object(self.window, 'request'):
+            self.window.browse()
+        self.assertFalse(self.window.more)
+
     def test_stale_results_are_ignored_and_network_metadata_is_plain(self):
         source = upnp.public(SERVER, True) | {'name': '<img src="x">'}
         payload = ({'action': 'network_sources'}, self.parent.config.copy(), 0, {'sources': [source]})

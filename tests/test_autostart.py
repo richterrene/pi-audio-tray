@@ -18,7 +18,7 @@ class Autostart(unittest.TestCase):
         self.root = Path(self.temp.name)
         self.executable = self.root / 'Pi Audio Tray.AppImage'
         self.executable.touch()
-        self.environment = patch.dict(os.environ, {'XDG_CONFIG_HOME': str(self.root), 'APPIMAGE': str(self.executable)})
+        self.environment = patch.dict(os.environ, {'XDG_CONFIG_HOME': str(self.root), 'XDG_CONFIG_DIRS': '', 'APPIMAGE': str(self.executable)})
         self.environment.start()
         self.platform = patch.object(desktop.sys, 'platform', 'linux')
         self.platform.start()
@@ -49,6 +49,19 @@ class Autostart(unittest.TestCase):
         with desktop.autostart_path().open('a') as output:
             output.write('Hidden=true\n')
         self.assertFalse(desktop.autostart_enabled())
+
+    def test_disabling_masks_a_system_entry_instead_of_exposing_it(self):
+        system = self.root / 'system/autostart/pi-audio-tray.desktop'
+        system.parent.mkdir(parents=True)
+        system.write_text('[Desktop Entry]\nType=Application\nExec=/example/app\n')
+        with patch.dict(os.environ, {'XDG_CONFIG_DIRS': str(system.parent.parent)}):
+            self.assertTrue(desktop.autostart_enabled())
+            desktop.set_autostart(False)
+            self.assertFalse(desktop.autostart_enabled())
+            self.assertIn('Hidden=true', desktop.autostart_path().read_text())
+            self.assertTrue(system.exists())
+            desktop.set_autostart(True)
+            self.assertTrue(desktop.autostart_enabled())
 
     @unittest.skipUnless(shutil.which('desktop-file-validate'), 'Requires freedesktop desktop validator')
     def test_generated_entry_passes_system_desktop_validator(self):

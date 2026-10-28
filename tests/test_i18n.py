@@ -16,7 +16,7 @@ class TranslationCatalogs(unittest.TestCase):
     def test_all_requested_languages_cover_the_complete_ui_template(self):
         codes = {'en','de','fr','es','it','pt','nl','pl','cs','ro','hu','el','sv','da','nb','fi','uk','tr','ru'}
         catalogs = i18n.catalogs()
-        self.assertEqual(set(catalogs), codes)
+        self.assertTrue(codes <= catalogs.keys())
         for code, catalog in catalogs.items():
             self.assertEqual(set(catalog['messages']), sources(), code)
             self.assertTrue((i18n.ROOT.parent / 'assets/flags' / (catalog['country'] + '.svg')).is_file(), code)
@@ -43,6 +43,13 @@ class TranslationCatalogs(unittest.TestCase):
             self.assertEqual(i18n.catalogs(), {})
             self.assertEqual(i18n.set_language('xx'), 'en')
             self.assertIn(('en', 'English', 'GB'), i18n.available_languages())
+
+    def test_a_new_language_is_discovered_without_changing_a_code_registry(self):
+        with tempfile.TemporaryDirectory() as folder, patch.object(i18n, 'ROOT', Path(folder)):
+            (Path(folder) / 'zz.json').write_text(json.dumps({'language': 'zz', 'name': 'Example language', 'country': 'GB', 'messages': {'Play': 'Example play'}}))
+            self.assertIn(('zz', 'Example language', 'GB'), i18n.available_languages())
+            self.assertEqual(i18n.set_language('zz'), 'zz')
+            self.assertEqual(i18n.tr('Play'), 'Example play')
 
     def test_language_selector_and_standard_buttons_in_each_language(self):
         from PySide6.QtWidgets import QApplication, QDialogButtonBox, QLabel

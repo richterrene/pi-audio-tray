@@ -116,6 +116,30 @@ class MusicVisibility(MusicWindowTests):
 
 
 class NonblockingRefresh(MusicWindowTests):
+    def test_language_change_does_not_discard_an_accepted_control(self):
+        self.show_window()
+        jobs = []
+        with self.hold_workers(jobs), patch('music_ui.music_request', side_effect=self.response) as remote:
+            self.window.refresh_status()
+            self.window.request({'action': 'pause'})
+            self.parent.config['language'] = 'de'
+            jobs[0]()
+            self.assertEqual(len(jobs), 2)
+            jobs[1]()
+        self.assertIn('pause', [call.args[1]['action'] for call in remote.call_args_list])
+
+    def test_more_pages_flag_cannot_leak_from_library_into_queue(self):
+        self.show_window()
+        self.window.more = True
+        with patch.object(self.window, 'request'):
+            self.window.tabs.setCurrentIndex(1)
+            self.window.page(100)
+        self.assertEqual(self.window.queue_offset, 0)
+        self.assertFalse(self.window.more)
+
+    def test_usb_rescan_does_not_claim_the_async_scan_has_finished(self):
+        self.window.operation_done(({'action': 'update'}, {'ok': True}, self.response(None, {'action': 'status'}), self.parent.config.copy()), None)
+        self.assertIn('after the scan finishes', self.window.message.text())
     def show_window(self):
         with patch.object(self.window, 'request'):
             self.window.show()
@@ -197,15 +221,18 @@ class NonblockingRefresh(MusicWindowTests):
             self.assertEqual([call.args[1]['action'] for call in remote.call_args_list], ['status'])
             self.assertEqual(self.window.now.text(), 'Player not checked yet')
 
-    def test_hiding_cancels_pending_requests_without_starting_more_ssh_work(self):
+    def test_hiding_preserves_an_accepted_playback_click_and_drops_reads(self):
         self.show_window()
         jobs = []
-        with self.hold_workers(jobs), patch('music_ui.music_request', side_effect=self.response):
+        with self.hold_workers(jobs), patch('music_ui.music_request', side_effect=self.response) as remote:
             self.window.refresh_status()
             self.window.request({'action': 'pause'})
+            self.window.request({'action': 'browse'})
             self.window.hide()
             jobs[0]()
-            self.assertEqual(len(jobs), 1)
+            self.assertEqual(len(jobs), 2)
+            jobs[1]()
+            self.assertEqual([call.args[1]['action'] for call in remote.call_args_list], ['status', 'pause', 'status'])
             self.assertEqual(self.window.pending_requests, [])
 
     def test_old_folder_response_cannot_replace_the_new_view(self):
