@@ -5,7 +5,7 @@ import unittest
 from unittest.mock import Mock, patch
 from PySide6.QtCore import QPoint, QRect, Qt
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication, QScrollArea
+from PySide6.QtWidgets import QApplication, QScrollArea, QWidget
 from i18n import available_languages, set_language
 from setup_ui import SetupDialog
 from ui_style import STYLE
@@ -39,7 +39,10 @@ class SetupLayout(unittest.TestCase):
                 self.assertLessEqual(dialog.height(), 480)
                 scroll = dialog.findChild(QScrollArea)
                 self.assertIsNotNone(scroll)
-                self.assertEqual(scroll.horizontalScrollBar().maximum(), 0)
+                overflow = [(type(widget).__name__, widget.minimumSizeHint().width())
+                            for widget in scroll.findChildren(QWidget)
+                            if widget.minimumSizeHint().width() > scroll.viewport().width()]
+                self.assertEqual(scroll.horizontalScrollBar().maximum(), 0, overflow)
                 self.assertGreater(scroll.verticalScrollBar().maximum(), 0)
                 for control in (dialog.close_button, dialog.log):
                     top_left = control.mapTo(dialog, QPoint(0, 0))
