@@ -1,4 +1,4 @@
-# Set up a new Pi remotely (0.7 preview)
+# Set up a new Pi remotely (preview)
 
 **Set up a new Pi…** installs a receiver over the same verified SSH connection
 used by the tray app. It is included in Linux, macOS and Windows packages.
@@ -73,6 +73,13 @@ Use **Check / repair existing Pi components…** for additive maintenance of an
 existing managed receiver. The fresh wizard remains protected against overwriting
 completed/custom installations. See [component inspection and repair](PI_COMPONENTS.md).
 Uninstalling is not offered; unselected maintenance components are left alone.
+
+## Small screens and release status
+
+The form scrolls to keep the Pi identity, progress log and Close visible in small
+work areas. Long choice labels wrap; Tab scrolls focused controls into view.
+The [stable-release checklist](RELEASE_READINESS.md) still requires a physical
+fresh-install test; the layout fix does not promote installation out of preview.
 
 ## Run the wizard
 

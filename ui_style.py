@@ -5,9 +5,51 @@ import sys
 from PySide6.QtCore import QEvent, Qt, QTimer
 from PySide6.QtGui import QCursor, QGuiApplication, QIcon, QPainter, QPixmap, QPalette
 from PySide6.QtSvg import QSvgRenderer
-from PySide6.QtWidgets import (QApplication, QDialog, QDialogButtonBox, QInputDialog,
-    QLabel, QLineEdit, QListWidget, QMenu, QMessageBox, QProxyStyle, QPushButton, QSizePolicy, QStyle, QStyleFactory)
+from PySide6.QtWidgets import (QApplication, QCheckBox, QDialog, QDialogButtonBox, QHBoxLayout, QInputDialog,
+    QLabel, QLineEdit, QListWidget, QMenu, QMessageBox, QProxyStyle, QPushButton, QSizePolicy, QStyle, QStyleFactory, QStyleOptionButton)
 from i18n import tr, translate_standard_buttons
+
+
+class WrappedCheckBox(QCheckBox):
+    """Native checkbox behavior with a plain-text label that wraps to its width."""
+    def __init__(self, text, parent=None):
+        super().__init__('', parent)
+        self.label = QLabel(text, self)
+        self.label.setTextFormat(Qt.TextFormat.PlainText)
+        self.label.setWordWrap(True)
+        self.label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self.setAccessibleName(text)
+        self.row = QHBoxLayout(self)
+        self.row.setSpacing(0)
+        self.row.addWidget(self.label)
+        self.update_margins()
+
+    def update_margins(self):
+        option = QStyleOptionButton()
+        self.initStyleOption(option)
+        width = self.style().pixelMetric(QStyle.PixelMetric.PM_IndicatorWidth, option, self)
+        spacing = self.style().pixelMetric(QStyle.PixelMetric.PM_CheckBoxLabelSpacing, option, self)
+        self.row.setContentsMargins(width + spacing, 2, 0, 2)
+
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        if hasattr(self, 'row') and event.type() in (QEvent.Type.StyleChange, QEvent.Type.FontChange):
+            self.update_margins()
+
+    def sizeHint(self):
+        return self.row.sizeHint().expandedTo(super().sizeHint())
+
+    def minimumSizeHint(self):
+        return self.row.minimumSize().expandedTo(super().sizeHint())
+
+    def hasHeightForWidth(self):
+        return True
+
+    def heightForWidth(self, width):
+        return max(self.row.totalHeightForWidth(width), super().sizeHint().height())
+
+    def hitButton(self, position):
+        return self.rect().contains(position)
 
 
 class ActivatedListWidget(QListWidget):

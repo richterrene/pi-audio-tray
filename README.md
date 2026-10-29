@@ -15,6 +15,12 @@ central message or move the controls and rows. Colors follow the desktop palette
 Other distributions and boards have not been validated. This project is not
 affiliated with Spotify or Raspberry Pi.
 
+**Stable-release preparation:** feature development is frozen for the
+`0.10.1-rc.1` candidate. It is not a stable release. See the
+[release gates, supported scope, test checklist and rollback instructions](docs/RELEASE_READINESS.md).
+Fresh-install and interactive Mac/Windows validation plus the normal-use trial
+are still required; CI success alone does not close those gates.
+
 ## Local music and phone playback control
 
 The optional **Music…** window browses a Pi-attached library and controls its
@@ -297,7 +303,7 @@ local executable paths only, with no SSH credentials or Pi settings.
 
 ## Screenshots
 
-These screenshots show the current desktop UI (0.10.0), rendered from the actual
+These screenshots show the current desktop UI (0.10.1-rc.1), rendered from the actual
 Linux/Qt widgets with **fictional demo connection details and music metadata**. No real
 account, device address, SSH key, or Soloist API key is shown. macOS uses its
 native window and menu-bar presentation. Windows uses its system tray; see the
@@ -306,6 +312,12 @@ platform notes for native validation limits.
 ### New Pi setup (preview)
 
 <img src="assets/screenshots/new-pi-setup.png" alt="New Pi setup wizard with optional MPD, HTTPS player, system updates and Cockpit, using fictional connection data" width="680">
+
+On smaller screens the choices/tools scroll while the target, progress and Close
+remain visible. This 640×480 work-area example uses fictional data:
+
+<img src="assets/screenshots/setup-small.png" alt="Setup form in a small work area, with scrolling choices and fixed progress and Close controls" width="608">
+
 
 This demo selects the optional components; their actual defaults are listed
 above. See the [setup guide](docs/NEW_PI_SETUP.md) before provisioning a fresh receiver.
