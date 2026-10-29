@@ -86,7 +86,7 @@ http {{
    proxy_set_header Authorization "";
    proxy_set_header Cookie $http_cookie;
   }}
-  location ~ ^/(login|logout|account)$ {{
+  location ~ ^/(login|logout|account|power)$ {{
    limit_req zone=music_login burst=6 nodelay;
    limit_req_status 429;
    client_max_body_size 4k;

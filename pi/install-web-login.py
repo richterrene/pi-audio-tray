@@ -88,17 +88,22 @@ def main():
     write(root / 'login.json', json.dumps({'origins': config.origins(names)}) + '\n')
     dropin = Path('/etc/systemd/system/pi-audio-web.service.d')
     dropin.mkdir(mode=0o755, exist_ok=True)
+    previous_dependency = (dropin / 'login.conf').read_text() if (dropin / 'login.conf').exists() else None
     write(dropin / 'login.conf', config.WEB_DEPENDENCY)
     write(root / 'nginx.conf', config.nginx_config(args.hostname, addresses))
     try:
         run('/usr/sbin/nginx', '-t', '-c', str(root / 'nginx.conf'))
     except Exception:
         write(root / 'nginx.conf', previous)
-        (dropin / 'login.conf').unlink()
+        if previous_dependency is None:
+            (dropin / 'login.conf').unlink(missing_ok=True)
+        else:
+            write(dropin / 'login.conf', previous_dependency)
         raise
     run('systemctl', 'daemon-reload')
     try:
-        run('systemctl', 'enable', '--now', 'pi-audio-login.service')
+        run('systemctl', 'enable', 'pi-audio-login.service')
+        run('systemctl', 'restart', 'pi-audio-login.service')
         for _ in range(50):
             if Path('/run/pi-audio-login/auth.sock').exists():
                 break
@@ -124,7 +129,10 @@ def main():
             raise RuntimeError('HTTPS login health check failed')
     except Exception:
         write(root / 'nginx.conf', previous)
-        (dropin / 'login.conf').unlink(missing_ok=True)
+        if previous_dependency is None:
+            (dropin / 'login.conf').unlink(missing_ok=True)
+        else:
+            write(dropin / 'login.conf', previous_dependency)
         run('systemctl', 'daemon-reload')
         run('systemctl', 'reload-or-restart', 'pi-audio-web.service')
         raise

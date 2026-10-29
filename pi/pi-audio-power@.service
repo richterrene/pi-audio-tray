@@ -1,0 +1,23 @@
+[Unit]
+Description=Pi Audio fixed web shutdown broker
+[Service]
+ExecStart=/usr/bin/python3 -I /usr/local/lib/pi-audio-tray/web-power.py
+StandardInput=socket
+StandardOutput=null
+StandardError=journal
+User=root
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+ProtectHome=yes
+InaccessiblePaths=-/etc/shadow -/etc/gshadow -/etc/ssh -/etc/pi-audio-tray -/var/lib/pi-audio-login -/srv/pi-audio-music
+ProtectSystem=strict
+ReadWritePaths=/var/lib/pi-audio-setup/lock
+PrivateTmp=yes
+PrivateDevices=yes
+RestrictAddressFamilies=AF_UNIX
+RestrictSUIDSGID=yes
+UMask=0077
+LimitCORE=0
+RuntimeMaxSec=15
+MemoryMax=64M
+TasksMax=8

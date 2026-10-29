@@ -34,6 +34,7 @@ class Sessions:
         with self.db() as db:
             db.execute('CREATE TABLE IF NOT EXISTS sessions (hash TEXT PRIMARY KEY, expires INTEGER, credential TEXT, created INTEGER)')
             db.execute('CREATE TABLE IF NOT EXISTS attempts (ip TEXT PRIMARY KEY, count INTEGER, since INTEGER)')
+            db.execute('CREATE TABLE IF NOT EXISTS confirmations (hash TEXT PRIMARY KEY, session TEXT, expires INTEGER)')
         self.path.chmod(0o600)
 
     @contextmanager
@@ -69,8 +70,29 @@ class Sessions:
         with self.db() as db:
             if all_devices:
                 db.execute('DELETE FROM sessions')
+                db.execute('DELETE FROM confirmations')
             else:
                 db.execute('DELETE FROM sessions WHERE hash=?', (hashlib.sha256(token.encode()).hexdigest(),))
+                db.execute('DELETE FROM confirmations WHERE session=?', (hashlib.sha256(token.encode()).hexdigest(),))
+
+    def confirmation(self, session):
+        if not self.valid(session):
+            raise ValueError('Authenticated session required')
+        token = secrets.token_urlsafe(32)
+        with self.db() as db:
+            db.execute('DELETE FROM confirmations WHERE expires <= ?', (time.time(),))
+            db.execute('DELETE FROM confirmations WHERE hash IN (SELECT hash FROM confirmations ORDER BY expires DESC LIMIT -1 OFFSET 127)')
+            db.execute('INSERT INTO confirmations VALUES (?,?,?)',
+                (hashlib.sha256(token.encode()).hexdigest(), hashlib.sha256(session.encode()).hexdigest(), int(time.time())+120))
+        return token
+
+    def consume_confirmation(self, session, token):
+        if not isinstance(token, str) or not TOKEN.fullmatch(token) or not self.valid(session):
+            return False
+        with self.db() as db:
+            result = db.execute('DELETE FROM confirmations WHERE hash=? AND session=? AND expires>?',
+                (hashlib.sha256(token.encode()).hexdigest(), hashlib.sha256(session.encode()).hexdigest(), time.time()))
+            return result.rowcount == 1
 
     def allowed(self, ip):
         now = int(time.time())
@@ -115,6 +137,39 @@ def cookie(name, value, age=None):
     return result
 
 
+class PowerClient:
+    path = Path('/run/pi-audio-power/control.sock')
+
+    def available(self):
+        try:
+            info = self.path.lstat()
+            import stat
+            return stat.S_ISSOCK(info.st_mode) and info.st_uid == os.getuid() and not info.st_mode & 0o077
+        except OSError:
+            return False
+
+    def request(self):
+        try:
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
+                connection.settimeout(8)
+                connection.connect(str(self.path))
+                connection.sendall(b'poweroff\n')
+                connection.shutdown(socket.SHUT_WR)
+                raw = b''
+                while len(raw) <= 256 and not raw.endswith(b'\n'):
+                    part = connection.recv(257-len(raw))
+                    if not part: break
+                    raw += part
+            if len(raw) > 256:
+                return 'unavailable'
+            value = json.loads(raw)
+            if isinstance(value, dict) and set(value) == {'status'} and value['status'] in ('accepted', 'busy', 'denied'):
+                return value['status']
+        except (OSError, ValueError):
+            pass
+        return 'unavailable'
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = 'PiAudioLogin'
 
@@ -151,14 +206,33 @@ class Handler(BaseHTTPRequestHandler):
     def redirect(self, location, headers=()):
         self.reply(303, headers=[('Location', location), *headers])
 
-    def page(self, message='', account=False, status=200):
+    def page(self, message='', account=False, status=200, power=False, requested=False):
         csrf = secrets.token_urlsafe(32)
         hidden = '<input type="hidden" name="csrf" value="' + csrf + '">'
-        if account:
+        if power:
+            if requested:
+                content = '<h2>Shutdown requested</h2><p>The Pi will shut down shortly if update and setup checks remain clear. Audio will stop. To start it again, reconnect its power.</p>'
+            elif self.server.power and self.server.power.available():
+                session = cookies(self.headers.get('Cookie', '')).get(SESSION, '')
+                try:
+                    confirmation = self.server.sessions.confirmation(session)
+                except ValueError:
+                    self.redirect('/login')
+                    return
+                content = ('<h2>Shut down this Pi?</h2><p>This stops all audio and powers off the Pi. To start it again, reconnect its power.</p>'
+                           '<form method="post" action="/power">' + hidden +
+                           '<input type="hidden" name="confirm" value="' + confirmation + '">'
+                           '<button type="submit" class="danger">Shut down Pi</button></form>')
+            else:
+                content = '<h2>Shutdown unavailable</h2><p>Install the optional web shutdown component first.</p>'
+            content += '<p><a href="/">Back to music player</a> · <a href="/account">Account</a></p>'
+        elif account:
             content = ('<p>This browser is signed in to your music player.</p><p><a href="/">Open music player</a></p>'
                        '<form method="post" action="/logout">' + hidden +
                        '<button name="all" value="0">Sign out this browser</button> '
                        '<button name="all" value="1">Sign out all browsers</button></form>')
+            if self.server.power and self.server.power.available():
+                content += '<p><a href="/power">Shut down Pi…</a></p>'
         else:
             content = ('<p>Sign in once to control music on your Pi.</p><form method="post" action="/login">' + hidden +
                        '<label>Username<input name="username" value="music" autocomplete="username" required></label>'
@@ -166,28 +240,30 @@ class Handler(BaseHTTPRequestHandler):
                        '<label class="remember"><input type="checkbox" name="remember" value="yes" checked> Remember this browser for 90 days</label>'
                        '<button type="submit">Open music player</button></form>')
         body = ('<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
-                '<title>Pi Audio · Sign in</title><style>body{font:16px system-ui;margin:0;background:#101c29;color:#edf6fa;display:grid;min-height:100vh;place-items:center}'
+                '<title>Pi Audio</title><style>body{font:16px system-ui;margin:0;background:#101c29;color:#edf6fa;display:grid;min-height:100vh;place-items:center}'
                 'main{max-width:390px;margin:20px;padding:32px;background:#1b2c3b;border-radius:18px}h1{margin:0}label{display:block;margin:18px 0}'
                 'input:not([type=checkbox]){box-sizing:border-box;width:100%;padding:12px;border:1px solid #8ba2b4;border-radius:8px;margin-top:6px;background:#10202e;color:white;font:inherit}'
-                'button{background:#087f68;color:white;border:0;border-radius:8px;padding:12px 16px;font:inherit;margin:5px 0;cursor:pointer}a{color:#7ce7c5}.remember{font-size:14px}.error{color:#ffb5b5}</style>'
+                'button{background:#087f68;color:white;border:0;border-radius:8px;padding:12px 16px;font:inherit;margin:5px 0;cursor:pointer}button.danger{background:#b23c49}a{color:#7ce7c5}.remember{font-size:14px}.error{color:#ffb5b5}</style>'
                 '<main><h1>Pi Audio</h1><p class="error" role="alert">' + html.escape(message) + '</p>' + content + '</main></html>')
         self.reply(status, body, [('Set-Cookie', cookie(CSRF, csrf, 600))])
 
     def do_GET(self):
-        if self.path not in ('/check', '/login', '/account'):
+        if self.path not in ('/check', '/login', '/account', '/power'):
             self.reply(404)
             return
         session = cookies(self.headers.get('Cookie', '')).get(SESSION, '')
         valid = self.server.sessions.valid(session)
         if self.path == '/check':
             self.reply(204 if valid else 401)
-        elif self.path == '/account' and not valid:
+        elif self.path in ('/account', '/power') and not valid:
             self.redirect('/login')
+        elif self.path == '/power':
+            self.page(power=True, status=200 if self.server.power and self.server.power.available() else 503)
         else:
             self.page(account=valid)
 
     def do_POST(self):
-        if self.path not in ('/login', '/logout'):
+        if self.path not in ('/login', '/logout', '/power'):
             self.reply(404)
             return
         if self.headers.get('Origin') not in self.server.origins:
@@ -214,6 +290,19 @@ class Handler(BaseHTTPRequestHandler):
             self.reply(403, 'Reload the sign-in page and try again.')
             return
         current = jar.get(SESSION, '')
+        if self.path == '/power':
+            if not self.server.sessions.valid(current):
+                self.redirect('/login')
+                return
+            if set(fields) != {'csrf', 'confirm'} or not self.server.sessions.consume_confirmation(current, fields.get('confirm', '')):
+                self.reply(403, 'Reload the shutdown page and confirm again.')
+                return
+            result = self.server.power.request() if self.server.power else 'unavailable'
+            if result == 'accepted':
+                self.page(power=True, requested=True, status=202)
+            else:
+                self.page('Shutdown was not scheduled. Updates or setup may be running, or the shutdown helper is unavailable.', power=True, status=503)
+            return
         if self.path == '/logout':
             if not self.server.sessions.valid(current):
                 self.redirect('/login')
@@ -255,8 +344,9 @@ class Server(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
     daemon_threads = True
     request_queue_size = 64
 
-    def __init__(self, path, sessions, origins):
+    def __init__(self, path, sessions, origins, power=None):
         self.sessions, self.origins = sessions, set(origins)
+        self.power = power
         self.slots = threading.BoundedSemaphore(32)
         super().__init__(path, Handler)
 
@@ -287,7 +377,7 @@ def main():
     sessions.credential()  # Fail startup if the protected verifier file is unreadable.
     path = Path('/run/pi-audio-login/auth.sock')
     path.unlink(missing_ok=True)
-    with Server(str(path), sessions, config['origins']) as server:
+    with Server(str(path), sessions, config['origins'], power=PowerClient()) as server:
         path.chmod(0o660)
         notify = os.environ.get('NOTIFY_SOCKET')
         if notify:
