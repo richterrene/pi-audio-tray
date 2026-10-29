@@ -7,7 +7,7 @@ import audio
 from core import display_text
 from i18n import tr, translate_standard_buttons
 from setup_ui import Task
-from ui_style import LocalizedMessageBox as QMessageBox
+from ui_style import LocalizedMessageBox as QMessageBox, exec_dialog
 
 
 class AudioDialog(QDialog):
@@ -159,7 +159,7 @@ class AudioDialog(QDialog):
         box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         translate_standard_buttons(box)
         box.setDefaultButton(QMessageBox.StandardButton.No)
-        return box.exec() == QMessageBox.StandardButton.Yes
+        return exec_dialog(box) == QMessageBox.StandardButton.Yes
 
     def reject(self):
         if not self.worker:

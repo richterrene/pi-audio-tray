@@ -1,9 +1,9 @@
 """Manage connection profiles without changing any remote Pi."""
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QDialog, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QPushButton, QVBoxLayout
+from PySide6.QtWidgets import QDialog, QHBoxLayout, QLabel, QListWidgetItem, QPushButton, QVBoxLayout
 from i18n import tr
 import profiles
-from ui_style import get_text
+from ui_style import get_text, ActivatedListWidget
 
 
 class ProfilesDialog(QDialog):
@@ -16,8 +16,9 @@ class ProfilesDialog(QDialog):
         note = QLabel(tr('Save a separate SSH connection for each Pi. One Pi is active at a time.\nRemoving a profile does not change the Pi or delete SSH keys.'))
         note.setWordWrap(True)
         layout.addWidget(note)
-        self.list = QListWidget()
+        self.list = ActivatedListWidget()
         self.list.currentItemChanged.connect(self.selection_changed)
+        self.list.itemActivated.connect(lambda _: self.use_selected())
         layout.addWidget(self.list)
         row = QHBoxLayout()
         self.add_button = QPushButton(tr('Add Pi…'))

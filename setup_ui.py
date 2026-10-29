@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QFormLayout,
 import provision
 from core import UnknownHost, display_text, trust_host
 from setup_plan import validate_plan
-from ui_style import LocalizedMessageBox as QMessageBox, get_text
+from ui_style import LocalizedMessageBox as QMessageBox, get_text, exec_dialog
 
 
 class Task(QThread):
@@ -162,9 +162,13 @@ class SetupDialog(QDialog):
             box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
             translate_standard_buttons(box)
             box.setDefaultButton(QMessageBox.StandardButton.No)
-            if box.exec() == QMessageBox.StandardButton.Yes:
-                trust_host(exc)
-                self.append(tr('Host key saved. Click Check Pi again.'))
+            if exec_dialog(box) == QMessageBox.StandardButton.Yes:
+                try:
+                    trust_host(exc)
+                except (OSError, ValueError) as error:
+                    self.append(str(error))
+                else:
+                    self.append(tr('Host key saved. Click Check Pi again.'))
         else:
             self.append(str(exc))
 
@@ -212,7 +216,7 @@ class SetupDialog(QDialog):
             box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
             translate_standard_buttons(box)
             box.setDefaultButton(QMessageBox.StandardButton.No)
-            if box.exec() != QMessageBox.StandardButton.Yes:
+            if exec_dialog(box) != QMessageBox.StandardButton.Yes:
                 return
             self.start(lambda progress: provision.install(self.config, plan, password, progress), lambda _: self.completed(plan))
         except (ValueError, TypeError) as exc:
@@ -239,11 +243,8 @@ class SetupDialog(QDialog):
         if self.worker:
             return
         from component_ui import ComponentsDialog
-        from PySide6.QtCore import QTimer
         dialog = ComponentsDialog(self.config, self)
-        QTimer.singleShot(0, dialog.check)
-        dialog.exec()
-        dialog.deleteLater()
+        exec_dialog(dialog, dialog.check)
         self.checked = False  # Any component changes invalidate a prior fresh-install probe.
         self.install_button.setEnabled(False)
 
@@ -257,10 +258,12 @@ class SetupDialog(QDialog):
     def reject(self):
         if self.worker:
             return  # Do not terminate administrator package/service operations mid-flight.
+        self.password.clear()
         super().reject()
 
     def closeEvent(self, event):
         if self.worker:
             event.ignore()
         else:
+            self.password.clear()
             super().closeEvent(event)

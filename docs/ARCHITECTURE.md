@@ -70,6 +70,14 @@ capabilities through explicit bounded request/response validation, not arbitrary
 remote commands, URLs or plugins. Privileged helper changes require reviewing
 both the caller and exact sudo rules.
 
+## UI lifecycle review
+
+See [the desktop interaction review](UI_REVIEW.md) for findings, the interaction
+matrix and validation limits. One-shot modal views use `ui_style.exec_dialog`
+for deferred-read cancellation and disposal. Activated lists consume Return
+so it cannot also execute a dialog default button. Persistent music/network
+views retain their existing visibility-aware schedulers.
+
 ## Deliberate limits and next refactors
 
 The project uses small modules and dictionaries rather than a plugin framework.
