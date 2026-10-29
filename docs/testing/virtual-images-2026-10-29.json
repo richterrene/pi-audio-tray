@@ -1,0 +1,70 @@
+{
+  "date": "2026-10-29",
+  "timezone": "Europe/Berlin",
+  "candidate": "0.10.1-rc.1",
+  "scope": "Existing QEMU raspi3b test-init smoke suite, not full systemd/install/audio validation",
+  "results": [
+    {
+      "kernel": "aarch64",
+      "userland": "arm64",
+      "model": "Raspberry Pi 3 Model B",
+      "python": "3.13.5",
+      "pid1": "test init (not systemd)",
+      "hardware_tests": "not performed",
+      "full_installer": "not executed",
+      "probe": {
+        "supported": true,
+        "reasons": [],
+        "architecture": "aarch64",
+        "os": "Debian GNU/Linux 13 (trixie)",
+        "uid": 1001
+      },
+      "tests": {
+        "run": 35,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 1
+      },
+      "real_dbus_agent": {
+        "skipped": "Image lacks dbus-python/GLib or dbus-run-session"
+      },
+      "duration_seconds": 27.9,
+      "case": "arm64-pi3",
+      "expected_supported": true,
+      "passed": true,
+      "image_sha256": "483db18a48da399b5b7022ffae9a07bc6d99daab30e593aedac09b69ff422843"
+    },
+    {
+      "kernel": "aarch64",
+      "userland": "armhf",
+      "model": "Raspberry Pi 3 Model B",
+      "python": "3.13.5",
+      "pid1": "test init (not systemd)",
+      "hardware_tests": "not performed",
+      "full_installer": "not executed",
+      "probe": {
+        "supported": false,
+        "reasons": [
+          "Requires 64-bit ARM64 userspace, not only a 64-bit kernel"
+        ],
+        "architecture": "aarch64",
+        "os": "Raspbian GNU/Linux 13 (trixie)",
+        "uid": 1001
+      },
+      "tests": {
+        "run": 35,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 1
+      },
+      "real_dbus_agent": {
+        "skipped": "Image lacks dbus-python/GLib or dbus-run-session"
+      },
+      "duration_seconds": 28.6,
+      "case": "armhf-pi3-mixed",
+      "expected_supported": false,
+      "passed": true,
+      "image_sha256": "2c302771f34c67a0b7ae7aa2e0dcdd3eac660504be59193c011ba79d412e1632"
+    }
+  ]
+}

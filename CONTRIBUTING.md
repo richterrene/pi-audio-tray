@@ -138,3 +138,9 @@ The [desktop interaction review](docs/UI_REVIEW.md) records the UI coverage and
 remaining manual limits. Run `python -m unittest discover -s tests -p test_ui_interactions.py -v` for its focused regressions. Reuse `ui_style.exec_dialog` for one-shot dialogs and cancel deferred reads
 when their event loop ends. Lists that activate rows with Enter must consume the
 key so a dialog default button cannot also execute.
+
+
+During [0.10.1 stable-release preparation](docs/RELEASE_READINESS.md), changes are
+limited to defects, validation, documentation and packaging. The readiness table
+separates automated evidence from manual/hardware/normal-use gates. Test reports
+should name the candidate and platform and redact private connection/library data.

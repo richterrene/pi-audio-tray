@@ -80,9 +80,11 @@ This is broad automated interaction coverage, not proof of every input sequence
 on every desktop. Offscreen rendering does not validate native window-manager
 focus, OS-exported tray menus, assistive technology, touch or native SSH agents.
 Native CI exercises platform runtimes, but is not a human desktop usability test.
-The tall setup form still needs generous logical screen space; high scaling and
-small displays remain a candidate for a scrollable/step-based layout. Rendered
-fixture screenshots do not establish every translation's layout at every scale.
+The tall setup form finding was subsequently fixed during
+[0.10.1 candidate preparation](RELEASE_READINESS.md): a scrollable form, wrapped
+choices and pinned identity/progress/Close pass 19-language small-screen tests
+at multiple Qt scaling factors. Rendered fixtures still do not establish every
+native desktop/translation combination.
 
 No physical audio-source handover, real installation/update, or power-off is
 performed by this audit. Those require separate, explicit receiver validation.

@@ -37,6 +37,15 @@ A native ARMv7 Pi 2 boot was attempted but did not reach the guest test completi
 marker. It is **excluded from the passing/default matrix**. Starting a kernel is
 not a passing test, and these results make no Pi 2 compatibility claim.
 
+## Release-candidate recheck (2026-10-29)
+
+The cached two-image matrix was repeated for 0.10.1 candidate preparation. Both
+cases again passed: 35 tests per guest, one skipped verifier test each; ARM64
+accepted and mixed armhf userspace rejected. The real D-Bus harness remained
+skipped for missing guest dependencies. See the
+[recorded results](testing/virtual-images-2026-10-29.json). The scope and full
+installer/hardware limitations above remain unchanged.
+
 ## Run it locally
 
 Requirements: Linux, Python 3.12+, an existing working Docker daemon/account,

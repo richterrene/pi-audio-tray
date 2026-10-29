@@ -11,7 +11,7 @@ import sys
 import tempfile
 
 from packaging_support import prepare_source
-from version import VERSION
+from version import VERSION, BUNDLE_VERSION
 
 ROOT = Path(__file__).resolve().parent
 
@@ -58,7 +58,7 @@ def main():
         info = bundle / 'Contents/Info.plist'
         with info.open('rb') as f:
             values = plistlib.load(f)
-        values.update(CFBundleShortVersionString=VERSION, CFBundleVersion=VERSION,
+        values.update(CFBundleShortVersionString=BUNDLE_VERSION, CFBundleVersion=BUNDLE_VERSION,
                       LSUIElement=True, LSMinimumSystemVersion='15.0')
         with info.open('wb') as f:
             plistlib.dump(values, f)

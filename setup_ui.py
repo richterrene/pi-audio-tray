@@ -1,13 +1,13 @@
 """One-time receiver setup with explicit plan review and masked sudo authentication."""
 from i18n import tr, translate_standard_buttons
 from PySide6.QtCore import QThread, Signal, Qt
-from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QFormLayout,
+from PySide6.QtWidgets import (QComboBox, QDialog, QFormLayout, QScrollArea, QWidget, QSizePolicy,
     QLabel, QLineEdit, QPushButton, QPlainTextEdit, QVBoxLayout, QHBoxLayout)
 
 import provision
 from core import UnknownHost, display_text, trust_host
 from setup_plan import validate_plan
-from ui_style import LocalizedMessageBox as QMessageBox, get_text, exec_dialog
+from ui_style import LocalizedMessageBox as QMessageBox, get_text, exec_dialog, WrappedCheckBox, WrappedPushButton, StableLabel
 
 
 class Task(QThread):
@@ -36,43 +36,61 @@ class SetupDialog(QDialog):
         self.checked = False
         self.installed_plan = None
         self.setWindowTitle(tr('Set up a new Pi'))
-        self.resize(680, 760)
-        layout = QVBoxLayout(self)
+        outer = QVBoxLayout(self)
+        self.scroll = QScrollArea()
+        self.scroll.setWidgetResizable(True)
+        content = QWidget()
+        layout = QVBoxLayout(content)
+        layout.setContentsMargins(0, 0, 8, 0)
+        self.scroll.setWidget(content)
+        outer.addWidget(self.scroll, 1)
         intro = QLabel(tr('Start with Raspberry Pi OS Lite / Debian 13 (64-bit), networking and SSH key access enabled.\n'
                        'This installs services on the selected Pi. It does not flash an SD card.\n'
                        'Use Check / repair Pi components for an existing managed receiver.'))
         intro.setWordWrap(True)
+        policy = intro.sizePolicy()
+        policy.setHorizontalPolicy(QSizePolicy.Policy.Ignored)
+        intro.setSizePolicy(policy)
         layout.addWidget(intro)
-        self.target = QLabel(display_text(config['username'] + '@' + config['host']))
+        self.target = StableLabel(display_text(config['username'] + '@' + config['host']), lines=2)
         self.target.setTextFormat(Qt.TextFormat.PlainText)
-        layout.addWidget(self.target)
+        outer.insertWidget(0, self.target)
         form = QFormLayout()
+        form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapAllRows)
         self.hostname = QLineEdit(config['host'])
         form.addRow(tr('Pi DNS name (TLS certificate)'), self.hostname)
-        self.updates = QCheckBox(tr('System updates daily; reboot at 05:30 only if needed (Pi local time)'))
+        self.updates = WrappedCheckBox(tr('System updates daily; reboot at 05:30 only if needed (Pi local time)'))
         self.updates.setChecked(True)
-        self.music = QCheckBox(tr('MPD + USB music + UPnP browsing'))
-        self.web = QCheckBox(tr('HTTPS phone/web player with remembered login (ports 80 / 443 / 8443)'))
-        self.cockpit = QCheckBox(tr('Cockpit management, loopback only (SSH tunnel required)'))
-        self.privacy = QCheckBox(tr('Hide other users’ process details (protects Soloist key arguments)'))
+        self.music = WrappedCheckBox(tr('MPD + USB music + UPnP browsing'))
+        self.web = WrappedCheckBox(tr('HTTPS phone/web player with remembered login (ports 80 / 443 / 8443)'))
+        self.cockpit = WrappedCheckBox(tr('Cockpit management, loopback only (SSH tunnel required)'))
+        self.privacy = WrappedCheckBox(tr('Hide other users’ process details (protects Soloist key arguments)'))
         self.privacy.setChecked(True)
-        self.shutdown = QCheckBox(tr('Allow the tray app to shut down this Pi'))
+        self.shutdown = WrappedCheckBox(tr('Allow the tray app to shut down this Pi'))
         self.shutdown.setChecked(True)
         for widget in (self.updates, self.music, self.web, self.cockpit, self.shutdown, self.privacy):
             form.addRow(widget)
         self.usb = QComboBox()
         form.addRow(tr('FAT32 USB drive (must contain Music/)'), self.usb)
-        self.resume = QCheckBox(tr('Retry an incomplete wizard installation with the same choices'))
+        self.resume = WrappedCheckBox(tr('Retry an incomplete wizard installation with the same choices'))
         form.addRow(self.resume)
-        self.terms = QCheckBox(tr('Download Soloist directly from Spotify; I have reviewed its terms'))
+        self.terms = WrappedCheckBox(tr('Download Soloist directly from Spotify; I have reviewed its terms'))
         form.addRow(self.terms)
         terms = QLabel('<a href="https://developer.spotify.com/documentation/soloist">' + tr('Spotify Soloist documentation and terms') + '</a>')
+        terms.setWordWrap(True)
+        policy = terms.sizePolicy()
+        policy.setHorizontalPolicy(QSizePolicy.Policy.Ignored)
+        terms.setSizePolicy(policy)
         terms.setOpenExternalLinks(True)
         form.addRow(terms)
         self.password = QLineEdit()
         self.password.setEchoMode(QLineEdit.EchoMode.Password)
         self.password.setPlaceholderText(tr('Leave empty only if this account already has administrator sudo'))
         form.addRow(tr('Pi sudo password (not saved)'), self.password)
+        for row in range(form.rowCount()):
+            item = form.itemAt(row, QFormLayout.ItemRole.LabelRole)
+            if item is not None and isinstance(item.widget(), QLabel):
+                item.widget().setWordWrap(True)
         layout.addLayout(form)
         self.web.setEnabled(False)
         self.usb.setEnabled(False)
@@ -80,37 +98,56 @@ class SetupDialog(QDialog):
         self.log = QPlainTextEdit()
         self.log.setReadOnly(True)
         self.log.setMaximumBlockCount(160)
-        layout.addWidget(self.log, 1)
-        row = QHBoxLayout()
-        self.check = QPushButton(tr('1. Check Pi'))
-        self.install_button = QPushButton(tr('2. Review and install…'))
+        self.log.setMinimumHeight(64)
+        self.log.setMaximumHeight(96)
+        outer.addWidget(self.log)
+        self.check = WrappedPushButton(tr('1. Check Pi'))
+        self.install_button = WrappedPushButton(tr('2. Review and install…'))
         self.install_button.setEnabled(False)
         self.close_button = QPushButton(tr('Close'))
-        for button in (self.check, self.install_button, self.close_button):
-            row.addWidget(button)
-        layout.addLayout(row)
+        for button in (self.check, self.install_button):
+            layout.addWidget(button)
+        close_row = QHBoxLayout()
+        close_row.addStretch()
+        close_row.addWidget(self.close_button)
+        outer.addLayout(close_row)
         self.check.clicked.connect(self.preflight)
-        self.components_button = QPushButton(tr('Check / repair existing Pi components…'))
+        self.components_button = WrappedPushButton(tr('Check / repair existing Pi components…'))
         layout.addWidget(self.components_button)
         self.components_button.clicked.connect(self.components)
         self.install_button.clicked.connect(self.install)
         self.close_button.clicked.connect(self.reject)
-        audio = QHBoxLayout()
+        audio = QFormLayout()
+        audio.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
         self.outputs = QComboBox()
-        self.output_refresh = QPushButton(tr('Refresh audio outputs'))
-        self.output_select = QPushButton(tr('Use output'))
-        self.key_button = QPushButton(tr('Set Soloist API key…'))
+        self.output_refresh = WrappedPushButton(tr('Refresh audio outputs'))
+        self.output_select = WrappedPushButton(tr('Use output'))
+        self.key_button = WrappedPushButton(tr('Set Soloist API key…'))
         self.key_button.setEnabled(False)
         layout.addWidget(self.key_button)
         self.key_button.clicked.connect(self.set_key)
         self.output_refresh.setEnabled(False)
         self.output_select.setEnabled(False)
-        audio.addWidget(self.outputs, 1)
-        audio.addWidget(self.output_refresh)
-        audio.addWidget(self.output_select)
+        audio.addRow(self.outputs)
+        audio.addRow(self.output_refresh)
+        audio.addRow(self.output_select)
         layout.addLayout(audio)
+        layout.addStretch()
         self.output_refresh.clicked.connect(lambda: self.start(lambda _: provision.audio_outputs(self.config), self.show_outputs))
         self.output_select.clicked.connect(lambda: self.start(lambda _: provision.select_output(self.config, self.outputs.currentData()), lambda _: self.append(tr('Default audio output saved by WirePlumber.'))))
+        for combo in (self.usb, self.outputs):
+            combo.setMinimumContentsLength(12)
+            combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        order = (self.hostname, self.updates, self.music, self.web, self.cockpit,
+                 self.shutdown, self.privacy, self.usb, self.resume, self.terms,
+                 self.password, self.check, self.install_button,
+                 self.components_button, self.key_button, self.outputs,
+                 self.output_refresh, self.output_select, self.close_button)
+        for before, after in zip(order, order[1:]):
+            QWidget.setTabOrder(before, after)
+        area = self.screen().availableGeometry()
+        self.resize(min(680, max(1, area.width() - 32)),
+                    min(760, max(1, area.height() - 48)))
 
     def append(self, text):
         self.log.appendPlainText(display_text(text, 4096))
