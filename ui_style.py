@@ -17,8 +17,14 @@ class WrappedCheckBox(QCheckBox):
         self.label = QLabel(text, self)
         self.label.setTextFormat(Qt.TextFormat.PlainText)
         self.label.setWordWrap(True)
+        policy = self.label.sizePolicy()
+        policy.setHorizontalPolicy(QSizePolicy.Policy.Ignored)
+        self.label.setSizePolicy(policy)
         self.label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self.setAccessibleName(text)
+        policy = QSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
+        policy.setHeightForWidth(True)
+        self.setSizePolicy(policy)
         self.row = QHBoxLayout(self)
         self.row.setSpacing(0)
         self.row.addWidget(self.label)
@@ -50,6 +56,39 @@ class WrappedCheckBox(QCheckBox):
 
     def hitButton(self, position):
         return self.rect().contains(position)
+
+
+class WrappedPushButton(QPushButton):
+    """Keep long translated actions readable without a horizontal minimum width."""
+    def __init__(self, text, parent=None):
+        super().__init__('', parent)
+        self.label = QLabel(text, self)
+        self.label.setTextFormat(Qt.TextFormat.PlainText)
+        self.label.setWordWrap(True)
+        policy = self.label.sizePolicy()
+        policy.setHorizontalPolicy(QSizePolicy.Policy.Ignored)
+        self.label.setSizePolicy(policy)
+        self.label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self.setAccessibleName(text)
+        policy = QSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
+        policy.setHeightForWidth(True)
+        self.setSizePolicy(policy)
+        self.row = QHBoxLayout(self)
+        self.row.setContentsMargins(12, 8, 12, 8)
+        self.row.addWidget(self.label)
+
+    def sizeHint(self):
+        return self.row.sizeHint().expandedTo(super().sizeHint())
+
+    def minimumSizeHint(self):
+        return self.row.minimumSize().expandedTo(super().sizeHint())
+
+    def hasHeightForWidth(self):
+        return True
+
+    def heightForWidth(self, width):
+        return max(self.row.totalHeightForWidth(width), super().sizeHint().height())
 
 
 class ActivatedListWidget(QListWidget):

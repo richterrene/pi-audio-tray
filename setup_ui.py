@@ -1,13 +1,13 @@
 """One-time receiver setup with explicit plan review and masked sudo authentication."""
 from i18n import tr, translate_standard_buttons
 from PySide6.QtCore import QThread, Signal, Qt
-from PySide6.QtWidgets import (QComboBox, QDialog, QFormLayout, QScrollArea, QWidget,
+from PySide6.QtWidgets import (QComboBox, QDialog, QFormLayout, QScrollArea, QWidget, QSizePolicy,
     QLabel, QLineEdit, QPushButton, QPlainTextEdit, QVBoxLayout, QHBoxLayout)
 
 import provision
 from core import UnknownHost, display_text, trust_host
 from setup_plan import validate_plan
-from ui_style import LocalizedMessageBox as QMessageBox, get_text, exec_dialog, WrappedCheckBox, StableLabel
+from ui_style import LocalizedMessageBox as QMessageBox, get_text, exec_dialog, WrappedCheckBox, WrappedPushButton, StableLabel
 
 
 class Task(QThread):
@@ -48,6 +48,9 @@ class SetupDialog(QDialog):
                        'This installs services on the selected Pi. It does not flash an SD card.\n'
                        'Use Check / repair Pi components for an existing managed receiver.'))
         intro.setWordWrap(True)
+        policy = intro.sizePolicy()
+        policy.setHorizontalPolicy(QSizePolicy.Policy.Ignored)
+        intro.setSizePolicy(policy)
         layout.addWidget(intro)
         self.target = StableLabel(display_text(config['username'] + '@' + config['host']), lines=2)
         self.target.setTextFormat(Qt.TextFormat.PlainText)
@@ -75,12 +78,19 @@ class SetupDialog(QDialog):
         form.addRow(self.terms)
         terms = QLabel('<a href="https://developer.spotify.com/documentation/soloist">' + tr('Spotify Soloist documentation and terms') + '</a>')
         terms.setWordWrap(True)
+        policy = terms.sizePolicy()
+        policy.setHorizontalPolicy(QSizePolicy.Policy.Ignored)
+        terms.setSizePolicy(policy)
         terms.setOpenExternalLinks(True)
         form.addRow(terms)
         self.password = QLineEdit()
         self.password.setEchoMode(QLineEdit.EchoMode.Password)
         self.password.setPlaceholderText(tr('Leave empty only if this account already has administrator sudo'))
         form.addRow(tr('Pi sudo password (not saved)'), self.password)
+        for row in range(form.rowCount()):
+            item = form.itemAt(row, QFormLayout.ItemRole.LabelRole)
+            if item is not None and isinstance(item.widget(), QLabel):
+                item.widget().setWordWrap(True)
         layout.addLayout(form)
         self.web.setEnabled(False)
         self.usb.setEnabled(False)
@@ -91,8 +101,8 @@ class SetupDialog(QDialog):
         self.log.setMinimumHeight(64)
         self.log.setMaximumHeight(96)
         outer.addWidget(self.log)
-        self.check = QPushButton(tr('1. Check Pi'))
-        self.install_button = QPushButton(tr('2. Review and install…'))
+        self.check = WrappedPushButton(tr('1. Check Pi'))
+        self.install_button = WrappedPushButton(tr('2. Review and install…'))
         self.install_button.setEnabled(False)
         self.close_button = QPushButton(tr('Close'))
         for button in (self.check, self.install_button):
@@ -102,7 +112,7 @@ class SetupDialog(QDialog):
         close_row.addWidget(self.close_button)
         outer.addLayout(close_row)
         self.check.clicked.connect(self.preflight)
-        self.components_button = QPushButton(tr('Check / repair existing Pi components…'))
+        self.components_button = WrappedPushButton(tr('Check / repair existing Pi components…'))
         layout.addWidget(self.components_button)
         self.components_button.clicked.connect(self.components)
         self.install_button.clicked.connect(self.install)
@@ -110,9 +120,9 @@ class SetupDialog(QDialog):
         audio = QFormLayout()
         audio.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
         self.outputs = QComboBox()
-        self.output_refresh = QPushButton(tr('Refresh audio outputs'))
-        self.output_select = QPushButton(tr('Use output'))
-        self.key_button = QPushButton(tr('Set Soloist API key…'))
+        self.output_refresh = WrappedPushButton(tr('Refresh audio outputs'))
+        self.output_select = WrappedPushButton(tr('Use output'))
+        self.key_button = WrappedPushButton(tr('Set Soloist API key…'))
         self.key_button.setEnabled(False)
         layout.addWidget(self.key_button)
         self.key_button.clicked.connect(self.set_key)

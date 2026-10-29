@@ -17,9 +17,9 @@ decision changes the supported platform/feature set.
 
 | Gate | Current evidence / remaining work |
 | --- | --- |
-| Desktop regressions | Local full suite: 325 tests, 3 existing tool/platform skips. Required PR security/Linux/Windows/both-macOS checks must also pass for the candidate commit. |
+| Desktop regressions | Local full suite: 326 tests, 3 existing tool/platform skips. Required PR security/Linux/Windows/both-macOS checks must also pass for the candidate commit. |
 | Small-screen setup | Fixed: choices and tools scroll, checkbox labels wrap, identity/progress/Close remain visible. All 19 languages checked at a 640×480 logical work area; focused tests repeated at 100%, 150%, 200% Qt scaling. |
-| Ubuntu graphical runtime | Actual X11/XWayland Qt backend: 20 interaction tests plus 5 layout tests pass with isolated settings/mocked receiver calls. This does not certify every native menu/focus/SSH-agent interaction. |
+| Ubuntu graphical runtime | Actual X11/XWayland Qt backend: 20 interaction tests plus 6 layout tests pass with isolated settings/mocked receiver calls. This does not certify every native menu/focus/SSH-agent interaction. |
 | ARM virtual smoke matrix | Re-run 2026-10-29: 35 tests per image, no failures/errors, 1 skip each; supported ARM64 accepted, mixed ARM64-kernel/armhf-userspace rejected. Real D-Bus harness skipped where dependencies are absent. [Exact results](testing/virtual-images-2026-10-29.json). No full systemd installer or audio test. |
 | Existing receiver read-only check | Reference receiver reachable, managed/supported; all component configuration/binaries present. EQ was installed but bypassed at inspection. Service flags are not proof of audible playback, repair or reboot persistence. No settings/services changed. |
 | Native package validation | All four manual build/smoke jobs must pass on the candidate source. Verify every downloaded SHA256 and compare merged source tree before release; native signing limitations remain explicit. |
