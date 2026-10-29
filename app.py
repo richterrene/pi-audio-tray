@@ -18,10 +18,10 @@ from PySide6.QtWidgets import (QApplication, QDialog, QFileDialog,
 
 from core import (PairSession, UnknownHost, config_dir, disable_pairing,
                   install_helper, load_config, poll, save_config, store_soloist_key,
-                  remove_soloist_key, update_soloist, trust_host, display_text, instance_lock_file, shutdown_pi, connection_key)
+                  remove_soloist_key, update_soloist, trust_host, display_text, instance_lock_file, shutdown_pi, connection_key, validate_config)
 from music_ui import MusicWindow
 from version import VERSION
-from ui_style import STYLE, StableLabel, StatusIndicator, ScreenMenu, plain_tooltip, symbol, flag_icon
+from ui_style import STYLE, StableLabel, StatusIndicator, ScreenMenu, plain_tooltip, symbol, flag_icon, exec_dialog
 from ui_style import LocalizedButtonBox as QDialogButtonBox, LocalizedMessageBox as QMessageBox, get_text
 from platform_support import lock_instance, autostart_enabled, set_autostart
 import profiles
@@ -33,7 +33,7 @@ def plain_message(parent, icon_type, title, text, buttons, default):
     box.setTextFormat(Qt.TextFormat.PlainText)
     box.setText(''.join(c for c in str(text) if c == '\n' or c.isprintable())[:4096])
     box.setDefaultButton(default)
-    return box.exec()
+    return exec_dialog(box)
 
 
 def plain_question(parent, title, text, buttons=QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
@@ -169,6 +169,13 @@ class Settings(QDialog):
         if self.parentWidget().session or self.parentWidget().busy - {'poll'}:
             plain_information(self, tr('Pi operation in progress'),
                               tr('Wait for the current Pi operation before saving connection changes.'))
+            return
+        try:
+            config = validate_config(self.values())
+            if bool(config['host']) != bool(config['username']):
+                raise ValueError(tr('Enter a hostname and SSH username.'))
+        except (ValueError, TypeError) as exc:
+            plain_warning(self, tr('Settings'), display_text(exc))
             return
         super().accept()
 
@@ -604,7 +611,7 @@ class TrayApp(QWidget):
                               tr('Finish pairing or the current Pi operation before changing the connection.'))
             return
         dialog = Settings(self.config, self)
-        if dialog.exec() == QDialog.DialogCode.Accepted:
+        if exec_dialog(dialog) == QDialog.DialogCode.Accepted:
             language_before = self.config.get('language', 'en')
             config = dialog.values()
             if bool(config['host']) != bool(config['username']):
@@ -704,7 +711,7 @@ class TrayApp(QWidget):
         except (OSError, ValueError, TypeError) as exc:
             plain_warning(self, tr('Pi profiles'), display_text(exc))
             return
-        if dialog.exec() == QDialog.DialogCode.Accepted:
+        if exec_dialog(dialog) == QDialog.DialogCode.Accepted:
             self.switch_profile(dialog.selected)
         self.reload_profiles()
 
@@ -720,9 +727,9 @@ class TrayApp(QWidget):
         if self.music_window is not None:
             self.music_window.hide()
         self.timer.stop()
-        dialog = SetupDialog(self.config, self)
         try:
-            dialog.exec()
+            dialog = SetupDialog(self.config, self)
+            exec_dialog(dialog)
             if dialog.installed_plan and dialog.installed_plan['web']:
                 self.config['music_web_url'] = 'https://' + dialog.installed_plan['hostname'] + '/'
                 save_config(self.config)
@@ -761,15 +768,9 @@ class TrayApp(QWidget):
         try:
             dialog = {'audio': AudioDialog, 'components': ComponentsDialog, 'policy': PolicyDialog, 'updates': UpdatesDialog, 'volume': VolumeDialog, 'dsp': DspDialog}[kind](self.config, self)
             self.receiver_window = dialog
-            def initial_read():
-                if self.receiver_window is dialog:
-                    (dialog.check if kind == 'components' else dialog.refresh)()
-            QTimer.singleShot(0, initial_read)
-            dialog.exec()
+            exec_dialog(dialog, dialog.check if kind == 'components' else dialog.refresh)
         finally:
             self.receiver_window = None
-            if dialog is not None:
-                dialog.deleteLater()
             self.busy.discard('provision')
             self.update_polling()
             self.refresh()
@@ -878,6 +879,7 @@ class TrayApp(QWidget):
                     except Exception as exc:
                         self.notice.setText(str(exc))
             dialog.finished.connect(reply)
+            dialog.finished.connect(dialog.deleteLater)
             dialog.show()
             dialog.raise_()
             dialog.activateWindow()

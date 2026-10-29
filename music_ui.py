@@ -4,9 +4,11 @@ import threading
 from i18n import tr
 from PySide6.QtCore import QObject, Qt, QTimer, Signal, QUrl, QSignalBlocker
 from PySide6.QtGui import QDesktopServices
-from PySide6.QtWidgets import (QDialog, QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
+from PySide6.QtWidgets import (QDialog, QHBoxLayout, QLabel, QListWidgetItem,
                                QPushButton, QSpinBox, QTabWidget, QVBoxLayout)
 from core import connection_key, display_text, music_request, music_web_url
+
+from ui_style import ActivatedListWidget
 
 READ_ACTIONS = frozenset(('browse', 'queue', 'status'))
 
@@ -48,7 +50,10 @@ class MusicWindow(QDialog):
         self.volume = QSpinBox()
         self.volume.setRange(0, 100)
         self.volume.setSuffix(' %')
-        self.volume.editingFinished.connect(lambda: self.request({'action': 'volume', 'value': self.volume.value()}))
+        self.volume_dirty = False
+        self.volume.setEnabled(False)
+        self.volume.valueChanged.connect(self.volume_edited)
+        self.volume.editingFinished.connect(self.commit_volume)
         controls.addWidget(self.volume)
         layout.addLayout(controls)
         self.location = QLabel(tr('Library'))
@@ -56,12 +61,12 @@ class MusicWindow(QDialog):
         self.location.setWordWrap(True)
         layout.addWidget(self.location)
         self.tabs = QTabWidget()
-        self.library, self.queue = QListWidget(), QListWidget()
+        self.library, self.queue = ActivatedListWidget(), ActivatedListWidget()
         self.tabs.addTab(self.library, tr('Library'))
         self.tabs.addTab(self.queue, tr('Queue'))
         self.tabs.currentChanged.connect(self.reload_page)
-        self.library.itemDoubleClicked.connect(self.activate_library)
-        self.queue.itemDoubleClicked.connect(self.activate_queue)
+        self.library.itemActivated.connect(self.activate_library)
+        self.queue.itemActivated.connect(self.activate_queue)
         layout.addWidget(self.tabs)
         navigation = QHBoxLayout()
         for text, callback in [(tr('Up'), self.up), (tr('Previous page'), lambda: self.page(-100)),
@@ -103,7 +108,11 @@ class MusicWindow(QDialog):
         self.location.setText(tr('Library'))
         self.now.setText(tr('Player not checked yet'))
         self.message.setText(tr('Double-click a folder to browse, or a track to play it.'))
+        blocker = QSignalBlocker(self.volume)
         self.volume.setValue(0)
+        self.volume.setEnabled(False)
+        self.volume_dirty = False
+        del blocker
         if self.network_window is not None:
             self.network_window.reset_connection()
 
@@ -180,8 +189,12 @@ class MusicWindow(QDialog):
         try:
             volume = int(state.get('volume', -1))
             volume_pending = any(job[0].get('action') == 'volume' for job in self.pending_requests)
-            if 0 <= volume <= 100 and not volume_pending and not self.volume.hasFocus() and not self.volume.lineEdit().hasFocus():
+            if (0 <= volume <= 100 and not volume_pending and not self.volume_dirty
+                    and not self.volume.hasFocus() and not self.volume.lineEdit().hasFocus()):
+                blocker = QSignalBlocker(self.volume)
                 self.volume.setValue(volume)
+                del blocker
+            self.volume.setEnabled(0 <= volume <= 100)
         except (ValueError, TypeError):
             pass
         action = request['action']
@@ -258,9 +271,13 @@ class MusicWindow(QDialog):
     def reload_page(self, *args, background=False):
         if self.tabs.currentIndex() == 0:
             context = (self.path, self.offset)
+            if self.page_contexts.get('browse') != context:
+                self.library.clear()
             self.more = self.page_more.get('browse', (None, False)) == (context, True)
             self.request({'action': 'browse', 'path': self.path, 'offset': self.offset}, background=background)
         else:
+            if self.page_contexts.get('queue') != (self.queue_offset,):
+                self.queue.clear()
             self.more = self.page_more.get('queue', (None, False)) == ((self.queue_offset,), True)
             self.request({'action': 'queue', 'offset': self.queue_offset}, background=background)
 
@@ -270,6 +287,15 @@ class MusicWindow(QDialog):
                 self.reload_page(background=True)
             else:
                 self.request({'action': 'status'}, background=True)
+
+    def volume_edited(self, value):
+        self.volume_dirty = True
+
+    def commit_volume(self):
+        # Qt emits editingFinished on focus loss even when nothing was edited.
+        if self.volume_dirty and self.volume.isEnabled():
+            self.volume_dirty = False
+            self.request({'action': 'volume', 'value': self.volume.value()})
 
     def activate_library(self, item):
         row = item.data(Qt.ItemDataRole.UserRole)
@@ -293,6 +319,8 @@ class MusicWindow(QDialog):
             self.request({'action': 'add', 'path': row.get('directory') or row.get('file')})
 
     def up(self):
+        if self.tabs.currentIndex() != 0:
+            return
         self.path, self.offset = str(PurePosixPath(self.path).parent), 0
         if self.path == '.':
             self.path = ''

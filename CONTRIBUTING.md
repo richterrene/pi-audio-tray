@@ -133,3 +133,8 @@ real QThreads: never shadow Qt's `QDialog.finished(int)` signal with a cleanup
 method. See [isolated live graph tests](docs/EQUALIZER.md#reproducing-the-isolated-graph-test)
 for explicit opt-in Pi validation; regular tests must not connect to a receiver
 or play audio.
+
+The [desktop interaction review](docs/UI_REVIEW.md) records the UI coverage and
+remaining manual limits. Run `python -m unittest discover -s tests -p test_ui_interactions.py -v` for its focused regressions. Reuse `ui_style.exec_dialog` for one-shot dialogs and cancel deferred reads
+when their event loop ends. Lists that activate rows with Enter must consume the
+key so a dialog default button cannot also execute.

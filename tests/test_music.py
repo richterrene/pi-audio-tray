@@ -160,6 +160,10 @@ class NonblockingRefresh(MusicWindowTests):
 
     def test_background_refresh_keeps_controls_enabled_and_delivers_pause_click(self):
         self.show_window()
+        # Controls become available after the first valid status; a later poll
+        # must not disable them or prevent a queued playback command.
+        status = self.response(None, {'action': 'status'})
+        self.window.apply_result(({'action': 'status'}, status, status, self.parent.config.copy()), None)
         jobs = []
         with self.hold_workers(jobs), patch('music_ui.music_request', side_effect=self.response) as remote:
             self.window.refresh_status()

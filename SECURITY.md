@@ -608,3 +608,16 @@ sources are pinned to GitHub Actions. Force pushes/deletion are blocked and
 linear history is required. Independent approval remains optional for the sole
 maintainer; a second review for privileged/authentication changes is recommended
 when another reviewer is available. See CONTRIBUTING.md for the exact checks.
+
+
+## Desktop interaction follow-up (2026-10-29)
+
+The [UI interaction review](docs/UI_REVIEW.md) covers canceled/deferred reads,
+stale capability controls, keyboard/default-button propagation and hidden-dialog
+lifetime. One-shot input dialogs clear their values before deferred deletion;
+setup clears unused administrator input on permitted close paths. These changes
+reduce credential lifetime in widgets, without claiming secure memory erasure.
+UPnP navigation clears previous click targets before a new server/folder reply,
+preventing old object IDs from being sent to a newly selected server. Receiver
+validation, host verification and privilege boundaries remain independently
+enforced. No new remote operation or root permission is added.

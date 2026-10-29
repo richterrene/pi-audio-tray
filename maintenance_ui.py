@@ -8,7 +8,7 @@ import volume
 from core import display_text
 from i18n import tr, translate_standard_buttons
 from setup_ui import Task
-from ui_style import LocalizedMessageBox as QMessageBox
+from ui_style import LocalizedMessageBox as QMessageBox, exec_dialog
 
 
 class MaintenanceDialog(QDialog):
@@ -32,7 +32,7 @@ class MaintenanceDialog(QDialog):
         box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         translate_standard_buttons(box)
         box.setDefaultButton(QMessageBox.StandardButton.No)
-        return box.exec() == QMessageBox.StandardButton.Yes
+        return exec_dialog(box) == QMessageBox.StandardButton.Yes
 
     def start(self, operation, callback):
         if self.worker: return
@@ -49,6 +49,7 @@ class MaintenanceDialog(QDialog):
         self.message.setText('\n'.join(display_text(line, 4096) for line in str(value)[:4096].split('\n')))
 
     def failure(self, exc):
+        self.snapshot = None
         self.progress(str(exc))
 
     def finished_task(self):

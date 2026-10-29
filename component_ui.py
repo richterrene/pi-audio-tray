@@ -9,7 +9,7 @@ from core import UnknownHost, trust_host, display_text
 from i18n import tr, translate_standard_buttons
 from setup_ui import Task
 from setup_plan import validate_maintenance
-from ui_style import LocalizedMessageBox as QMessageBox, plain_tooltip
+from ui_style import LocalizedMessageBox as QMessageBox, plain_tooltip, exec_dialog
 
 
 def labels():
@@ -145,9 +145,13 @@ class ComponentsDialog(QDialog):
             box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
             translate_standard_buttons(box)
             box.setDefaultButton(QMessageBox.StandardButton.No)
-            if box.exec() == QMessageBox.StandardButton.Yes:
-                trust_host(exc)
-                self.append(tr('Host key saved. Click Check Pi again.'))
+            if exec_dialog(box) == QMessageBox.StandardButton.Yes:
+                try:
+                    trust_host(exc)
+                except (OSError, ValueError) as error:
+                    self.append(str(error))
+                else:
+                    self.append(tr('Host key saved. Click Check Pi again.'))
         else:
             self.append(str(exc))
 
@@ -215,7 +219,7 @@ class ComponentsDialog(QDialog):
         box.setDefaultButton(QMessageBox.StandardButton.No)
         password = self.password.text()
         self.password.clear()
-        if box.exec() != QMessageBox.StandardButton.Yes:
+        if exec_dialog(box) != QMessageBox.StandardButton.Yes:
             return
         def completed(_):
             self.recheck = True
@@ -224,20 +228,14 @@ class ComponentsDialog(QDialog):
     def audio(self):
         from audio_ui import AudioDialog
         dialog = AudioDialog(self.config, self)
-        from PySide6.QtCore import QTimer
-        QTimer.singleShot(0, dialog.refresh)
-        dialog.exec()
-        dialog.deleteLater()
+        exec_dialog(dialog, dialog.refresh)
         self.check()
 
     def maintenance(self, kind):
         from maintenance_ui import PolicyDialog, UpdatesDialog
-        from PySide6.QtCore import QTimer
         from dsp_ui import DspInstallDialog
         dialog = {'policy': PolicyDialog, 'updates': UpdatesDialog, 'dsp': DspInstallDialog}[kind](self.config, self)
-        QTimer.singleShot(0, dialog.refresh)
-        dialog.exec()
-        dialog.deleteLater()
+        exec_dialog(dialog, dialog.refresh)
         self.check()
 
     def reject(self):

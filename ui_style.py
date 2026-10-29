@@ -2,12 +2,44 @@
 import html
 from pathlib import Path
 import sys
-from PySide6.QtCore import QEvent, Qt
+from PySide6.QtCore import QEvent, Qt, QTimer
 from PySide6.QtGui import QCursor, QGuiApplication, QIcon, QPainter, QPixmap, QPalette
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (QApplication, QDialog, QDialogButtonBox, QInputDialog,
-    QLabel, QLineEdit, QMenu, QMessageBox, QProxyStyle, QPushButton, QSizePolicy, QStyle, QStyleFactory)
+    QLabel, QLineEdit, QListWidget, QMenu, QMessageBox, QProxyStyle, QPushButton, QSizePolicy, QStyle, QStyleFactory)
 from i18n import tr, translate_standard_buttons
+
+
+class ActivatedListWidget(QListWidget):
+    """Return activates the row without also firing QDialog's default button."""
+    def keyPressEvent(self, event):
+        if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            item = self.currentItem()
+            if item is not None and item.flags() & Qt.ItemFlag.ItemIsEnabled:
+                self.itemActivated.emit(item)
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+
+def exec_dialog(dialog, initial_read=None):
+    """Own a one-shot modal dialog and cancel its deferred read on every exit.
+
+    A zero-delay callback can outlive exec() (early close or an exception). Keep
+    it independent of the C++ object's lifetime so it cannot start a late worker.
+    Callers may read results immediately after return, before deferred deletion.
+    """
+    active = True
+    def start_read():
+        if active:
+            initial_read()
+    try:
+        if initial_read is not None:
+            QTimer.singleShot(0, start_read)
+        return dialog.exec()
+    finally:
+        active = False
+        dialog.deleteLater()
 
 
 def plain_tooltip(text):
@@ -78,8 +110,12 @@ def get_text(parent, title, label, echo=QLineEdit.EchoMode.Normal, text=''):
     dialog.setTextValue(text)
     dialog.setOkButtonText(tr('OK'))
     dialog.setCancelButtonText(tr('Cancel'))
-    accepted = dialog.exec() == QDialog.DialogCode.Accepted
-    return dialog.textValue(), accepted
+    try:
+        accepted = dialog.exec() == QDialog.DialogCode.Accepted
+        return (dialog.textValue() if accepted else ''), accepted
+    finally:
+        dialog.setTextValue('')
+        dialog.deleteLater()
 
 PATHS = {
     'equalizer': '<path d="M6 3v5m0 4v9M12 3v10m0 4v4M18 3v2m0 4v12M3 8h6v4H3zM9 13h6v4H9zM15 5h6v4h-6z"/>',

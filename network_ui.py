@@ -2,8 +2,10 @@
 import threading
 from i18n import tr
 from PySide6.QtCore import QObject, Qt, Signal
-from PySide6.QtWidgets import QDialog, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QPushButton, QVBoxLayout
+from PySide6.QtWidgets import QDialog, QHBoxLayout, QLabel, QListWidgetItem, QPushButton, QVBoxLayout
 from core import connection_key, display_text, music_request
+
+from ui_style import ActivatedListWidget
 
 READ_ACTIONS = frozenset(('network_sources', 'network_discover', 'network_browse'))
 
@@ -21,6 +23,7 @@ class NetworkWindow(QDialog):
         self.history = [('0', tr('Library'))]
         self.offset = 0
         self.more = False
+        self.page_context = None
         self.busy = False
         self.pending = []
         self.connection = None
@@ -31,9 +34,9 @@ class NetworkWindow(QDialog):
                       'Tracks and albums join the same queue as USB music and the web player.'))
         note.setTextFormat(Qt.TextFormat.PlainText)
         layout.addWidget(note)
-        self.sources = QListWidget()
+        self.sources = ActivatedListWidget()
         self.sources.setMaximumHeight(130)
-        self.sources.itemDoubleClicked.connect(self.open_source)
+        self.sources.itemActivated.connect(self.open_source)
         layout.addWidget(self.sources)
         bar = QHBoxLayout()
         for title, callback in [(tr('Discover servers'), lambda: self.request({'action': 'network_discover'})),
@@ -46,8 +49,8 @@ class NetworkWindow(QDialog):
         self.location = QLabel(tr('Double-click an enabled server to browse.'))
         self.location.setTextFormat(Qt.TextFormat.PlainText)
         layout.addWidget(self.location)
-        self.items = QListWidget()
-        self.items.itemDoubleClicked.connect(self.activate)
+        self.items = ActivatedListWidget()
+        self.items.itemActivated.connect(self.activate)
         layout.addWidget(self.items)
         bar = QHBoxLayout()
         for title, callback in [(tr('Up'), self.up), (tr('Previous page'), lambda: self.page(-100)),
@@ -66,6 +69,7 @@ class NetworkWindow(QDialog):
         self.hide()
         self.pending.clear()
         self.connection, self.server = None, None
+        self.page_context = None
         self.history = [('0', tr('Library'))]
         self.offset, self.more = 0, False
         self.sources.clear()
@@ -141,6 +145,9 @@ class NetworkWindow(QDialog):
                 rows = result.get('items')
                 if not isinstance(rows, list) or len(rows) > 100:
                     raise ValueError(tr('Invalid network music page'))
+                selected = self.items.currentItem()
+                selected_id = selected.data(Qt.ItemDataRole.UserRole)['object'] if selected else None
+                scroll = self.items.verticalScrollBar().value()
                 self.items.clear()
                 for row in rows:
                     if not isinstance(row, dict) or not isinstance(row.get('object'), str) or not isinstance(row.get('Title'), str):
@@ -151,6 +158,10 @@ class NetworkWindow(QDialog):
                     item = QListWidgetItem(title)
                     item.setData(Qt.ItemDataRole.UserRole, row)
                     self.items.addItem(item)
+                    if row['object'] == selected_id:
+                        self.items.setCurrentItem(item)
+                self.items.verticalScrollBar().setValue(scroll)
+                self.page_context = (request['server'], request['object'], request['offset'])
                 self.more = result.get('more') is True
                 self.location.setText(display_text(self.server['name']) + ' / ' + ' / '.join(display_text(x[1]) for x in self.history) + tr(' · {count} entries', count=len(rows)))
                 self.message.setText(tr('Double-click a folder to browse or a track to play. Add an album or track to the shared queue.'))
@@ -194,6 +205,9 @@ class NetworkWindow(QDialog):
 
     def browse(self):
         if self.server:
+            context = (self.server['id'], self.history[-1][0], self.offset)
+            if context != self.page_context:
+                self.items.clear()
             self.more = False
             self.request({'action': 'network_browse', 'server': self.server['id'], 'object': self.history[-1][0], 'offset': self.offset})
 
