@@ -417,6 +417,11 @@ The music HTTPS listener is private-IPv4-only by access policy; trusted music us
 can control the shared queue. The initial random credential is a protected
 plaintext bootstrap file until the user removes it.
 
+The MPD bridge accepts relative library paths only. Colons in the first path
+component are rejected as possible URI schemes or drive prefixes; colons in
+later folder/file names are allowed. Absolute paths, traversal, backslashes and
+control characters remain rejected before an MPD command is sent.
+
 
 ### Local music review evidence (0.5.0)
 

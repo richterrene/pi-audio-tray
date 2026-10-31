@@ -20,7 +20,9 @@ def quote(value):
 
 def music_path(value):
     quote(value)
-    if value.startswith('/') or ':' in value or '..' in PurePosixPath(value).parts or '\\' in value:
+    # Reject URI schemes and drive prefixes in the first component. Colons in
+    # later components are ordinary filenames within the selected library.
+    if value.startswith('/') or ':' in value.partition('/')[0] or '..' in PurePosixPath(value).parts or '\\' in value:
         raise ValueError('Only relative library paths are allowed')
     return value
 
