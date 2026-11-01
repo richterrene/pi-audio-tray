@@ -1,4 +1,3 @@
-import copy
 import json
 import os
 from pathlib import Path
@@ -296,6 +295,42 @@ class Gui(unittest.TestCase):
         request.assert_not_called()
         self.assertFalse(dialog.timer.isActive())
         dialog.deleteLater()
+
+    def test_close_delivers_command_accepted_during_read_exactly_once(self):
+        import threading
+        from bluetooth_ui import BluetoothDialog
+        entered, release = threading.Event(), threading.Event()
+        calls = []
+        def request(config, value=None):
+            calls.append(value)
+            if value is None:
+                entered.set(); release.wait(2)
+            return snapshot()
+        dialog = BluetoothDialog({'host': 'audio-pi.local', 'username': 'audio'})
+        dialog.show_status(snapshot()); dialog.table.selectRow(0)
+        with patch.object(bluetooth_devices, 'request', side_effect=request):
+            dialog.show(); dialog.refresh()
+            self.wait(entered.is_set)
+            dialog.automatic.click()
+            self.assertIsNotNone(dialog.pending_command)
+            dialog.close_button.click()
+            release.set()
+            self.wait(lambda: dialog.worker is None and not dialog.isVisible())
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(calls[1], {'action': 'automatic', 'adapter': ADAPTER, 'address': MAC, 'enabled': True})
+        dialog.deleteLater()
+
+    def test_failed_read_disables_stale_output_selection(self):
+        from bluetooth_ui import BluetoothDialog
+        dialog = BluetoothDialog({'host': 'audio-pi.local', 'username': 'audio'})
+        dialog.show_status(snapshot())
+        with patch.object(bluetooth_devices, 'request', side_effect=RuntimeError('Fixture error')):
+            dialog.show(); dialog.refresh()
+            self.wait(lambda: dialog.worker is None)
+        self.assertFalse(dialog.output.isEnabled())
+        self.assertFalse(dialog.output_button.isEnabled())
+        self.assertFalse(dialog.connect_button.isEnabled())
+        dialog.close(); dialog.deleteLater()
 
     def test_failed_read_does_not_leave_close_guard(self):
         from bluetooth_ui import BluetoothDialog

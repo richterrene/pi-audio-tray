@@ -3,7 +3,6 @@ from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QHeaderView, QHBoxLayout, QLabel,
     QLineEdit, QPushButton, QTableWidget, QTableWidgetItem)
 import bluetooth_devices as bluetooth
-from core import display_text
 from i18n import tr
 from maintenance_ui import MaintenanceDialog
 
@@ -86,8 +85,8 @@ class BluetoothDialog(MaintenanceDialog):
         idle = (self.worker is None or self.reading) and self.pending_pair is None and self.pending_command is None and not self.close_after
         device = self.selected()
         ready = bool(idle and self.snapshot and self.snapshot['powered'])
-        self.output.setEnabled(idle)
-        self.output_button.setEnabled(bool(idle and self.output.currentData()))
+        self.output.setEnabled(bool(idle and self.snapshot))
+        self.output_button.setEnabled(bool(idle and self.snapshot and self.output.currentData()))
         self.scan_button.setEnabled(ready)
         self.refresh_button.setEnabled(idle)
         self.install_button.setEnabled(idle and self.worker is None)
@@ -209,12 +208,13 @@ class BluetoothDialog(MaintenanceDialog):
     def finished_task(self):
         self.reading = False
         super().finished_task()
-        if self.close_after:
-            self.pending_command = None
-            self.reject()
-        elif self.pending_command is not None:
+        # A command already accepted during a read belongs to this Pi/config.
+        # Drain it before closing, just like an already-running write.
+        if self.pending_command is not None:
             value, self.pending_command = self.pending_command, None
             self.start(lambda _: bluetooth.request(self.config, value), self.show_status)
+        elif self.close_after:
+            self.reject()
 
     def showEvent(self, event):
         super().showEvent(event)
