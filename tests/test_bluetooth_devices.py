@@ -1,5 +1,6 @@
 import copy
 import json
+import os
 from pathlib import Path
 import tempfile
 import types
@@ -88,6 +89,7 @@ class Protocol(unittest.TestCase):
         self.assertIn('CapabilityBoundingSet=\n', unit)
 
 
+@unittest.skipUnless(os.name == 'posix', 'Receiver settings require POSIX file permissions')
 class Settings(unittest.TestCase):
     def test_roundtrip_private_and_link_rejection(self):
         with tempfile.TemporaryDirectory() as folder, patch.object(pi_bluetooth, 'DIRECTORY', Path(folder) / '.config/pi-audio-tray'):
@@ -171,6 +173,30 @@ class Manager(unittest.TestCase):
         self.manager.reconcile()
         self.assertTrue(self.device['Blocked'])
 
+    def test_output_disappearance_never_moves_streams(self):
+        self.manager.command = Mock()
+        with self.assertRaises(ValueError): self.manager.set_output('missing_sink')
+        self.manager.command.assert_not_called()
+
+    def test_output_change_preserves_enabled_eq_curve_and_skips_filter_stream(self):
+        with tempfile.TemporaryDirectory() as folder, patch.object(pi_bluetooth, 'ROOT', Path(folder)):
+            (Path(folder) / 'pi-dsp').touch()
+            self.manager.outputs = lambda: [{'name': 'bluez_output.example'}]
+            settings = {'enabled': True, 'target': 'alsa_output.example', 'gains': [1]*10, 'preamp': -2}
+            def command(*args, data=None):
+                if args[-1] == 'status': return json.dumps({'settings': settings})
+                if args[-1] == 'sink-inputs': return json.dumps([
+                    {'index': 1, 'properties': {'node.name': 'spotify'}},
+                    {'index': 2, 'properties': {'node.name': 'pi_audio.dsp.output'}}])
+                return '{}'
+            self.manager.command = Mock(side_effect=command)
+            self.manager.set_output('bluez_output.example')
+            configure = [c for c in self.manager.command.call_args_list if c.args[-1] == 'configure'][0]
+            self.assertEqual(json.loads(configure.kwargs['data']), {**settings, 'target': 'bluez_output.example'})
+            moves = [c for c in self.manager.command.call_args_list if 'move-sink-input' in c.args]
+            self.assertEqual(len(moves), 1)
+            self.assertEqual(moves[0].args[-2:], ('1', 'bluez_output.example'))
+
     def test_bluez_failure_reports_degraded_and_retries(self):
         self.manager.objects = Mock(side_effect=RuntimeError('BlueZ restarting'))
         self.assertTrue(self.manager.reconcile())
@@ -231,6 +257,22 @@ class Gui(unittest.TestCase):
                 self.wait(lambda: dialog.worker is None and not dialog.isVisible())
                 self.assertFalse(dialog.timer.isActive())
             dialog.deleteLater()
+
+    def test_close_rejects_child_pairing_confirmations_before_deletion(self):
+        from PySide6.QtWidgets import QWidget, QDialog
+        from bluetooth_ui import BluetoothDialog
+        parent = QWidget()
+        parent.session = object()
+        parent.stop_pairing = Mock()
+        dialog = BluetoothDialog({'host': 'audio-pi.local', 'username': 'audio'}, parent)
+        box = QDialog(dialog)
+        parent.dialogs = {'1': box}
+        box.show(); dialog.show()
+        dialog.close_button.click()
+        self.assertFalse(box.isVisible())
+        self.assertEqual(parent.dialogs, {})
+        parent.stop_pairing.assert_called_once()
+        dialog.deleteLater(); parent.deleteLater()
 
     def test_hidden_dialog_does_not_poll(self):
         from bluetooth_ui import BluetoothDialog

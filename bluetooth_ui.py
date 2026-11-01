@@ -232,7 +232,14 @@ class BluetoothDialog(MaintenanceDialog):
             self.progress(tr('Finishing Bluetooth operation before closing…'))
             return
         parent = self.parentWidget()
-        if parent is not None and getattr(parent, 'session', None): parent.stop_pairing()
+        if parent is not None:
+            # Pairing confirmations are parented here while this dialog is modal.
+            # Reject/remove them before Qt deletes their parent; late agent events
+            # must not call methods on already-deleted QMessageBox objects.
+            for box in list(getattr(parent, 'dialogs', {}).values()):
+                box.reject()
+            if hasattr(parent, 'dialogs'): parent.dialogs.clear()
+            if getattr(parent, 'session', None): parent.stop_pairing()
         super().reject()
 
     def closeEvent(self, event):
