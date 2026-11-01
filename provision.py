@@ -11,7 +11,7 @@ from setup_plan import validate_plan
 
 ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 # Explicit manifest: never upload a checkout, local configuration or __pycache__.
-PI_FILES = ('setup-probe.py', 'component-probe.py', 'setup-receiver.py', 'soloist-launch.py',
+PI_FILES = ('bluetooth-privacy.py', 'pi-audio-bluetooth-privacy.service', 'setup-probe.py', 'component-probe.py', 'setup-receiver.py', 'soloist-launch.py',
     'soloist.service', 'soloist-update.py', 'soloist-update.service', 'soloist-update.timer',
     '50-audio-receiver.conf', '52pi-audio-upgrades', 'needrestart.conf',
     'apt-daily-timer.conf', 'apt-upgrade-timer.conf', 'reboot-if-needed.py',

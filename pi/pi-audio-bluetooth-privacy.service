@@ -1,0 +1,12 @@
+[Unit]
+Description=Keep Bluetooth pairing disabled at startup
+Requires=bluetooth.service
+After=bluetooth.service
+PartOf=bluetooth.service
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+TimeoutStartSec=45
+ExecStart=/usr/bin/python3 -I /usr/local/lib/pi-audio-tray/bluetooth-privacy
+[Install]
+WantedBy=bluetooth.service
