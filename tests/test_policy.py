@@ -156,6 +156,16 @@ class Arbitration(unittest.TestCase):
         self.assertEqual(trace.feed(b'\n125 {"type":"playback_changed","status":"paused"}\n'), [False])
         self.assertFalse(hasattr(trace, 'track'))
 
+    def test_outgoing_headphone_transport_is_not_an_incoming_source(self):
+        watcher = pi_policy.BluetoothEvents()
+        path = '/org/bluez/hci0/dev_00_11_22_33_44_55/sep1/fd0'
+        watcher.changed('org.bluez.MediaTransport1', {'State': 'active',
+            'UUID': '0000110a-0000-1000-8000-00805f9b34fb'}, [], path=path)
+        self.assertEqual(watcher.events, [])
+        watcher.changed('org.bluez.MediaTransport1', {'State': 'active',
+            'UUID': '0000110b-0000-1000-8000-00805f9b34fb'}, [], path=path)
+        self.assertEqual(watcher.events, [('bluetooth:00_11_22_33_44_55', True)])
+
     def test_bluez_signal_extracts_only_valid_device_play_state(self):
         watcher = pi_policy.BluetoothEvents()
         watcher.changed('org.bluez.MediaPlayer1', {'Status': 'playing'}, [], path='/org/bluez/hci0/dev_00_11_22_33_44_55/player0')

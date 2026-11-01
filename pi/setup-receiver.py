@@ -247,7 +247,7 @@ def main():
                 policy_enabled = subprocess.run([*usercmd, '/usr/bin/systemctl', '--user', 'is-enabled', '--quiet', 'pi-audio-policy.service'], stdin=subprocess.DEVNULL, stdout=LOG, stderr=LOG, timeout=10).returncode == 0
                 user('systemctl', '--user', 'stop', 'pi-audio-policy.service')
             root = safe_dir('/usr/local/lib/pi-audio-tray')
-            for source, target, mode in [('pi_helper.py', 'pi-helper', 0o755), ('pi_music.py', 'pi-music', 0o755), ('pi_upnp.py', 'pi_upnp.py', 0o644), ('pi_audio.py', 'pi-audio', 0o755), ('pi_policy.py', 'pi_policy.py', 0o755), ('soloist-launch.py', 'soloist-launch', 0o755), ('soloist-update.py', 'soloist-update', 0o755)]:
+            for source, target, mode in [('pi_bluetooth.py', 'pi-bluetooth', 0o755), ('bluetooth_schema.py', 'bluetooth_schema.py', 0o644), ('pi_helper.py', 'pi-helper', 0o755), ('pi_music.py', 'pi-music', 0o755), ('pi_upnp.py', 'pi_upnp.py', 0o644), ('pi_audio.py', 'pi-audio', 0o755), ('pi_policy.py', 'pi_policy.py', 0o755), ('soloist-launch.py', 'soloist-launch', 0o755), ('soloist-update.py', 'soloist-update', 0o755)]:
                 install(source, root / target, mode)
             write('/etc/pi-audio-tray/soloist-user', account.pw_name + '\n')
             for name in ('soloist-update.service', 'soloist-update.timer'):
@@ -255,7 +255,9 @@ def main():
             user('install', '-d', '-m', '700', str(home / '.config/soloist'))
             userfile('soloist.service', home / '.config/systemd/user/soloist.service')
             public_dir('/usr/local/lib/systemd/user')
+            install('pi-audio-bluetooth.service', '/usr/local/lib/systemd/user/pi-audio-bluetooth.service')
             install('pi-audio-policy.service', '/usr/local/lib/systemd/user/pi-audio-policy.service')
+            userfile('60-bluetooth-output.conf', home / '.config/wireplumber/wireplumber.conf.d/60-bluetooth-output.conf')
             userfile('50-audio-receiver.conf', home / '.config/wireplumber/wireplumber.conf.d/50-audio-receiver.conf')
             run('usermod', '-aG', 'audio,bluetooth', account.pw_name)
             run('loginctl', 'enable-linger', account.pw_name)
@@ -269,6 +271,9 @@ def main():
             install('pi-audio-bluetooth-privacy.service', '/etc/systemd/system/pi-audio-bluetooth-privacy.service')
             run('systemctl', 'daemon-reload')
             run('systemctl', 'enable', '--now', 'pi-audio-bluetooth-privacy.service')
+            safe_dir('/var/lib/pi-audio-bluetooth', 0o700)
+            write('/var/lib/pi-audio-bluetooth/owner', account.pw_name + '\n', 0o600)
+            user('systemctl', '--user', 'enable', '--now', 'pi-audio-bluetooth.service')
             run('systemctl', 'enable', '--now', 'soloist-update.timer')
             run('systemctl', 'start', 'soloist-update.service')
             if maintenance:

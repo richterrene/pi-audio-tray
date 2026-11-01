@@ -16,6 +16,7 @@ optional HTTPS player keep running independently of the desktop app.
 | Source policy | `maintenance_ui.py`, `pi_policy.py` | Opt-in per-user arbitration, event-driven source state and owned-mute recovery |
 | System updates | `updates.py`, `pi/system-updates.py` | Cached inventory and two fixed privileged operations under the existing update policy |
 | Master volume | `volume.py`, `pi/volume-control.py` | Normal-user PipeWire sink identity validation, coalesced writes and a 100% ceiling |
+| Bluetooth device management | `bluetooth_schema.py`, `bluetooth_devices.py`, `bluetooth_ui.py`, `pi_bluetooth.py` | Normal-user session D-Bus, bounded SSH JSON, per-adapter preferences; existing approved pairing agent |
 | Receiver status/pairing | `pi_helper.py` | Allowlisted health/stat requests and bounded pairing window |
 | Receiver music | `pi_music.py`, `pi_upnp.py` | MPD Unix socket; validated media paths and opt-in pinned LAN sources |
 | Web shutdown | `pi/web_login.py`, `pi/web_power.py`, private socket/units | Opt-in session/CSRF/one-use intent; fixed root broker with setup/package guards |

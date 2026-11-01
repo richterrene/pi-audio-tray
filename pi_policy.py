@@ -324,6 +324,17 @@ class BluetoothEvents:
         if interface == 'org.bluez.MediaPlayer1' and str(changed.get('Status', '')) in ('playing', 'paused', 'stopped'):
             state = str(changed['Status']) == 'playing'
         elif interface == 'org.bluez.MediaTransport1' and str(changed.get('State', '')) in ('active', 'idle'):
+            # Transport UUID describes the LOCAL endpoint. A source transport
+            # sends to headphones and must never compete as an incoming source.
+            uuid = changed.get('UUID')
+            if uuid is None and self.bus is not None:
+                try:
+                    import dbus
+                    uuid = dbus.Interface(self.bus.get_object(self.owner, path),
+                        'org.freedesktop.DBus.Properties').Get(interface, 'UUID', timeout=2)
+                except Exception:
+                    return  # Graph events remain the fallback when identity is unavailable.
+            if str(uuid).lower() != '0000110b-0000-1000-8000-00805f9b34fb': return
             state = str(changed['State']) == 'active'
         if state is not None and len(self.events) < 128:
             self.events.append(('bluetooth:' + match.group(1), state))

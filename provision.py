@@ -13,11 +13,11 @@ ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 # Explicit manifest: never upload a checkout, local configuration or __pycache__.
 PI_FILES = ('bluetooth-privacy.py', 'pi-audio-bluetooth-privacy.service', 'setup-probe.py', 'component-probe.py', 'setup-receiver.py', 'soloist-launch.py',
     'soloist.service', 'soloist-update.py', 'soloist-update.service', 'soloist-update.timer',
-    '50-audio-receiver.conf', '52pi-audio-upgrades', 'needrestart.conf',
+    'pi-audio-bluetooth.service', '60-bluetooth-output.conf', '50-audio-receiver.conf', '52pi-audio-upgrades', 'needrestart.conf',
     'apt-daily-timer.conf', 'apt-upgrade-timer.conf', 'reboot-if-needed.py',
     'pi-audio-reboot.service', 'pi-audio-reboot.timer', 'pi-audio-policy.service', 'system-updates.py', 'install-music.py',
     'install-web-login.py', 'web_login.py', 'web_login_config.py', 'renew-music-tls.py')
-TOP_FILES = ('setup_plan.py', 'pi_helper.py', 'pi_music.py', 'pi_upnp.py', 'pi_audio.py', 'pi_policy.py')
+TOP_FILES = ('pi_bluetooth.py', 'bluetooth_schema.py', 'setup_plan.py', 'pi_helper.py', 'pi_music.py', 'pi_upnp.py', 'pi_audio.py', 'pi_policy.py')
 
 
 def preflight(config):

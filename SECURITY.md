@@ -631,3 +631,14 @@ UPnP navigation clears previous click targets before a new server/folder reply,
 preventing old object IDs from being sent to a newly selected server. Receiver
 validation, host verification and privilege boundaries remain independently
 enforced. No new remote operation or root permission is added.
+
+## Bluetooth device management (development)
+
+See [Bluetooth boundaries](docs/BLUETOOTH.md#boundaries-and-validation). The new
+normal-user session-bus service controls only validated BlueZ devices and fixed
+audio-routing operations; no additional runtime sudo or network port is granted.
+Its private per-account preferences contain device/adapter addresses. BlueZ keeps
+pairing keys. Auto-off uses Blocked between manual connections; Disconnect pauses
+reconnection until explicit Connect/preference change or manager restart. Service
+failures may prevent policy enforcement, which is reported as degraded. Other
+processes with the audio account’s privileges can operate its controls.

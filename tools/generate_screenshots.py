@@ -20,6 +20,7 @@ from app import Settings, TrayApp
 from music_ui import MusicWindow
 from network_ui import NetworkWindow
 from setup_ui import SetupDialog
+from bluetooth_ui import BluetoothDialog
 from audio_ui import AudioDialog
 from dsp_ui import DspDialog, DspInstallDialog
 from component_ui import ComponentsDialog
@@ -210,6 +211,20 @@ def main():
         dialog.show()
         capture(dialog, output / filename)
         dialog.hide()
+    bluetooth = BluetoothDialog(window.config, window)
+    bluetooth.show_status({'protocol': 1, 'adapter': '10:20:30:40:50:60', 'powered': True,
+        'discovering': False, 'degraded': False,
+        'devices': [{'address': 'AA:BB:CC:DD:EE:FF', 'name': 'Studio headphones',
+            'role': 'output', 'paired': True, 'connected': True, 'automatic': True, 'paused': False},
+            {'address': '11:22:33:44:55:66', 'name': 'Phone', 'role': 'source',
+             'paired': True, 'connected': False, 'automatic': False, 'paused': False}],
+        'outputs': [{'name': 'alsa_output.example', 'description': 'Living room speakers', 'default': True},
+                    {'name': 'bluez_output.AA_BB_CC_DD_EE_FF.1', 'description': 'Studio headphones', 'default': False}]})
+    bluetooth.table.selectRow(0)
+    bluetooth.show()
+    bluetooth.timer.stop()
+    capture(bluetooth, output / 'bluetooth-devices.png')
+    bluetooth.hide()
     print('Captured desktop and music windows with fictional data only.')
 
 
