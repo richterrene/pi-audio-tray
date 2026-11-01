@@ -287,6 +287,10 @@ class TrayApp(QWidget):
         self.off_button.clicked.connect(self.stop_pairing)
         controls.addWidget(self.pair_button)
         controls.addWidget(self.off_button)
+        self.bluetooth_button = QPushButton(tr('Bluetooth devices…'))
+        self.bluetooth_button.setIcon(symbol('bluetooth'))
+        self.bluetooth_button.clicked.connect(lambda: self.receiver_dialog('bluetooth'))
+        controls.addWidget(self.bluetooth_button)
         layout.addLayout(controls)
         extras = QHBoxLayout()
         for label, glyph, callback in [(tr('Music…'), 'music', self.open_music),

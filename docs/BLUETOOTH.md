@@ -1,6 +1,7 @@
 # Bluetooth sources and outputs
 
-Open **Bluetooth → Bluetooth devices…** for the selected Pi. This is an
+Open **Bluetooth → Bluetooth devices…** in the tray menu, or use the
+**Bluetooth devices…** button in the status window, for the selected Pi. This is an
 unreleased development feature, separate from the 0.10.1 stable candidate.
 The first implementation manages the first BlueZ adapter (ordered by object
 path); it is not a multi-adapter router. The selected adapter address is checked
@@ -59,8 +60,8 @@ address. The tray profile stores no Bluetooth keys; pairing keys stay in BlueZ.
   preference itself is retained.
 
 Before the first explicit preference/connect/disconnect operation, existing
-paired devices retain their BlueZ Trusted/Blocked behavior. Other Bluetooth
-managers can change global BlueZ properties; for managed devices this service
+paired devices retain their BlueZ Trusted/Blocked behavior. Blocked is device-wide and also affects non-audio profiles of that device.
+Other Bluetooth managers can change global BlueZ properties; for managed devices this service
 reapplies its saved policy. An enforcement failure is shown as degraded rather
 than claiming the preference is guaranteed. Do not run competing policy managers
 for the same adapter. The manager must run for enforcement; disabling its service
