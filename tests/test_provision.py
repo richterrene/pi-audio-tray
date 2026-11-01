@@ -227,7 +227,10 @@ class InstallerStages(unittest.TestCase):
         self.assertNotIn('NOPASSWD: ALL', rules)
         self.assertTrue(any(c[:2] == ('visudo', '-cf') for c in commands))
         self.assertIn('hidepid=2', files['/etc/fstab'][0])
-        self.assertIn('pairable off', files['/etc/systemd/system/pi-audio-bluetooth-privacy.service'][0])
+        privacy_unit = files['/etc/systemd/system/pi-audio-bluetooth-privacy.service'][0]
+        self.assertIn('TimeoutStartSec=45', privacy_unit)
+        self.assertIn('/usr/local/lib/pi-audio-tray/bluetooth-privacy', privacy_unit)
+        self.assertEqual(files['/usr/local/lib/pi-audio-tray/bluetooth-privacy'][1], 0o755)
         self.assertFalse(any('install-music.py' in ' '.join(c) for c in commands))
         self.assertFalse(any('cockpit-ws' in c for c in commands))
         reboot_enable = next(i for i,c in enumerate(commands) if c[:3] == ('systemctl', 'enable', '--now') and 'pi-audio-reboot.timer' in c)

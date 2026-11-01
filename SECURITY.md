@@ -289,6 +289,16 @@ Windows 11 computer. [Windows details](docs/WINDOWS.md).
   matches the prompt. For legitimate rotation, verify first, back up the relevant
   known_hosts file, then remove only the old host entry. Never bypass verification
   with automatic acceptance or delete a changed key before investigating it.
+- The music installer masks the packaged myMPD user unit for the selected audio
+  account before installing/updating the web package. It uses the isolated system
+  service instead, and refuses to replace an already active user daemon. This
+  does not globally disable other users' myMPD services.
+- The startup privacy service waits up to 30 seconds for BlueZ/controllers, with
+  a 45-second systemd limit. It attempts both privacy switches on every visible
+  adapter and verifies that pairing and discoverability are off before/after
+  powering adapters on. A missing/unresponsive controller reports failure, rather
+  than silently ignoring privacy initialization. This one-shot service does not
+  close later user-requested pairing windows or monitor hot-plugged adapters.
 - A pairing window is three minutes, with BlueZ timeouts as a fallback. Normal
   shutdown, channel loss, and signals attempt closure. SIGKILL, daemon failure,
   stalled D-Bus/output or other agents can prevent cleanup; reconnect and verify
@@ -621,3 +631,14 @@ UPnP navigation clears previous click targets before a new server/folder reply,
 preventing old object IDs from being sent to a newly selected server. Receiver
 validation, host verification and privilege boundaries remain independently
 enforced. No new remote operation or root permission is added.
+
+## Bluetooth device management (development)
+
+See [Bluetooth boundaries](docs/BLUETOOTH.md#boundaries-and-validation). The new
+normal-user session-bus service controls only validated BlueZ devices and fixed
+audio-routing operations; no additional runtime sudo or network port is granted.
+Its private per-account preferences contain device/adapter addresses. BlueZ keeps
+pairing keys. Auto-off uses Blocked between manual connections; Disconnect pauses
+reconnection until explicit Connect/preference change or manager restart. Service
+failures may prevent policy enforcement, which is reported as degraded. Other
+processes with the audio account’s privileges can operate its controls.

@@ -287,6 +287,10 @@ class TrayApp(QWidget):
         self.off_button.clicked.connect(self.stop_pairing)
         controls.addWidget(self.pair_button)
         controls.addWidget(self.off_button)
+        self.bluetooth_button = QPushButton(tr('Bluetooth devices…'))
+        self.bluetooth_button.setIcon(symbol('bluetooth'))
+        self.bluetooth_button.clicked.connect(lambda: self.receiver_dialog('bluetooth'))
+        controls.addWidget(self.bluetooth_button)
         layout.addLayout(controls)
         extras = QHBoxLayout()
         for label, glyph, callback in [(tr('Music…'), 'music', self.open_music),
@@ -325,7 +329,8 @@ class TrayApp(QWidget):
             item.triggered.connect(self.open_window)
             self.menu_rows[key] = item
         self.menu.addSeparator()
-        pairing_menu = self.menu.submenu(tr('Pairing'), symbol('bluetooth'))
+        pairing_menu = self.menu.submenu(tr('Bluetooth'), symbol('bluetooth'))
+        pairing_menu.addAction(tr('Bluetooth devices…'), lambda: self.receiver_dialog('bluetooth'))
         self.on_action = pairing_menu.addAction(tr('Enable pairing · 3 min'), self.start_pairing)
         self.off_action = pairing_menu.addAction(tr('Disable pairing'), self.stop_pairing)
         self.profile_menu = self.menu.submenu(tr('Switch Pi'))
@@ -753,9 +758,10 @@ class TrayApp(QWidget):
         if not self.config['host'] or not self.config['username']:
             self.settings()
             return
-        if self.session or self.busy - {'poll'} or self.power_state:
+        if (self.session and kind != 'bluetooth') or self.busy - {'poll'} or self.power_state:
             plain_information(self, tr('Pi operation active'), tr('Finish the current Pi operation before setup.'))
             return
+        from bluetooth_ui import BluetoothDialog
         from audio_ui import AudioDialog
         from component_ui import ComponentsDialog
         from dsp_ui import DspDialog
@@ -766,7 +772,7 @@ class TrayApp(QWidget):
         self.timer.stop()
         dialog = None
         try:
-            dialog = {'audio': AudioDialog, 'components': ComponentsDialog, 'policy': PolicyDialog, 'updates': UpdatesDialog, 'volume': VolumeDialog, 'dsp': DspDialog}[kind](self.config, self)
+            dialog = {'bluetooth': BluetoothDialog, 'audio': AudioDialog, 'components': ComponentsDialog, 'policy': PolicyDialog, 'updates': UpdatesDialog, 'volume': VolumeDialog, 'dsp': DspDialog}[kind](self.config, self)
             self.receiver_window = dialog
             exec_dialog(dialog, dialog.check if kind == 'components' else dialog.refresh)
         finally:
@@ -829,8 +835,9 @@ class TrayApp(QWidget):
         self.job('shutdown', lambda: shutdown_pi(config))
         self.enable_controls()
 
-    def start_pairing(self):
-        if self.session or self.busy - {'poll'} or self.power_state:
+    def start_pairing(self, from_bluetooth=False):
+        allowed = {'poll', 'provision'} if from_bluetooth and self.receiver_window is not None else {'poll'}
+        if self.session or self.busy - allowed or self.power_state:
             return
         self.session = PairSession(self.config, self.events.pairing.emit)
         self.row('pairing', tr('Starting…'))
@@ -866,7 +873,7 @@ class TrayApp(QWidget):
                 text += tr('\n\nConfirm the same code on your device: {code}', code=event['code'])
             text += tr('\n\nApproved devices will be trusted for future connections.')
             dialog = QMessageBox(QMessageBox.Icon.Question, tr('Bluetooth pairing request'), text,
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, self)
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, self.receiver_window or self)
             translate_standard_buttons(dialog)
             dialog.setDefaultButton(QMessageBox.StandardButton.No)
             dialog.setTextFormat(Qt.TextFormat.PlainText)
@@ -1043,6 +1050,8 @@ def main():
     window = TrayApp(app)
     if '--show' in sys.argv or not QSystemTrayIcon.isSystemTrayAvailable():
         window.open_window()
+    if '--bluetooth' in sys.argv:
+        QTimer.singleShot(0, lambda: window.receiver_dialog('bluetooth'))
     return app.exec()
 
 

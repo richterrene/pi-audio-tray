@@ -596,3 +596,12 @@ credentials. **It does not run the full installer, normal systemd boot, Spotify
 authentication or physical audio/Bluetooth tests.** These checks improve software
 coverage; they do not certify every Pi model or replace a blank-Pi installation
 test. See the guide for the measured results and emulator limitations.
+
+### Bluetooth device management (development)
+
+The Bluetooth menu now provides source/output discovery, pairing, connected-device
+status, Connect/Disconnect, per-device automatic connection preferences and an
+explicit audio-output selector. Existing receivers need the dialog’s one-time
+Bluetooth management installation. See [Bluetooth setup, behavior and limits](docs/BLUETOOTH.md).
+
+![Bluetooth device management](assets/screenshots/bluetooth-devices.png)

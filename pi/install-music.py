@@ -44,6 +44,24 @@ def directory(path, mode=0o755, uid=0, gid=0):
     os.chown(path, uid, gid)
 
 
+def mask_packaged_user_mympd(user):
+    """Keep the package's per-user daemon from competing with the isolated unit."""
+    env = dict(os.environ, XDG_RUNTIME_DIR=f'/run/user/{user.pw_uid}',
+               DBUS_SESSION_BUS_ADDRESS=f'unix:path=/run/user/{user.pw_uid}/bus')
+    run('loginctl', 'enable-linger', user.pw_name)
+    run('systemctl', 'start', f'user@{user.pw_uid}.service')
+    command = ['runuser', '-u', user.pw_name, '--', '/usr/bin/systemctl', '--user']
+    active = subprocess.run([*command, 'is-active', '--quiet', 'mympd.service'],
+                            env=env, check=False, stdin=subprocess.DEVNULL,
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    if active.returncode == 0:
+        raise RuntimeError('User myMPD is already active; integrate manually instead')
+    run(*command, 'mask', 'mympd.service', env=env)
+    # It may not exist yet on a fresh install. Clear only this stale failure if loaded.
+    subprocess.run([*command, 'reset-failed', 'mympd.service'], env=env, check=False,
+                   stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
 def main():
     os.environ['PATH'] = '/usr/sbin:/usr/bin:/sbin:/bin'
     parser = argparse.ArgumentParser(description=__doc__)
@@ -76,6 +94,8 @@ def main():
     for unit in distribution_units:
         if subprocess.run(['systemctl', 'is-active', '--quiet', unit], check=False).returncode == 0:
             parser.error('Distribution music/web services already active; integrate manually instead')
+    if not args.no_web:
+        mask_packaged_user_mympd(user)
     # Prevent distribution postinst scripts from exposing default listeners.
     for unit in distribution_units:
         run('systemctl', 'mask', '--now', unit)

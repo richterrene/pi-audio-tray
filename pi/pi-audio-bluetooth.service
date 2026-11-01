@@ -1,0 +1,17 @@
+[Unit]
+Description=Pi Audio Bluetooth device preferences
+After=wireplumber.service
+[Service]
+Type=dbus
+BusName=org.piaudiotray.Bluetooth1
+TimeoutStartSec=20
+PrivateUsers=yes
+ExecStart=/usr/bin/python3 -I /usr/local/lib/pi-audio-tray/pi-bluetooth daemon
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+UMask=0077
+LimitCORE=0
+[Install]
+WantedBy=default.target
