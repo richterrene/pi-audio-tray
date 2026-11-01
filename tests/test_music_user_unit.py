@@ -1,14 +1,18 @@
 """Avoid duplicate package myMPD user daemons without touching other accounts."""
 import importlib.util
+import os
 from pathlib import Path
 import types
 import unittest
 from unittest.mock import Mock, patch
 
-spec=importlib.util.spec_from_file_location('music_install',Path(__file__).resolve().parents[1]/'pi/install-music.py')
-m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
+if os.name == 'posix':
+    spec = importlib.util.spec_from_file_location('music_install', Path(__file__).resolve().parents[1] / 'pi/install-music.py')
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
 
 
+@unittest.skipUnless(os.name == 'posix', 'Pi user-unit installer requires POSIX accounts')
 class UserUnitTests(unittest.TestCase):
     def setUp(self):
         self.user=types.SimpleNamespace(pw_name='audio',pw_uid=1234)

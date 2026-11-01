@@ -162,6 +162,19 @@ class Manager(unittest.TestCase):
         with self.assertRaises(ValueError): self.action('pair')
         self.assertTrue(self.device['Blocked'])
 
+    def test_stale_disconnected_signal_does_not_cancel_pending_manual_connect(self):
+        key = ADAPTER + '/' + MAC
+        self.manager.saved[key] = False
+        self.manager.policy.connect(key)
+        self.manager.reconcile()
+        self.manager.schedule(pi_bluetooth.DEVICE, {'Connected': False}, [], path=DPATH)
+        self.manager.reconcile()
+        self.assertFalse(self.device['Blocked'])
+        self.manager.schedule(pi_bluetooth.DEVICE, {'Connected': True}, [], path=DPATH)
+        self.manager.schedule(pi_bluetooth.DEVICE, {'Connected': False}, [], path=DPATH)
+        self.manager.reconcile()
+        self.assertTrue(self.device['Blocked'])
+
     def test_short_disconnect_edge_ends_manual_lease(self):
         key = ADAPTER + '/' + MAC
         self.manager.saved[key] = False

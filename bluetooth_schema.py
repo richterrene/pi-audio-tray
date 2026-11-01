@@ -96,6 +96,7 @@ class ConnectionPolicy:
         self.paused = set()
 
     def connect(self, key):
+        self.seen.discard(key)
         self.paused.discard(key)
         self.manual.add(key)
 

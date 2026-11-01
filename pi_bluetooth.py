@@ -241,9 +241,12 @@ class Manager:
         # Preserve short disconnect edges even if a peer reconnects before the
         # next inventory. A manual auto-off lease must end at that edge.
         key = self.device_keys.get(str(path))
-        if interface == DEVICE and 'Connected' in changed and not bool(changed['Connected']) and key:
-            self.policy.manual.discard(key)
-            self.policy.seen.discard(key)
+        if interface == DEVICE and 'Connected' in changed and key:
+            if bool(changed['Connected']):
+                self.policy.seen.add(key)
+            elif key in self.policy.seen:
+                self.policy.manual.discard(key)
+                self.policy.seen.discard(key)
         if not self.refresh_pending:
             self.refresh_pending = True
             self.glib.idle_add(self.scheduled)
