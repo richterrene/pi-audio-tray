@@ -26,6 +26,21 @@ class MusicProtocol(unittest.TestCase):
                 pi_music.dispatch(mpd, request)
         mpd.command.assert_not_called()
 
+    def test_colons_in_nested_music_names_reach_mpd_unchanged(self):
+        for path in ('Network music/Artist/Album: Part 1/song: live.flac',
+                     'USB music/Artist: Band/recording.mp3'):
+            with self.subTest(path=path):
+                mpd = Mock()
+                self.assertEqual(pi_music.dispatch(mpd, {'action': 'add', 'path': path}), {'ok': True})
+                mpd.command.assert_called_once_with('add', path)
+
+    def test_colon_support_does_not_allow_uri_or_traversal_inputs(self):
+        for path in ('smb://server/music', 'file:/etc/passwd', 'C:/Windows/song.mp3',
+                     '1scheme:track', 'Network music/../secret:track',
+                     'Network music/Album: Part 1/../../..', '//server/share:track'):
+            with self.subTest(path=path), self.assertRaises(ValueError):
+                pi_music.dispatch(Mock(), {'action': 'add', 'path': path})
+
     def test_play_file_targets_the_new_song_id(self):
         mpd = Mock()
         mpd.command.side_effect = [[('Id', '57')], []]
