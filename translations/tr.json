@@ -3,6 +3,9 @@
   "name": "Türkçe",
   "country": "TR",
   "messages": {
+    "Could not open the HiFiBerry web interface.": "HiFiBerry web arayüzü açılamadı.",
+    "Managed by HiFiBerryOS": "HiFiBerryOS tarafından yönetiliyor",
+    "HiFiBerry Bluetooth…": "HiFiBerry Bluetooth…",
     "\n\nAdministrator installation changes packages, services and restricted sudo rules. No disk is formatted. No playback starts. Partial changes are preserved if setup fails. Audio levels are left unchanged; lower your amplifier volume before first playback.": "\n\nAdministrator installation changes packages, services and restricted sudo rules. Hiçbir disk biçimlendirilmemiş. Oynatma başlatılmıyor. Kurulum başarısız olursa kısmi değişiklikler korunur. Ses seviyeleri değişmeden bırakılır; lower your amplifier volume before first playback.",
     "\n\nApproved devices will be trusted for future connections.": "\n\nOnaylanan cihazlara gelecekteki bağlantılar için güvenilecektir.",
     "\n\nConfirm the same code on your device: {code}": "\n\nCihazınızda aynı kodu doğrulayın: {code}",

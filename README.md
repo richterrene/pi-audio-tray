@@ -1,5 +1,22 @@
 # Pi Audio Tray
 
+### HiFiBerryOS receivers
+
+HiFiBerryOS NG on Debian 13 is detected automatically when connected as the
+configured audio user. Add a separate Pi profile with its SSH hostname and key.
+Status and system statistics work without installing a Pi helper. Master volume
+uses the current PipeWire default sink, including the vendor's Speaker EQ chain.
+Spotify Soloist status, build lifetime, Bluetooth adapter state and connected
+device names are displayed. The vendor Soloist user update service is supported.
+
+Music browsing, Bluetooth pairing, DSP, API-key settings, shutdown and system
+administration open the HiFiBerry web interface in your browser. These are not
+native tray controls on HiFiBerryOS. The app uses the receiver's existing HTTP
+web interface; use it only on a trusted LAN or VPN. The setup/repair installers
+and helper installer refuse HiFiBerryOS to preserve its vendor configuration.
+No API key is fetched by the tray app. Tested with Pi 5 / DAC+ DSP, HiFiBerry
+packages on Debian 13 ARM64; older Buildroot-based HiFiBerryOS is not supported.
+
 A small Linux/Windows tray and macOS menu-bar app for a Raspberry Pi running Spotify
 Soloist with PipeWire,
 or the older Raspotify / BlueALSA setup.

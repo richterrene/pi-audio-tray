@@ -58,6 +58,7 @@ def inventory():
     model = model.read_text().strip('\0') if model.exists() else ''
     arch = run('/usr/bin/dpkg', '--print-architecture').stdout.strip()
     supported = arch == 'arm64' and platform.machine() == 'aarch64' and 'Raspberry Pi' in model and release.get('VERSION_ID', '').strip('"') == '13' and release.get('ID', '').strip('"') in ('debian', 'raspbian')
+    supported = supported and not (Path('/etc/hifiberry.user').exists() and Path('/usr/bin/config-soundcard').exists())
     package_result = run('/usr/bin/dpkg-query', '-W', '-f=${binary:Package}\t${Status}\t${Version}\n', *PACKAGES)
     packages = {}
     for line in package_result.stdout.splitlines():

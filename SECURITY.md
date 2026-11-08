@@ -1,5 +1,17 @@
 # Security and privacy
 
+## HiFiBerryOS integration
+
+The Debian-based HiFiBerryOS mode runs the bundled monitoring probe as the SSH
+user, sent over the verified SSH connection. No root helper is installed. The
+probe reads only the local Soloist bridge's public status endpoint (bounded
+response and timeout), never ConfigDB's secure API-key endpoint. Master volume
+retains the normal-user PipeWire node/serial/server-cookie checks. Vendor setup,
+keys, Bluetooth pairing and DSP remain in the vendor web interface. Its HTTP
+transport has the security properties of that existing interface; use a trusted
+LAN or VPN. No new HTTP listener or sudo rule is installed. Administrator
+provisioning and helper installation reject detected HiFiBerryOS receivers.
+
 ## Optional web shutdown (0.10.0)
 
 See [setup, capability and recovery](docs/WEB_POWER.md). This is opt-in: existing

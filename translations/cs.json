@@ -3,6 +3,9 @@
   "name": "Čeština",
   "country": "CZ",
   "messages": {
+    "Could not open the HiFiBerry web interface.": "Nelze otevřít webové rozhraní HiFiBerry.",
+    "Managed by HiFiBerryOS": "Spravováno systémem HiFiBerryOS",
+    "HiFiBerry Bluetooth…": "Bluetooth HiFiBerry…",
     "\n\nAdministrator installation changes packages, services and restricted sudo rules. No disk is formatted. No playback starts. Partial changes are preserved if setup fails. Audio levels are left unchanged; lower your amplifier volume before first playback.": "\n\nInstalace správce změní balíčky, služby a omezená pravidla sudo. Není naformátován žádný disk. Přehrávání se nespustí. Částečné změny jsou zachovány, pokud se nastavení nezdaří. Úrovně zvuku zůstávají nezměněny; před prvním přehráváním snižte hlasitost zesilovače.",
     "\n\nApproved devices will be trusted for future connections.": "\n\nSchválená zařízení budou pro budoucí připojení důvěryhodná.",
     "\n\nConfirm the same code on your device: {code}": "\n\nPotvrďte stejný kód na svém zařízení: {code}",

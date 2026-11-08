@@ -3,6 +3,9 @@
   "name": "Suomi",
   "country": "FI",
   "messages": {
+    "Could not open the HiFiBerry web interface.": "HiFiBerry-verkkokäyttöliittymää ei voitu avata.",
+    "Managed by HiFiBerryOS": "HiFiBerryOS hallinnoi",
+    "HiFiBerry Bluetooth…": "HiFiBerry Bluetooth…",
     "\n\nAdministrator installation changes packages, services and restricted sudo rules. No disk is formatted. No playback starts. Partial changes are preserved if setup fails. Audio levels are left unchanged; lower your amplifier volume before first playback.": "\n\nJärjestelmänvalvojan asennus muuttaa paketteja, palveluita ja rajoitettuja sudo-sääntöjä. Mitään levyä ei ole alustettu. Toisto ei ala. Osittaiset muutokset säilyvät, jos asennus epäonnistuu. Äänitasot jätetään ennalleen; pienennä vahvistimen äänenvoimakkuutta ennen ensimmäistä toistoa.",
     "\n\nApproved devices will be trusted for future connections.": "\n\nHyväksytyt laitteet luotetaan tulevissa yhteyksissä.",
     "\n\nConfirm the same code on your device: {code}": "\n\nVahvista sama koodi laitteessasi: {code}",

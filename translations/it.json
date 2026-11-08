@@ -3,6 +3,9 @@
   "name": "Italiano",
   "country": "IT",
   "messages": {
+    "Could not open the HiFiBerry web interface.": "Impossibile aprire l’interfaccia web HiFiBerry.",
+    "Managed by HiFiBerryOS": "Gestito da HiFiBerryOS",
+    "HiFiBerry Bluetooth…": "Bluetooth HiFiBerry…",
     "\n\nAdministrator installation changes packages, services and restricted sudo rules. No disk is formatted. No playback starts. Partial changes are preserved if setup fails. Audio levels are left unchanged; lower your amplifier volume before first playback.": "\n\nL'installazione dell'amministratore modifica pacchetti, servizi e regole sudo limitate. Nessun disco è formattato. Non viene avviata alcuna riproduzione. Le modifiche parziali vengono conservate se l'installazione non riesce. I livelli audio rimangono invariati; abbassare il volume dell'amplificatore prima della prima riproduzione.",
     "\n\nApproved devices will be trusted for future connections.": "\n\nI dispositivi approvati verranno considerati attendibili per le connessioni future.",
     "\n\nConfirm the same code on your device: {code}": "\n\nConferma lo stesso codice sul tuo dispositivo: {code}",

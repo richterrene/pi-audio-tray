@@ -223,6 +223,9 @@ def validate_status(data):
     backend = data.get('spotify_backend', 'raspotify')
     if backend not in ('raspotify', 'soloist'):
         raise ValueError('Invalid audio backend')
+    receiver = data.get('receiver', 'managed')
+    if receiver not in ('managed', 'hifiberry'):
+        raise ValueError('Invalid receiver type')
     clean_devices = []
     for device in devices:
         if not isinstance(device, dict) or not isinstance(device.get('name'), str):
@@ -276,23 +279,41 @@ def validate_status(data):
     if 'cpu_count' in stats and not 1 <= stats['cpu_count'] <= 4096:
         raise ValueError('Invalid CPU count')
     return {'protocol': 1, 'services': services, 'adapter': clean_adapter,
-            'devices': clean_devices, 'spotify_backend': backend, 'soloist': clean_soloist, 'stats': stats}
+            'devices': clean_devices, 'spotify_backend': backend, 'soloist': clean_soloist, 'stats': stats,
+            'receiver': receiver}
 
 
 def poll(config, detailed=True):
     client = connect(config)
     try:
         command = ' status' if detailed else ' health'
-        result = validate_status(json.loads(run(client, REMOTE_HELPER + command)))
+        if is_hifiberry(client):
+            root = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
+            output = run(client, '/usr/bin/python3 -I -' + command,
+                         input_data=(root / 'pi_helper.py').read_text())
+        else:
+            output = run(client, REMOTE_HELPER + command)
+        result = validate_status(json.loads(output))
         result['_detailed'] = bool(detailed)
         return result
     finally:
         client.close()
 
 
+def is_hifiberry(client):
+    """Detect vendor ownership before using our managed-receiver commands."""
+    return run(client, 'if test -f /etc/hifiberry.user && test -x /usr/bin/config-soundcard; then echo hifiberry; fi').strip() == 'hifiberry'
+
+
+def require_managed_receiver(client):
+    if is_hifiberry(client):
+        raise RuntimeError('Use the HiFiBerry web interface to configure this receiver.')
+
+
 def disable_pairing(config):
     client = connect(config)
     try:
+        require_managed_receiver(client)
         run(client, 'sudo -n ' + REMOTE_HELPER + ' off')
     finally:
         client.close()
@@ -304,6 +325,7 @@ def store_soloist_key(config, key):
         raise ValueError('Enter a printable Soloist API key without whitespace (maximum 16383 UTF-8 bytes).')
     client = connect(config)
     try:
+        require_managed_receiver(client)
         with client.open_sftp() as sftp:
             folder = sftp.normalize('.') + '/.config/soloist'
             sftp.chmod(folder, 0o700)
@@ -326,6 +348,7 @@ def store_soloist_key(config, key):
 def remove_soloist_key(config):
     client = connect(config)
     try:
+        require_managed_receiver(client)
         run(client, 'systemctl --user stop soloist.service')
         with client.open_sftp() as sftp:
             path = sftp.normalize('.') + '/.config/soloist/api-key'
@@ -340,6 +363,9 @@ def remove_soloist_key(config):
 def update_soloist(config):
     client = connect(config)
     try:
+        if is_hifiberry(client):
+            run(client, 'systemctl --user start soloist-update.service', timeout=190)
+            return
         run(client, 'sudo -n systemctl start soloist-update.service', timeout=190)
     finally:
         client.close()
@@ -389,6 +415,7 @@ def install_helper(config):
     client = connect(config)
     temporary = []
     try:
+        require_managed_receiver(client)
         for source, destination in (('pi_helper.py', REMOTE_HELPER),
                                      ('pi_upnp.py', '/usr/local/lib/pi-audio-tray/pi_upnp.py'),
                                      ('pi_music.py', '/usr/local/lib/pi-audio-tray/pi-music')):
@@ -461,6 +488,7 @@ class PairSession:
     def run(self):
         try:
             self.client = connect(self.config)
+            require_managed_receiver(self.client)
             self.input, stdout, stderr = self.client.exec_command(
                 'sudo -n ' + REMOTE_HELPER + ' pair', timeout=210)
             self.channel = stdout.channel
