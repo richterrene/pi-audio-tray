@@ -152,7 +152,7 @@ class PollMode(unittest.TestCase):
         reply=json.dumps({'protocol':1,'services':{},'adapter':{},'devices':[], '_detailed':True})
         with patch.object(core,'connect',return_value=client), patch.object(core,'run',return_value=reply) as run:
             result=core.poll(core.DEFAULTS,detailed=False)
-        run.assert_called_once_with(client,core.REMOTE_HELPER+' health')
+        self.assertEqual(run.call_args.args, (client, core.REMOTE_HELPER+' health'))
         self.assertFalse(result['_detailed'])
         client.close.assert_called_once()
 

@@ -23,6 +23,8 @@ def inventory():
     userspace = architecture.stdout.strip() if architecture.returncode == 0 else ''
     bits = struct.calcsize('P') * 8
     reasons = []
+    if Path('/etc/hifiberry.user').exists() and Path('/usr/bin/config-soundcard').exists():
+        reasons.append('HiFiBerryOS owns this receiver; configure it using its web interface')
     if release.get('VERSION_ID') != '13' or release.get('ID') not in ('debian', 'raspbian'):
         reasons.append('Requires Debian / Raspberry Pi OS 13 Trixie')
     if platform.machine() != 'aarch64' or 'Raspberry Pi' not in model:

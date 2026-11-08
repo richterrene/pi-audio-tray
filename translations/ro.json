@@ -3,6 +3,9 @@
   "name": "Română",
   "country": "RO",
   "messages": {
+    "Could not open the HiFiBerry web interface.": "Interfața web HiFiBerry nu a putut fi deschisă.",
+    "Managed by HiFiBerryOS": "Gestionat de HiFiBerryOS",
+    "HiFiBerry Bluetooth…": "Bluetooth HiFiBerry…",
     "\n\nAdministrator installation changes packages, services and restricted sudo rules. No disk is formatted. No playback starts. Partial changes are preserved if setup fails. Audio levels are left unchanged; lower your amplifier volume before first playback.": "\n\nInstalarea administratorului modifică pachetele, serviciile și regulile sudo restricționate. Niciun disc nu este formatat. Nu începe nicio redare. Modificările parțiale sunt păstrate dacă configurarea eșuează. Nivelurile audio sunt lăsate neschimbate; reduceți volumul amplificatorului înainte de prima redare.",
     "\n\nApproved devices will be trusted for future connections.": "\n\nDispozitivele aprobate vor fi de încredere pentru conexiunile viitoare.",
     "\n\nConfirm the same code on your device: {code}": "\n\nConfirmați același cod pe dispozitivul dvs.: {code}",

@@ -3,6 +3,9 @@
   "name": "Nederlands",
   "country": "NL",
   "messages": {
+    "Could not open the HiFiBerry web interface.": "De HiFiBerry-webinterface kon niet worden geopend.",
+    "Managed by HiFiBerryOS": "Beheerd door HiFiBerryOS",
+    "HiFiBerry Bluetooth…": "HiFiBerry Bluetooth…",
     "\n\nAdministrator installation changes packages, services and restricted sudo rules. No disk is formatted. No playback starts. Partial changes are preserved if setup fails. Audio levels are left unchanged; lower your amplifier volume before first playback.": "\n\nInstallatie door de beheerder verandert pakketten, services en beperkte sudo-regels. Er is geen schijf geformatteerd. Er wordt niet afgespeeld. Gedeeltelijke wijzigingen blijven behouden als de installatie mislukt. Audioniveaus blijven ongewijzigd; verlaag het volume van uw versterker voordat u voor het eerst gaat afspelen.",
     "\n\nApproved devices will be trusted for future connections.": "\n\nGoedgekeurde apparaten worden vertrouwd voor toekomstige verbindingen.",
     "\n\nConfirm the same code on your device: {code}": "\n\nBevestig dezelfde code op uw apparaat: {code}",

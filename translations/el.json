@@ -3,6 +3,9 @@
   "name": "Ελληνικά",
   "country": "GR",
   "messages": {
+    "Could not open the HiFiBerry web interface.": "Δεν ήταν δυνατό το άνοιγμα της διεπαφής ιστού HiFiBerry.",
+    "Managed by HiFiBerryOS": "Διαχείριση από το HiFiBerryOS",
+    "HiFiBerry Bluetooth…": "Bluetooth HiFiBerry…",
     "\n\nAdministrator installation changes packages, services and restricted sudo rules. No disk is formatted. No playback starts. Partial changes are preserved if setup fails. Audio levels are left unchanged; lower your amplifier volume before first playback.": "\n\nΗ εγκατάσταση του διαχειριστή αλλάζει πακέτα, υπηρεσίες και περιορισμένους κανόνες sudo. Κανένας δίσκος δεν έχει μορφοποιηθεί. Δεν ξεκινά η αναπαραγωγή. Εάν η ρύθμιση αποτύχει, διατηρούνται μερικές αλλαγές. Τα επίπεδα ήχου παραμένουν αμετάβλητα. χαμηλώστε την ένταση του ενισχυτή σας πριν από την πρώτη αναπαραγωγή.",
     "\n\nApproved devices will be trusted for future connections.": "\n\nΟι εγκεκριμένες συσκευές θα είναι αξιόπιστες για μελλοντικές συνδέσεις.",
     "\n\nConfirm the same code on your device: {code}": "\n\nΕπιβεβαιώστε τον ίδιο κωδικό στη συσκευή σας: {code}",

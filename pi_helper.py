@@ -172,6 +172,7 @@ def adapter(bus):
 
 
 def status(detailed=True):
+    hifiberry = Path('/etc/hifiberry.user').is_file() and Path('/usr/bin/config-soundcard').is_file()
     bus = dbus.SystemBus()
     devices, adapters = [], []
     for path, interfaces in objects(bus).items():
@@ -203,9 +204,9 @@ def status(detailed=True):
             if name == 'soloist':
                 backend = 'soloist'
     soloist = {}
-    if detailed:
+    if detailed and not hifiberry:
         soloist['key_configured'] = (Path.home() / '.config/soloist/api-key').exists()
-    if detailed and backend == 'soloist':
+    if detailed and backend == 'soloist' and not hifiberry:
         import re
         version = subprocess.run(['/usr/local/bin/soloist', '--version'],
             capture_output=True, text=True, timeout=5).stdout.strip()
@@ -221,8 +222,35 @@ def status(detailed=True):
         capture_output=True, text=True, timeout=5)
     soloist['update_failed'] = any(line.startswith('Result=') and line != 'Result=success'
         for line in update_result.stdout.splitlines())
+    if hifiberry:
+        backend = 'soloist'
+        # The vendor bridge exposes version/expiry/auth flags, never API keys.
+        # Do not query ConfigDB's secure key endpoint or process arguments.
+        if detailed:
+            from urllib.request import urlopen
+            from datetime import date
+            try:
+                with urlopen('http://127.0.0.1:3549/status', timeout=3) as response:
+                    bridge = json.loads(response.read(16385))
+                soloist['key_configured'] = services.get('soloist') == 'active'
+                if isinstance(bridge.get('version'), str):
+                    soloist['version'] = bridge['version'][:256]
+                soloist['days_remaining'] = max(0, (date.fromisoformat(bridge['expires_on']) - date.today()).days)
+            except (OSError, ValueError, KeyError, TypeError):
+                pass
+        timer = subprocess.run(['systemctl', '--user', 'is-active', 'soloist-update.timer'],
+                               capture_output=True, text=True, timeout=5)
+        # Vendor Soloist updates and OS updates are separate facts.
+        soloist['automatic_updates'] = timer.stdout.strip() == 'active' and len(timers) == 2 and timers[1] == 'active'
+        update = subprocess.run(['systemctl', '--user', 'show', '-p', 'Result', 'soloist-update.service'],
+                                capture_output=True, text=True, timeout=5)
+        soloist['update_failed'] = any(line.startswith('Result=') and line != 'Result=success'
+                                      for line in update.stdout.splitlines()) or any(
+            line.startswith('Result=') and line != 'Result=success'
+            for line in update_result.stdout.splitlines())
     emit(protocol=1, services=services, adapter=adapters[0] if adapters else {},
          devices=devices, spotify_backend=backend, soloist=soloist,
+         receiver='hifiberry' if hifiberry else 'managed',
          stats=collect_stats() if detailed else {})
 
 

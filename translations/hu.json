@@ -3,6 +3,9 @@
   "name": "Magyar",
   "country": "HU",
   "messages": {
+    "Could not open the HiFiBerry web interface.": "A HiFiBerry webes felülete nem nyitható meg.",
+    "Managed by HiFiBerryOS": "A HiFiBerryOS kezeli",
+    "HiFiBerry Bluetooth…": "HiFiBerry Bluetooth…",
     "\n\nAdministrator installation changes packages, services and restricted sudo rules. No disk is formatted. No playback starts. Partial changes are preserved if setup fails. Audio levels are left unchanged; lower your amplifier volume before first playback.": "\n\nAz adminisztrátori telepítés megváltoztatja a csomagokat, szolgáltatásokat és a korlátozott sudo szabályokat. Nincs lemez formázva. Nem indul el a lejátszás. A részleges módosítások megmaradnak, ha a telepítés sikertelen. A hangszintek változatlanok maradnak; csökkentse az erősítő hangerejét az első lejátszás előtt.",
     "\n\nApproved devices will be trusted for future connections.": "\n\nA jóváhagyott eszközök megbízhatóak lesznek a jövőbeni kapcsolatokhoz.",
     "\n\nConfirm the same code on your device: {code}": "\n\nErősítse meg ugyanazt a kódot az eszközön: {code}",

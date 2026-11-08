@@ -497,11 +497,18 @@ class TrayApp(QWidget):
             services, adapter = data['services'], data['adapter']
             backend = data.get('spotify_backend', 'raspotify')
             audio_services = ('pipewire', 'wireplumber') if backend == 'soloist' else ('bluealsa', 'bluealsa-aplay')
-            healthy = adapter.get('Powered') and all(services.get(s) == 'active' for s in (backend, 'bluetooth', *audio_services))
+            hifiberry = data.get('receiver') == 'hifiberry'
+            healthy = (all(services.get(s) == 'active' for s in (backend, *audio_services)) if hifiberry else
+                       adapter.get('Powered') and all(services.get(s) == 'active' for s in (backend, 'bluetooth', *audio_services)))
+            pairing_label = tr('HiFiBerry Bluetooth…') if hifiberry else tr('Enable pairing · 3 min')
+            self.on_action.setText(pairing_label)
+            self.pair_button.setText(pairing_label)
+            self.off_action.setText(tr('HiFiBerry Bluetooth…') if hifiberry else tr('Disable pairing'))
+            self.off_button.setText(tr('HiFiBerry Bluetooth…') if hifiberry else tr('Disable pairing'))
             self.notice.set_state('ok' if healthy else 'warning')
             self.tray.setIcon(icon('#55d9ad' if healthy else '#e8b75f'))
             self.tray.setToolTip(tr('Pi Audio Tray · ') + (tr('services running') if healthy else tr('check services')))
-            self.row('pi', tr('Online · ') + self.config['host'])
+            self.row('pi', tr('Online · ') + self.config['host'] + (' · HiFiBerryOS' if hifiberry else ''))
             backend_state = tr(services.get(backend, 'unknown'))
             self.row('spotify', backend_state + ' · ' + backend.title())
             self.row('bluetooth', tr('Powered on') if adapter.get('Powered') else tr('Powered off / unavailable'))
@@ -524,7 +531,7 @@ class TrayApp(QWidget):
             self.row('audio', tr('Ready') if all(services.get(s) == 'active' for s in audio_services) else tr('Service stopped'))
             soloist = data.get('soloist', {})
             if backend == 'soloist':
-                key_state = tr('Key configured') if soloist.get('key_configured') else tr('API key needed')
+                key_state = tr('Managed by HiFiBerryOS') if hifiberry else (tr('Key configured') if soloist.get('key_configured') else tr('API key needed'))
                 days = soloist.get('days_remaining')
                 self.row('soloist', key_state + (tr(' · build valid {days} days', days=days) if days is not None else ''))
             else:
@@ -596,6 +603,8 @@ class TrayApp(QWidget):
             plain_warning(self, 'Pi Audio Tray', str(error))
 
     def open_music(self):
+        if self.hifiberry_web('/library'):
+            return
         if not self.config['host']:
             self.settings()
             return
@@ -604,6 +613,20 @@ class TrayApp(QWidget):
         self.music_window.showNormal()
         self.music_window.raise_()
         self.music_window.activateWindow()
+
+    def hifiberry_web(self, path='/'):
+        """Keep vendor-owned configuration in its own UI and audio graph."""
+        if not self.snapshot or self.snapshot.get('receiver') != 'hifiberry':
+            return False
+        from PySide6.QtCore import QUrl
+        from PySide6.QtGui import QDesktopServices
+        url = QUrl()
+        url.setScheme('http')
+        url.setHost(self.config['host'])
+        url.setPath(path)
+        if not QDesktopServices.openUrl(url):
+            plain_warning(self, 'HiFiBerryOS', tr('Could not open the HiFiBerry web interface.'))
+        return True
 
     def open_window(self):
         self.showNormal()
@@ -721,6 +744,8 @@ class TrayApp(QWidget):
         self.reload_profiles()
 
     def setup(self):
+        if self.hifiberry_web('/services'):
+            return
         if not self.config['host'] or not self.config['username']:
             self.settings()
             return
@@ -750,6 +775,10 @@ class TrayApp(QWidget):
         self.receiver_dialog('components')
 
     def receiver_dialog(self, kind):
+        paths = {'dsp': '/sound', 'audio': '/services/players', 'bluetooth': '/services/players', 'components': '/services',
+                 'policy': '/services', 'updates': '/services'}
+        if kind != 'volume' and self.hifiberry_web(paths.get(kind, '/')):
+            return
         if self.receiver_window is not None:
             self.receiver_window.showNormal()
             self.receiver_window.raise_()
@@ -782,6 +811,8 @@ class TrayApp(QWidget):
             self.refresh()
 
     def update_helper(self):
+        if self.hifiberry_web('/services'):
+            return
         if not self.config['host']:
             self.settings()
             return
@@ -798,6 +829,8 @@ class TrayApp(QWidget):
         self.job('setup', lambda: install_helper(config))
 
     def soloist_key(self, parent=None):
+        if self.hifiberry_web('/services/players'):
+            return
         key, accepted = get_text(parent or self, tr('Spotify Soloist API key'),
             tr('Paste your personal Soloist API key.\nIt is sent directly to your Pi over SSH.'),
             QLineEdit.EchoMode.Password)
@@ -806,6 +839,8 @@ class TrayApp(QWidget):
             self.job('key', lambda: store_soloist_key(config, key.strip()))
 
     def remove_key(self):
+        if self.hifiberry_web('/services/players'):
+            return
         if plain_question(self, tr('Remove Soloist API key'),
             tr('Stop Soloist and remove its API key from the Pi?\n'
             'This does not revoke the key at Spotify.')) == QMessageBox.StandardButton.Yes:
@@ -818,6 +853,8 @@ class TrayApp(QWidget):
         self.job('update', lambda: update_soloist(config))
 
     def shutdown(self):
+        if self.hifiberry_web('/services'):
+            return
         if not self.snapshot or self.session or self.busy - {'poll'} or self.power_state:
             plain_information(self, tr('Pi shutdown unavailable'),
                               tr('Connect to the Pi and finish pairing or the current operation first.'))
@@ -836,6 +873,8 @@ class TrayApp(QWidget):
         self.enable_controls()
 
     def start_pairing(self, from_bluetooth=False):
+        if self.hifiberry_web('/services/players'):
+            return
         allowed = {'poll', 'provision'} if from_bluetooth and self.receiver_window is not None else {'poll'}
         if self.session or self.busy - allowed or self.power_state:
             return
@@ -845,6 +884,8 @@ class TrayApp(QWidget):
         threading.Thread(target=self.session.run, daemon=True).start()
 
     def stop_pairing(self):
+        if self.hifiberry_web('/services/players'):
+            return
         try:
             if self.session:
                 self.session.stop()

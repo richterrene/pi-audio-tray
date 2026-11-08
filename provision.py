@@ -6,7 +6,7 @@ import sys
 import time
 import uuid
 
-from core import connect, run
+from core import connect, run, require_managed_receiver
 from setup_plan import validate_plan
 
 ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
@@ -81,6 +81,7 @@ def administrator_install(config, plan, password, progress, installer, pi_files,
     client = connect(config)
     stage = '/tmp/pi-audio-setup-' + uuid.uuid4().hex
     try:
+        require_managed_receiver(client)
         with client.open_sftp() as sftp:
             sftp.get_channel().settimeout(20)
             sftp.mkdir(stage, mode=0o700)

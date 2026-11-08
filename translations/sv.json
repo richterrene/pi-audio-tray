@@ -3,6 +3,9 @@
   "name": "Svenska",
   "country": "SE",
   "messages": {
+    "Could not open the HiFiBerry web interface.": "Kunde inte öppna HiFiBerrys webbgränssnitt.",
+    "Managed by HiFiBerryOS": "Hanteras av HiFiBerryOS",
+    "HiFiBerry Bluetooth…": "HiFiBerry Bluetooth…",
     "\n\nAdministrator installation changes packages, services and restricted sudo rules. No disk is formatted. No playback starts. Partial changes are preserved if setup fails. Audio levels are left unchanged; lower your amplifier volume before first playback.": "\n\nAdministratörsinstallation ändrar paket, tjänster och begränsade sudo-regler. Ingen disk är formaterad. Ingen uppspelning startar. Partiella ändringar bevaras om installationen misslyckas. Ljudnivåerna lämnas oförändrade; sänk din förstärkarvolym före första uppspelning.",
     "\n\nApproved devices will be trusted for future connections.": "\n\nGodkända enheter kommer att vara betrodda för framtida anslutningar.",
     "\n\nConfirm the same code on your device: {code}": "\n\nBekräfta samma kod på din enhet: {code}",

@@ -128,7 +128,7 @@ class TransportTests(unittest.TestCase):
         remote = sftp.return_value
         remote.file.return_value.__enter__ = Mock(return_value=Mock())
         remote.file.return_value.__exit__ = Mock()
-        with patch.object(provision, 'connect', return_value=client):
+        with patch.object(provision, 'connect', return_value=client), patch.object(provision, 'require_managed_receiver'):
             messages = []
             provision.install({}, plan(), 'example-password-not-a-secret', messages.append)
         self.assertEqual(messages, ['Installed.'])
